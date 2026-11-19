@@ -60,8 +60,8 @@ T3 Code yet.
 
 ## Status
 
-Nothing is built. T3 Code v0.1.10 is vendored in [`t3code/`](./t3code) as the base to work from.
-There is no installer and no build of our own.
+The repo is the T3 Code v0.1.10 tree with this README in front of it. Nothing of t3stash is built
+yet. Upstream's README is in [UPSTREAM.md](./UPSTREAM.md).
 
 Questions to answer before writing any of it:
 
