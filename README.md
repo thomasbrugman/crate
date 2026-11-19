@@ -60,7 +60,8 @@ T3 Code yet.
 
 ## Status
 
-Nothing is built. There is no code and no installer. This repository holds the idea and the license.
+Nothing is built. T3 Code v0.1.10 is vendored in [`t3code/`](./t3code) as the base to work from.
+There is no installer and no build of our own.
 
 Questions to answer before writing any of it:
 
