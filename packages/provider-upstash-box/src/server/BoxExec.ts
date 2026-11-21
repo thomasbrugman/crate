@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import { BoxApi, isMissingBox, layer as boxApiLayer } from "./BoxApi.ts";
+import * as BoxApi from "./BoxApi.ts";
 
 export class BoxExecError extends Schema.TaggedError<BoxExecError>()("BoxExecError", {
   threadId: ThreadId,
@@ -57,10 +57,11 @@ export class BoxExec extends Context.Service<
 >()("@t3tools/provider-upstash-box/server/BoxExec") {}
 
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+const isBoxExecError = Schema.is(BoxExecError);
 
 export const make = Effect.gen(function* () {
   const resolver = yield* BoxExecThreadResolver;
-  const api = yield* BoxApi;
+  const api = yield* BoxApi.BoxApi;
   return BoxExec.of({
     run: Effect.fn("BoxExec.run")(function* (input) {
       const fail = (reason: BoxExecError["reason"]) =>
@@ -75,11 +76,7 @@ export const make = Effect.gen(function* () {
         return yield* fail("invalid_input");
       const thread = yield* resolver
         .resolve(input.threadId)
-        .pipe(
-          Effect.mapError((error) =>
-            error instanceof BoxExecError ? error : fail("resolve_failed"),
-          ),
-        );
+        .pipe(Effect.mapError((error) => (isBoxExecError(error) ? error : fail("resolve_failed"))));
       if (!thread) return yield* fail("thread_unavailable");
       const persisted = thread.providerThread;
       if (
@@ -98,7 +95,7 @@ export const make = Effect.gen(function* () {
       const command = [input.command, ...(input.args ?? []).map(quote)].join(" ");
       const result = yield* Effect.tryPromise({
         try: () => box.exec.command(`cd -- ${quote(cwd)} || exit 1\n${command}`),
-        catch: (error) => fail(isMissingBox(error) ? "box_unavailable" : "exec_failed"),
+        catch: (error) => fail(BoxApi.isMissingBox(error) ? "box_unavailable" : "exec_failed"),
       });
       if (result.exitCode === null) return yield* fail("missing_exit_code");
       return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr ?? "" };
@@ -106,4 +103,4 @@ export const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(BoxExec, make).pipe(Layer.provide(boxApiLayer));
+export const layer = Layer.effect(BoxExec, make).pipe(Layer.provide(BoxApi.layer));

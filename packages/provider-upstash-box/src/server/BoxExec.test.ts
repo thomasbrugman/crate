@@ -2,13 +2,14 @@ import { assert, it } from "@effect/vitest";
 import { ProviderDriverKind, ThreadId } from "@t3tools/contracts";
 import { BoxError } from "@upstash/box";
 import * as Effect from "effect/Effect";
+// @effect-diagnostics-next-line nodeBuiltinImport:off - Execute shell source independently of the service under test.
 import * as NodeChildProcess from "node:child_process";
 
-import { BoxApi, type BoxHandle } from "./BoxApi.ts";
-import { BoxExecError, BoxExecThreadResolver, make, type BoxExecThread } from "./BoxExec.ts";
+import * as BoxApi from "./BoxApi.ts";
+import * as BoxExec from "./BoxExec.ts";
 
 const threadId = ThreadId.make("exec-thread");
-const thread: BoxExecThread = {
+const thread: BoxExec.BoxExecThread = {
   providerThread: {
     appThreadId: threadId,
     driver: ProviderDriverKind.make("upstashBox"),
@@ -24,26 +25,26 @@ const thread: BoxExecThread = {
 
 function service(
   options: {
-    resolve?: BoxExecThreadResolver["Service"]["resolve"];
-    get?: BoxApi["Service"]["get"];
-    command?: BoxHandle["exec"]["command"];
+    resolve?: BoxExec.BoxExecThreadResolver["Service"]["resolve"];
+    get?: BoxApi.BoxApi["Service"]["get"];
+    command?: BoxApi.BoxHandle["exec"]["command"];
   } = {},
 ) {
   const unexpected = async (): Promise<never> => {
     throw new Error("unexpected API call");
   };
-  const box: BoxHandle = {
+  const box: BoxApi.BoxHandle = {
     id: "persisted-box-id",
     agent: { stream: unexpected },
     exec: { command: options.command ?? unexpected },
     files: { write: unexpected },
     delete: unexpected,
   };
-  return make.pipe(
-    Effect.provideService(BoxExecThreadResolver, {
+  return BoxExec.make.pipe(
+    Effect.provideService(BoxExec.BoxExecThreadResolver, {
       resolve: options.resolve ?? (() => Effect.succeed(thread)),
     }),
-    Effect.provideService(BoxApi, {
+    Effect.provideService(BoxApi.BoxApi, {
       get:
         options.get ??
         (async (id, apiKey) => {
@@ -116,11 +117,11 @@ it.effect("fails closed without creating Boxes or exposing SDK errors", () =>
     for (const [resolve, reason] of [
       [() => Effect.succeed(null), "thread_unavailable"],
       [
-        () => Effect.fail(new BoxExecError({ threadId, reason: "resolve_failed" })),
+        () => Effect.fail(new BoxExec.BoxExecError({ threadId, reason: "resolve_failed" })),
         "resolve_failed",
       ],
       [
-        () => Effect.fail(new BoxExecError({ threadId, reason: "not_box_thread" })),
+        () => Effect.fail(new BoxExec.BoxExecError({ threadId, reason: "not_box_thread" })),
         "not_box_thread",
       ],
       [
