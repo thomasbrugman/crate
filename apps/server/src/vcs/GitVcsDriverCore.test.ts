@@ -94,7 +94,7 @@ it.effect(
                 operation: "GitVcsDriver.test.push",
                 cwd: "/workspace",
                 args: ["push"],
-                timeoutMs,
+                ...(timeoutMs === undefined ? {} : { timeoutMs }),
               })
               .pipe(Effect.forkChild);
             yield* Deferred.await(entered);
