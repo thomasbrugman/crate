@@ -18,6 +18,7 @@ import {
   VcsProcessSpawnError,
   VcsProcessStdinWriteError,
   VcsProcessTimeoutError,
+  VcsUnsupportedOperationError,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import type { SourceControlProcessInput } from "@t3tools/source-control-core/server/SourceControlHost";
@@ -417,3 +418,16 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(VcsProcess, make).pipe(Layer.provide(ProcessRunner.layer));
+
+export const cloudLayer = Layer.succeed(VcsProcess, {
+  run: Effect.fn("VcsProcess.run")((input: VcsProcessInput) =>
+    Effect.fail(
+      new VcsUnsupportedOperationError({
+        operation: input.operation,
+        kind: "unknown",
+        detail:
+          "Host Git and diff commands are not available in cloud threads. Use the Box agent tools.",
+      }),
+    ),
+  ),
+});

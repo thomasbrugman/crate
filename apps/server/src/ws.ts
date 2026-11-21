@@ -2195,7 +2195,7 @@ export const layerWsRpc = (
                     .checkWorktreeBase({
                       commandId: input.commandId,
                       projectId: input.projectId,
-                      workspaceStrategy: input.workspaceStrategy,
+                      workspaceStrategy: { type: "root" },
                     })
                     .pipe(
                       Effect.andThen(

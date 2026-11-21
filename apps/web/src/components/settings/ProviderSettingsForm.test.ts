@@ -35,17 +35,17 @@ describe("ProviderSettingsForm helpers", () => {
   });
 
   it("preserves unknown config keys while omitting empty configurable fields", () => {
-    const opencode = providerClients.get(ProviderDriverKind.make("opencode"));
-    expect(opencode).toBeDefined();
+    const box = providerClients.get(ProviderDriverKind.make("upstashBox"));
+    expect(box).toBeDefined();
 
-    const serverUrl = deriveProviderSettingsFields(opencode!).find(
-      (field) => field.key === "serverUrl",
+    const template = deriveProviderSettingsFields(box!).find(
+      (field) => field.key === "templateBoxName",
     );
-    expect(serverUrl).toBeDefined();
+    expect(template).toBeDefined();
 
     const next = nextProviderConfigWithFieldValue(
-      { forkOwned: 1, serverUrl: "http://127.0.0.1:4096" },
-      serverUrl!,
+      { forkOwned: 1, templateBoxName: "custom-template" },
+      template!,
       "",
     );
 
@@ -53,21 +53,20 @@ describe("ProviderSettingsForm helpers", () => {
   });
 
   it("does not store a text value its field's schema rejects", () => {
-    const claude = providerClients.get(ProviderDriverKind.make("claudeAgent"));
-    expect(claude).toBeDefined();
-    const autoCompactWindow = deriveProviderSettingsFields(claude!).find(
-      (field) => field.key === "autoCompactWindow",
-    );
-    expect(autoCompactWindow).toBeDefined();
+    const box = providerClients.get(ProviderDriverKind.make("upstashBox"));
+    expect(box).toBeDefined();
+    const size = deriveProviderSettingsFields(box!).find((field) => field.key === "size");
+    expect(size?.control).toBe("select");
 
-    for (const invalid of ["300k", "50000"]) {
-      expect(
-        nextProviderConfigWithFieldValue({ launchArgs: "--x" }, autoCompactWindow!, invalid),
-      ).toEqual({ launchArgs: "--x" });
+    for (const invalid of ["tiny", "xlarge"]) {
+      expect(nextProviderConfigWithFieldValue({ launchArgs: "--x" }, size!, invalid)).toEqual({
+        launchArgs: "--x",
+      });
     }
-    expect(
-      nextProviderConfigWithFieldValue({ launchArgs: "--x" }, autoCompactWindow!, "300000"),
-    ).toEqual({ launchArgs: "--x", autoCompactWindow: "300000" });
+    expect(nextProviderConfigWithFieldValue({ launchArgs: "--x" }, size!, "medium")).toEqual({
+      launchArgs: "--x",
+      size: "medium",
+    });
   });
 
   it("stores false boolean fields when true is the default", () => {

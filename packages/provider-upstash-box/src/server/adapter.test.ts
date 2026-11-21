@@ -5,6 +5,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   ProviderSessionId,
+  ProviderThreadId,
   RunAttemptId,
   RunId,
   ThreadId,
@@ -39,9 +40,15 @@ const finish: Chunk = {
 };
 
 const setup = Effect.fn("test.setupBox")(function* (stream: BoxStream) {
+  const prompts: string[] = [];
   const box: BoxHandle = {
     id: "box-123",
-    agent: { stream: async () => stream },
+    agent: {
+      stream: async ({ prompt }) => {
+        prompts.push(prompt);
+        return stream;
+      },
+    },
     exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
     files: { write: async () => undefined },
     delete: async () => undefined,
@@ -108,7 +115,7 @@ const setup = Effect.fn("test.setupBox")(function* (stream: BoxStream) {
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn };
+  return { runtime, turn, prompts };
 });
 
 function fakeStream(chunks: ReadonlyArray<Chunk>, error = false): BoxStream {
@@ -134,7 +141,7 @@ it.effect(
   () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const { runtime, turn } = yield* setup(
+        const { runtime, turn, prompts } = yield* setup(
           fakeStream([
             { type: "start", runId: "native-run" },
             { type: "tool-result", output: "orphan" },
@@ -148,8 +155,18 @@ it.effect(
             { type: "stats", cpuNs: 1, memoryPeakBytes: 1 },
           ]),
         );
-        yield* runtime.startTurn(turn);
+        const text = "Earlier context\n\nhello";
+        yield* runtime.startTurn({
+          ...turn,
+          providerThread: {
+            ...turn.providerThread,
+            id: ProviderThreadId.make("persisted-placeholder"),
+          },
+          message: { ...turn.message, text },
+          inlineContextLength: text.length - 5,
+        });
         const events = yield* collect(runtime.events);
+        assert.deepEqual(prompts, [text]);
         for (const event of events) yield* decodeEvent(event);
         const messages = events
           .filter((event) => event.type === "message.updated")
@@ -163,9 +180,22 @@ it.effect(
           ],
         );
         assert.isTrue(messages.every((message) => message.id === messages[0]?.id));
+        const assistantItems = events.flatMap((event) =>
+          event.type === "turn_item.updated" && event.turnItem.type === "assistant_message"
+            ? [event.turnItem]
+            : [],
+        );
+        assert.deepEqual(
+          assistantItems.map((item) => [item.text, item.streaming, item.messageId]),
+          messages.map((message) => [message.text, message.streaming, message.id]),
+        );
+        assert.isTrue(assistantItems.every((item) => item.id === assistantItems[0]?.id));
         const completedTools = events
           .filter((event) => event.type === "turn_item.updated")
-          .filter((event) => event.turnItem.status === "completed");
+          .filter(
+            (event) =>
+              event.turnItem.type === "dynamic_tool" && event.turnItem.status === "completed",
+          );
         assert.deepEqual(
           completedTools.map((event) => event.turnItem.title),
           ["Write", "Read"],

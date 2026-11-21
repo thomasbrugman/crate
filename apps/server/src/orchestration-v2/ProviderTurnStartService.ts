@@ -803,7 +803,10 @@ export const layer: Layer.Layer<
           return;
         }
       }
-      const recreateResult = yield* Effect.result(restoreMissingWorktree(projection.thread));
+      const cloud = providerThread.driver === "upstashBox";
+      const recreateResult = yield* Effect.result(
+        cloud ? Effect.void : restoreMissingWorktree(projection.thread),
+      );
       if (recreateResult._tag === "Failure") {
         if (input.willRetry === true) return yield* recreateResult.failure;
         yield* settleStartFailure({
@@ -924,11 +927,13 @@ export const layer: Layer.Layer<
         if (!repaired.committed) return;
       }
       // Opening a session does not prompt the provider, so the workspace is still unchanged.
-      const baseline = yield* runExecution.forkBaseline({
-        appThread: projection.thread,
-        run,
-        checkpointScope,
-      });
+      const baseline = yield* cloud
+        ? Effect.succeed(Effect.void)
+        : runExecution.forkBaseline({
+            appThread: projection.thread,
+            run,
+            checkpointScope,
+          });
       const brokenNativeThread = providerThread.status === "error";
       // Opened without the broken native id, a session that was not live starts fresh.
       const opensFreshSession =
@@ -2156,12 +2161,20 @@ export const layer: Layer.Layer<
           return yield* Effect.gen(function* () {
             // Storage cleanup removes worktrees under the same lease. Only startup
             // holds it; the provider turn runs after it is released.
-            const { thread } = yield* projectionStore.getThreadRecords(input.threadId, []);
-            const cwd =
-              thread.worktreePath ??
-              (yield* projects
-                .getById(thread.projectId, { includeDeleted: true })
-                .pipe(Effect.map((project) => Option.getOrUndefined(project)?.workspaceRoot)));
+            const { thread, providerThreads } = yield* projectionStore.getThreadRecords(
+              input.threadId,
+              ["providerThreads"],
+            );
+            const cloud = providerThreads.some(
+              (provider) =>
+                provider.id === thread.activeProviderThreadId && provider.driver === "upstashBox",
+            );
+            const cwd = cloud
+              ? undefined
+              : (thread.worktreePath ??
+                (yield* projects
+                  .getById(thread.projectId, { includeDeleted: true })
+                  .pipe(Effect.map((project) => Option.getOrUndefined(project)?.workspaceRoot))));
             const providerTurn = yield* cwd === undefined
               ? start(input, captureStartingRun)
               : withTurnStartReservation(

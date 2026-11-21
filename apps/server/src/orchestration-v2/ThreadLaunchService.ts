@@ -15,6 +15,7 @@ import {
   type OrchestrationV2ThreadProjection,
   type ProviderDriverKind,
   type ProviderInteractionMode,
+  type ProviderInstanceId,
   ProjectId,
   type RunId,
   type RuntimeMode,
@@ -118,7 +119,7 @@ export interface ThreadLaunchInput {
 
 type PreparationInput = Pick<
   ThreadLaunchInput,
-  "commandId" | "projectId" | "workspaceStrategy" | "initialMessage"
+  "commandId" | "projectId" | "workspaceStrategy" | "initialMessage" | "modelSelection"
 > & {
   readonly reusedWorktree?: { readonly baseRef: string };
 };
@@ -281,10 +282,28 @@ const make = Effect.gen(function* () {
   const eventSink = yield* EventSink.EventSinkV2;
   const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
   // A project-folder launch that names no branch records the folder's checkout, as the composer does.
-  const launchBranch = (strategy: ThreadLaunchWorkspaceStrategy, workspaceRoot: string) =>
-    strategy.type === "root" && strategy.branch === undefined
-      ? git.currentBranch(workspaceRoot).pipe(Effect.orElseSucceed(() => null))
-      : Effect.succeed(strategy.branch ?? null);
+  const isCloudProvider = (instanceId: ProviderInstanceId) =>
+    providerRegistry.getProviders.pipe(
+      Effect.map((providers) =>
+        providers.some(
+          (provider) => provider.instanceId === instanceId && provider.driver === "upstashBox",
+        ),
+      ),
+    );
+  const launchBranch = (
+    strategy: ThreadLaunchWorkspaceStrategy,
+    workspaceRoot: string,
+    instanceId: ProviderInstanceId,
+  ) =>
+    isCloudProvider(instanceId).pipe(
+      Effect.flatMap((cloud) =>
+        cloud
+          ? Effect.succeed(null)
+          : strategy.type === "root" && strategy.branch === undefined
+            ? git.currentBranch(workspaceRoot).pipe(Effect.orElseSucceed(() => null))
+            : Effect.succeed(strategy.branch ?? null),
+      ),
+    );
   const preparationScope = yield* Scope.make("sequential");
   const scheduledLaunches = yield* Ref.make<ReadonlySet<CommandId>>(new Set());
   yield* Effect.addFinalizer(() => Scope.close(preparationScope, Exit.void));
@@ -634,7 +653,11 @@ const make = Effect.gen(function* () {
           });
         }
       } else {
-        branch = yield* launchBranch(input.workspaceStrategy, project.workspaceRoot);
+        branch = yield* launchBranch(
+          input.workspaceStrategy,
+          project.workspaceRoot,
+          input.modelSelection.instanceId,
+        );
       }
       let worktreePath =
         input.workspaceStrategy.type === "existing_worktree"
@@ -1248,11 +1271,13 @@ const make = Effect.gen(function* () {
 
   const launch: ThreadLaunchService["Service"]["launch"] = Effect.fn("ThreadLaunchService.launch")(
     function* (request) {
+      const cloud = yield* isCloudProvider(request.modelSelection.instanceId);
       // Scratch has no Git repository. Normalize before folder allocation so
       // durable preparation and retries use the thread's own Scratch folder.
-      const input: ThreadLaunchInput =
-        request.workspaceStrategy.type === "worktree" &&
-        (yield* managedFolders.isScratchProject(request.projectId))
+      const input: ThreadLaunchInput = cloud
+        ? { ...request, workspaceStrategy: { type: "root" } }
+        : request.workspaceStrategy.type === "worktree" &&
+            (yield* managedFolders.isScratchProject(request.projectId))
           ? { ...request, workspaceStrategy: { type: "root" } }
           : request;
       yield* ProjectCloneTracker.rejectCommandsDuringClone(cloneTracker, {
@@ -1318,7 +1343,7 @@ const make = Effect.gen(function* () {
         }
 
         const workspaceStrategy: ThreadLaunchWorkspaceStrategy =
-          input.workspaceStrategy.type === "root" && Option.isNone(launchReceipt)
+          !cloud && input.workspaceStrategy.type === "root" && Option.isNone(launchReceipt)
             ? Option.match(
                 yield* managedFolders
                   .folderForThread({
@@ -1334,7 +1359,7 @@ const make = Effect.gen(function* () {
               )
             : input.workspaceStrategy;
         const initialBranch = yield* Effect.interruptible(
-          launchBranch(workspaceStrategy, project.workspaceRoot),
+          launchBranch(workspaceStrategy, project.workspaceRoot, input.modelSelection.instanceId),
         );
         const initialWorktreePath =
           workspaceStrategy.type === "existing_worktree" ? workspaceStrategy.worktreePath : null;
@@ -1588,6 +1613,7 @@ const make = Effect.gen(function* () {
       {
         commandId: input.commandId,
         projectId: thread.projectId,
+        modelSelection: run.modelSelection,
         workspaceStrategy: reuse?.strategy ?? workspacePreparation,
         ...(reuse === null ? {} : { reusedWorktree: reuse.reusedWorktree }),
         ...(message === undefined

@@ -160,7 +160,7 @@ export const layerFromProjectStore: Layer.Layer<
             ? undefined
             : (yield* instance.snapshot.getSnapshot).supportedRuntimeModes;
         const cwd =
-          input.thread.worktreePath ??
+          (instance?.driverKind === "upstashBox" ? "/workspace/home" : input.thread.worktreePath) ??
           (yield* projects.get(input.thread.projectId).pipe(
             Effect.mapError(
               (cause) =>

@@ -63,7 +63,10 @@
         "graphql.config.ts",
       ],
       // The generated operations export every selection's class.
-      "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
+      "ignoreIssues": {
+        "**/*.graphql.ts": ["exports", "types", "namespaceMembers"],
+        "src/background/KeepAwake.ts": ["exports"],
+      },
       // Keep the transitive Effect runtime pinned for standalone npm installs.
       // The Vite+ web build prerequisite.
       // Native and disk-loaded provider packages stay external to the bundle; the
@@ -160,7 +163,7 @@
     // Local drivers remain vendored but are intentionally not registered in this fork.
     "packages/provider-{acp-registry,cursor,fx,grok,kiro,muse,opencode,pi}": {
       "includeEntryExports": true,
-      "ignoreIssues": { "src/server.ts": ["exports"] },
+      "ignoreIssues": { "src/server.ts": ["exports"], "src/client.ts": ["exports"] },
     },
     "packages/effect-acp": {
       "includeEntryExports": true,

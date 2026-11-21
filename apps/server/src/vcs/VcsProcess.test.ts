@@ -53,6 +53,14 @@ const captureProcessResult = (
   );
 
 describe("VcsProcess.run", () => {
+  it.effect("rejects cloud host commands without requiring a process runner", () =>
+    Effect.gen(function* () {
+      const service = yield* VcsProcess.VcsProcess;
+      const error = yield* service.run(baseInput).pipe(Effect.flip);
+      expect(error._tag).toBe("VcsUnsupportedOperationError");
+      expect(error.message).toContain("not available in cloud threads");
+    }).pipe(Effect.provide(VcsProcess.cloudLayer)),
+  );
   it.effect("explains a locked Git index and allows restore after the lock is released", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

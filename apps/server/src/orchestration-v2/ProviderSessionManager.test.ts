@@ -645,6 +645,7 @@ const makeProviderAdapter = Effect.fnUntraced(function* (
 });
 
 function layerTest(input: {
+  readonly cloud?: boolean;
   readonly state: Ref.Ref<TestProviderRuntimeState>;
   readonly idleTimeoutMs: number;
   readonly maxIdlePinMs?: number;
@@ -736,7 +737,13 @@ function layerTest(input: {
       ...(input.eventStreamsEnded === undefined
         ? {}
         : { eventStreamsEnded: input.eventStreamsEnded }),
-    }).pipe(Effect.map(ProviderAdapterRegistry.layerSingle)),
+    }).pipe(
+      Effect.map((adapter) =>
+        ProviderAdapterRegistry.layerSingle(
+          input.cloud ? { ...adapter, driver: ProviderDriverKind.make("upstashBox") } : adapter,
+        ),
+      ),
+    ),
   );
   const layerConfiguredMcpRegistry =
     input.pauseResolve === undefined
@@ -5605,8 +5612,8 @@ it.effect(
     }),
 );
 
-it.effect.each(["missing", "file"] as const)(
-  "rejects a %s workspace before opening a provider session",
+it.effect.each(["missing", "file", "cloud"] as const)(
+  "checks a %s workspace only when the provider runs locally",
   (workspaceState) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -5633,14 +5640,18 @@ it.effect.each(["missing", "file"] as const)(
             }),
           ],
         });
-        const error = yield* manager
-          .open({
-            threadId,
-            providerSessionId,
-            modelSelection,
-            runtimePolicy: { ...runtimePolicy, cwd },
-          })
-          .pipe(Effect.flip);
+        const open = manager.open({
+          threadId,
+          providerSessionId,
+          modelSelection,
+          runtimePolicy: { ...runtimePolicy, cwd },
+        });
+        if (workspaceState === "cloud") {
+          yield* open;
+          assert.equal((yield* Ref.get(state)).openCount, 1);
+          return;
+        }
+        const error = yield* open.pipe(Effect.flip);
         assert.instanceOf(error, ProviderWorkspaceMissingError);
         assert.include(error.message, cwd);
         assert.include(error.message, "Restore the folder at this path before retrying.");
@@ -5650,7 +5661,11 @@ it.effect.each(["missing", "file"] as const)(
           (yield* projectionStore.getThreadProjection(threadId)).providerSessions,
           [],
         );
-      }).pipe(Effect.provide(layerTest({ state, idleTimeoutMs: 60_000 })));
+      }).pipe(
+        Effect.provide(
+          layerTest({ state, idleTimeoutMs: 60_000, cloud: workspaceState === "cloud" }),
+        ),
+      );
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 

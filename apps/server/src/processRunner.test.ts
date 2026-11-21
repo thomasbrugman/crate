@@ -79,6 +79,14 @@ const runWith =
     );
 
 describe("runProcess", () => {
+  it.effect("rejects host execution in the cloud layer without a spawner", () =>
+    Effect.gen(function* () {
+      const runner = yield* ProcessRunner.ProcessRunner;
+      const error = yield* runner.run({ command: "git", args: ["status"] }).pipe(Effect.flip);
+      expect(error._tag).toBe("ProcessSpawnError");
+      expect(String(error.cause)).toContain("not available in cloud threads");
+    }).pipe(Effect.provide(ProcessRunner.cloudLayer)),
+  );
   it.effect("resolves and escapes Windows command shims before spawning", () => {
     const spawner = makeSpawner((command) =>
       Effect.sync(() => {

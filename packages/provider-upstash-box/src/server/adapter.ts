@@ -48,7 +48,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
     openSession: Effect.fn("UpstashBox.openSession")(function* (input) {
       const scope = yield* Effect.scope;
       const events = yield* Queue.unbounded<Adapter.ProviderAdapterV2Event>();
-      const boxes = new Map<ProviderThreadId, BoxHandle>();
+      const boxes = new Map<string, BoxHandle>();
       const threads = new Map<ProviderThreadId, OrchestrationV2ProviderThread>();
       let active: ActiveTurn | undefined;
       const now = yield* DateTime.now;
@@ -71,7 +71,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         thread: OrchestrationV2ProviderThread,
         box: BoxHandle,
       ) {
-        boxes.set(thread.id, box);
+        boxes.set(box.id, box);
         threads.set(thread.id, thread);
         yield* publish([{ type: "provider_thread.updated", driver, providerThread: thread }]);
         return thread;
@@ -168,16 +168,11 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               detail: "A Box turn is already active",
               reason: "previous_turn_active",
             });
-          if (
-            request.message.attachments.length ||
-            request.resume ||
-            request.inlineContextLength ||
-            request.appContext?.length
-          )
+          if (request.message.attachments.length || request.resume || request.appContext?.length)
             return yield* unsupported("Attachments, native resume, and application context");
           if (request.runtimePolicy.runtimeMode !== "full-access")
             return yield* unsupported("Restricted runtime policies");
-          const box = boxes.get(request.providerThread.id);
+          const box = boxes.get(request.providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
           const translation = new BoxTurnTranslation(request, ids.derive, yield* DateTime.now);
           const turn: ActiveTurn = { translation, interrupted: false };

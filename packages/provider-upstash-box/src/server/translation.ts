@@ -23,6 +23,8 @@ export class BoxTurnTranslation {
   private finished: Extract<Chunk, { type: "finish" }> | undefined;
   private startedAt: DateTime.Utc;
   private tools: ToolItem[] = [];
+  private itemOrdinal = 0;
+  private messageOrdinal: number | undefined;
   private message: OrchestrationV2ConversationMessage;
   private turn: OrchestrationV2ProviderTurn;
   private terminal = false;
@@ -105,6 +107,41 @@ export class BoxTurnTranslation {
     ];
   }
 
+  private messageEvents(now: DateTime.Utc, streaming: boolean): ProviderAdapterV2Event[] {
+    this.message = { ...this.message, text: this.text, streaming, updatedAt: now };
+    this.messageOrdinal ??= ++this.itemOrdinal;
+    return [
+      { type: "message.updated", driver: UPSTASH_BOX_PROVIDER, message: this.message },
+      {
+        type: "turn_item.updated",
+        driver: UPSTASH_BOX_PROVIDER,
+        turnItem: {
+          id: this.ids.turnItemFromProviderItem({
+            driver: UPSTASH_BOX_PROVIDER,
+            nativeItemId: `${this.input.attemptId}:assistant`,
+          }),
+          threadId: this.input.threadId,
+          runId: this.input.runId,
+          nodeId: this.input.rootNodeId,
+          providerThreadId: this.thread.id,
+          providerTurnId: this.turn.id,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal: this.messageOrdinal,
+          status: streaming ? "running" : "completed",
+          title: null,
+          startedAt: this.message.createdAt,
+          completedAt: streaming ? null : now,
+          updatedAt: now,
+          type: "assistant_message",
+          messageId: this.message.id,
+          text: this.text,
+          streaming,
+        },
+      },
+    ];
+  }
+
   accept(chunk: Chunk, now: DateTime.Utc): ProviderAdapterV2Event[] {
     if (this.terminal) return [];
     switch (chunk.type) {
@@ -127,10 +164,9 @@ export class BoxTurnTranslation {
         ];
       case "text-delta":
         this.text += chunk.text;
-        this.message = { ...this.message, text: this.text, updatedAt: now };
-        return [{ type: "message.updated", driver: UPSTASH_BOX_PROVIDER, message: this.message }];
+        return this.messageEvents(now, true);
       case "tool-call": {
-        const ordinal = this.tools.length + 1;
+        const ordinal = ++this.itemOrdinal;
         const item: ToolItem = {
           id: this.ids.turnItemFromProviderItem({
             driver: UPSTASH_BOX_PROVIDER,
@@ -216,12 +252,7 @@ export class BoxTurnTranslation {
           updatedAt: now,
         },
       }));
-    if (this.text)
-      events.push({
-        type: "message.updated",
-        driver: UPSTASH_BOX_PROVIDER,
-        message: { ...this.message, text: this.text, streaming: false, updatedAt: now },
-      });
+    if (this.text) events.push(...this.messageEvents(now, false));
     events.push(
       {
         type: "provider_turn.updated",
@@ -244,7 +275,7 @@ export class BoxTurnTranslation {
         ? {
             ...terminal,
             status,
-            failureItemOrdinal: PositiveInt.make(this.tools.length + 1),
+            failureItemOrdinal: PositiveInt.make(this.itemOrdinal + 1),
             failure: {
               class: "provider_error",
               message: "The Box agent stream failed or ended without a finish event.",

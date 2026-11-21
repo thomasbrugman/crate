@@ -617,7 +617,9 @@ export const make = Effect.gen(function* () {
   return WorkspaceEntries.of({ browse, list, listIgnoredFiles, refresh, search, searchContents });
 });
 
-export const layer = Layer.effect(WorkspaceEntries, make).pipe(
+const baseLayer = Layer.effect(WorkspaceEntries, make).pipe(
   Layer.provide(WorkspaceSearchIndex.WorkspaceSearchIndexMap.layer),
-  Layer.provide(VcsProcess.layer),
 );
+
+export const layer = baseLayer.pipe(Layer.provide(VcsProcess.layer));
+export const cloudLayer = baseLayer.pipe(Layer.provide(VcsProcess.cloudLayer));

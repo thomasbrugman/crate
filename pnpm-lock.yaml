@@ -1531,33 +1531,12 @@ importers:
       '@t3tools/issue-tracker-linear':
         specifier: workspace:*
         version: link:../issue-tracker-linear
-      '@t3tools/provider-acp-registry':
-        specifier: workspace:*
-        version: link:../provider-acp-registry
       '@t3tools/provider-core':
         specifier: workspace:*
         version: link:../provider-core
-      '@t3tools/provider-cursor':
+      '@t3tools/provider-upstash-box':
         specifier: workspace:*
-        version: link:../provider-cursor
-      '@t3tools/provider-fx':
-        specifier: workspace:*
-        version: link:../provider-fx
-      '@t3tools/provider-grok':
-        specifier: workspace:*
-        version: link:../provider-grok
-      '@t3tools/provider-kiro':
-        specifier: workspace:*
-        version: link:../provider-kiro
-      '@t3tools/provider-muse':
-        specifier: workspace:*
-        version: link:../provider-muse
-      '@t3tools/provider-opencode':
-        specifier: workspace:*
-        version: link:../provider-opencode
-      '@t3tools/provider-pi':
-        specifier: workspace:*
-        version: link:../provider-pi
+        version: link:../provider-upstash-box
       '@t3tools/secret-provider-definitions':
         specifier: workspace:*
         version: link:../secret-provider-definitions

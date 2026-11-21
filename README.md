@@ -1,84 +1,56 @@
 # t3stash
 
-Run your T3 Code agents on [Upstash Box](https://upstash.com/pricing/box).
-
-t3stash would create boxes on your own Upstash account and add them to [T3 Code](https://t3.codes)
-as environments. A box freezes when nothing is using it and wakes on the next request. You pay for
-the CPU seconds your agent uses and nothing while it waits.
-
-The idea comes from [t3boat](https://t3boat.paukraft.com). t3boat creates machines on Boat and adds
-them to T3 Code. t3stash would create boxes on Upstash and do the same.
-
-## Why Box
-
-Box bills per active CPU second, not per wall-clock hour or per box that exists.
-
-| Size   | vCPU | RAM   | Disk  | All cores busy | Idle |
-| ------ | ---- | ----- | ----- | -------------- | ---- |
-| Small  | 2    | 4 GB  | 10 GB | $0.10/hr       | $0   |
-| Medium | 4    | 8 GB  | 30 GB | $0.20/hr       | $0   |
-| Large  | 8    | 16 GB | 30 GB | $0.40/hr       | $0   |
-
-An agent spends most of a thread waiting: on the model, on you, on a build it started. A medium box
-that uses one percent of one core costs $0.002/hr, which is about $1.50 a month at that rate. The
-same box on a fixed always-on plan costs $16 a month. Storage is $0.10 per GB per month. The free
-tier gives you 5 CPU hours and 10 concurrent boxes, so an experiment costs nothing.
-
-Boxes run in AWS us-east-1 only. A wake is a network round trip from anywhere else, and that
-latency is the main cost of running this way.
-
-## What you'd get
-
-- Create, resize and delete boxes without a terminal.
-- Pick a box in T3 Code and work there as usual. A message to a frozen box wakes it.
-- A box that freezes mid-day and comes back with the same workspace, because it snapshots its disk
-  before it stops.
-- Cost per box for today and for the month, taken from Upstash usage.
-- Work that finishes with your laptop closed.
-
-## How it would work
-
-```
-T3 Code  --websocket-->  proxy on localhost  --https-->  T3 server on a box
-                              |
-                              +-- box CLI: create, resume, exec, snapshot
-```
-
-- The box runs a T3 server on loopback, pinned to your desktop app's version.
-- The proxy gives each box a stable `http://localhost:<port>` for T3 Code to pair with, so a new
-  address after a resume never matters.
-- While the box is frozen the proxy answers reads from what it captured on the way down. Opening a
-  chat does not wake the box.
-- A message or a tool call wakes the box, and the socket reconnects.
-- A watchdog stops the box when no agent run is in flight and nobody has touched it for a while. It
-  snapshots the disk first, so the workspace outlives Upstash's disk retention.
-- Box freezes itself after 6 hours idle. That covers the case where the watchdog fails.
-
-Each piece works on its own today: `box create`, `box exec`, `box files write`, `box snapshot`,
-`box --box <id> resume`, SSH through the box gateway, and auto-pause. Nobody has connected them to
-T3 Code yet.
+T3 Code with its agent runtime in [Upstash Box](https://upstash.com/box).
+Upstream documentation is retained in [UPSTREAM.md](./UPSTREAM.md).
 
 ## Status
 
-The repo is the T3 Code v0.1.11 tree with this README in front of it. Nothing of t3stash is built
-yet. Upstream's README is in [UPSTREAM.md](./UPSTREAM.md).
+An experimental cloud-only fork of T3 Code v0.1.11. Upstash Box is the only registered
+provider on the server and clients. The web settings form supports an API key, template
+Box name, optional model, and Box size. Agent replies and tool activity stream through
+T3's existing orchestration and chat UI.
 
-Questions to answer before writing any of it:
+Use Node 24, run `vp i`, then `vp run dev --no-seed`. Worktree development uses its own
+gitignored `.t3` state; read the printed web/server ports and pairing URL. Configure
+Upstash Box in Settings → Providers, or supply `UPSTASH_BOX_API_KEY` to the server.
+The default template is `cc-harness`; it must contain the verified Command Code auth,
+configuration, and streaming harness. Credentials stay in the template/Box and local
+secret settings, never in this repository.
 
-- How long a wake takes, from "send" to "agent responds". If it runs past T3 Code's slow-request
-  window, the proxy has to accept the message first and reconcile after the box wakes.
-- Box cannot resume a box on a timer. Scheduled work and automations would need the proxy awake, or
-  they miss their run.
-- Box pauses on its own clock. A watchdog is still needed to snapshot and to let in-flight work
-  finish.
-- What to do with a run that is mid-tool-call when the box freezes.
-- Whether the proxy lives in the desktop app or on one always-on box. With the desktop app, closing
-  your laptop leaves the boxes unreachable.
-- Where model credentials live. Box environment variables are the obvious place. The box
-  filesystem is not.
+## Choices
+
+- **Stack:** keep upstream's TypeScript, Effect, React, WebSocket contracts, SQLite
+  persistence, and event-sourced orchestration. The app server remains the control plane;
+  a Box does not run another T3 server.
+- **Provider:** `@upstash/box@0.8.1`, with Command Code installed inside the Box. No local
+  agent CLI, Replay provider, or local model probing is registered.
+- **Lifecycle:** one deterministically named Box per T3 thread. First use creates it,
+  installs Command Code, and copies auth/config/harness from the configured template.
+  Persisted Box IDs resume via `Box.get`; a missing Box is recreated. The Command Code
+  session ID from `finish` preserves follow-up conversation continuity. Interruption
+  cancels the stream. Archiving/deleting a T3 thread does **not** delete its Box yet;
+  remove unwanted Boxes in Upstash to reclaim storage.
+- **Workspace:** every agent runs in `/workspace/home`. The existing project directory
+  is retained as a local organizational label, not mounted or uploaded. Add an existing
+  folder in the project picker; ask the agent to clone a repository inside its Box.
+  Project Git URL import is not a cloud clone workflow in this version.
+- **Worktrees and setup:** cloud launches force the root workspace strategy with no host
+  branch checkout, worktree creation, or project setup scripts. Worktree restoration and
+  checkpoint capture are skipped; checkpoint records are explicitly missing rather
+  than pretending a local snapshot exists.
+- **Terminal and diff:** disabled, not proxied. Server-side terminal and host process/Git
+  boundaries reject execution; web terminal/diff/file/preview/device surfaces show
+  “Not available in cloud threads.” Use the agent's Box tools to run commands, inspect
+  files, or produce a diff. This avoids exposing a host PTY or accidentally reviewing
+  unrelated local files. The vendored local-provider packages remain unregistered.
+  The host sleep inhibitor is also unregistered; cloud work does not need to keep the
+  host's agent process awake.
+- **Other limits:** no rollback, fork, active steering, approvals, MCP callbacks, file
+  attachments, application context, or reasoning stream support yet. Desktop shares
+  the web UI; mobile uses the shared provider registry but has not been visually tested.
+  The control-plane server must stay running for orchestration; laptop-off operation
+  needs a separately hosted server.
 
 ## License
 
-MIT. See [LICENSE](./LICENSE).
-
-Not affiliated with T3 Code, Upstash or Boat.
+MIT. See [LICENSE](./LICENSE). Not affiliated with T3 Code or Upstash.

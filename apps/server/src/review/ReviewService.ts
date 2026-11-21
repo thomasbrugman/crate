@@ -152,3 +152,19 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(ReviewService, make);
+
+const cloudUnavailable = () =>
+  Effect.fail(
+    new VcsUnsupportedOperationError({
+      operation: "ReviewService",
+      kind: "unknown",
+      detail:
+        "Diff is not available in cloud threads. Ask the agent to inspect changes in its Box.",
+    }),
+  );
+
+export const cloudLayer = Layer.succeed(ReviewService, {
+  getBranchCommits: cloudUnavailable,
+  getDiffPreview: cloudUnavailable,
+  getDiffFileContents: cloudUnavailable,
+});

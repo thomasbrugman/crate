@@ -17,10 +17,34 @@ export const UpstashBoxSettings = makeProviderSettingsSchema(
         providerSettingsForm: { control: "password", clearWhenEmpty: "omit" },
       }),
     ),
-    templateBoxName: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("cc-harness"))),
-    model: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+    templateBoxName: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("cc-harness")),
+      Schema.annotateKey({
+        title: "Template Box",
+        providerSettingsForm: { placeholder: "cc-harness" },
+      }),
+    ),
+    model: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Model",
+        providerSettingsForm: { placeholder: "Template default" },
+      }),
+    ),
     size: Schema.Literals(["small", "medium", "large"]).pipe(
       Schema.withDecodingDefault(Effect.succeed("small" as const)),
+      Schema.annotateKey({
+        title: "Box size",
+        providerSettingsForm: {
+          control: "select",
+          placeholder: "Small",
+          options: [
+            { value: "small", label: "Small" },
+            { value: "medium", label: "Medium" },
+            { value: "large", label: "Large" },
+          ],
+        },
+      }),
     ),
   },
   { order: ["apiKey", "templateBoxName", "model", "size"] },
