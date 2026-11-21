@@ -1459,7 +1459,15 @@ export function ThreadThinkingRow(props: {
   const label = props.providerStartingLabel ?? props.label ?? gt("Thinking");
   if (props.boxSetupChecklist) {
     return (
-      <View className="gap-2 rounded-lg border border-border px-3 py-2">
+      <View
+        accessible
+        accessibilityLabel={messages(
+          props.boxSetupChecklist.find((step) => step.state === "active")?.labelMsg ??
+            props.providerStartingLabel ??
+            label,
+        )}
+        className="gap-2 rounded-lg border border-border px-3 py-2"
+      >
         <View className="flex-row items-center justify-between gap-3">
           <Text className="text-xs text-foreground">{gt("Setting up Box")}</Text>
           <Text className="text-xs text-foreground-muted">

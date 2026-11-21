@@ -466,7 +466,11 @@ export function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind:
         </div>
         <div className="flex flex-col gap-1.5">
           {boxSetupChecklist.map((step) => (
-            <div key={step.key} className="flex items-center gap-2">
+            <div
+              key={step.key}
+              className="flex items-center gap-2"
+              aria-current={step.state === "active" ? "step" : undefined}
+            >
               <svg
                 aria-hidden="true"
                 viewBox="0 0 14 14"
