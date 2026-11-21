@@ -450,9 +450,9 @@ describe("thread execution presentation", () => {
     const cloning = {
       ...boxSession,
       extensionStatuses: [
-        { key: "upstash-box.setup.connect", text: "Connecting to the Box" },
-        { key: "upstash-box.setup.check", text: "Checking the Box setup" },
         { key: "upstash-box.setup.clone", text: "Cloning the repository" },
+        { key: "upstash-box.setup.check", text: "Checking the Box setup" },
+        { key: "upstash-box.setup.connect", text: "Connecting to the Box" },
       ],
     };
     expect(

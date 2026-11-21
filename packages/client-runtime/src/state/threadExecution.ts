@@ -167,7 +167,7 @@ function providerStarting(
   const name = driver === undefined ? undefined : PROVIDER_DISPLAY_NAMES[driver];
   const label =
     isUpstashBoxDriver(driver) && session?.status === "starting"
-      ? boxSetupLabel(session.extensionStatuses?.at(-1)?.key)
+      ? boxSetupLabel(session.extensionStatuses?.[0]?.key)
       : name === undefined
         ? msg("Starting", { $context: "a provider is launching" })
         : msg("Starting {provider}", { provider: name });
@@ -175,7 +175,7 @@ function providerStarting(
     (step) => `upstash-box.setup.${step}`,
   );
   const reached = session?.extensionStatuses ?? [];
-  const activeKey = reached.at(-1)?.key ?? steps[0];
+  const activeKey = reached[0]?.key ?? steps[0];
   const activeIndex = steps.indexOf(activeKey!);
   return {
     providerStartingLabel: markedTextEnglish([label]),
