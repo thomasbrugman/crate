@@ -1,5 +1,6 @@
 import {
   ProviderThreadId,
+  type OrchestrationV2ProviderSession,
   type OrchestrationV2ProviderThread,
   type ProviderInstanceId,
 } from "@t3tools/contracts";
@@ -11,7 +12,7 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
 import { BoxApi, BoxRuntimeError, isMissingBox, type BoxHandle, type BoxStream } from "./BoxApi.ts";
-import { ensureBox, type BoxRuntimeConfig } from "./bootstrap.ts";
+import { ensureBox, type BoxRuntimeConfig, type BoxSetupStep } from "./bootstrap.ts";
 import { capabilities } from "./capabilities.ts";
 import { BoxTurnTranslation, UPSTASH_BOX_PROVIDER as driver } from "./translation.ts";
 
@@ -31,6 +32,15 @@ const SAVED_WORK_CHECK = [
   'unpushed=$(git rev-list --count HEAD --branches --not --remotes) && test "$unpushed" = 0;',
   'else files=$(ls -A /workspace/home) && test -z "$files"; fi',
 ].join(" ");
+
+const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
+  connect: "Connecting to the Box",
+  create: "Creating the Box",
+  check: "Checking the Box setup",
+  install: "Installing Command Code",
+  credentials: "Copying credentials from the template Box",
+  clone: "Cloning the repository",
+};
 
 export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(function* (
   instanceId: ProviderInstanceId,
@@ -90,7 +100,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const boxes = new Map<string, BoxHandle>();
       let active: ActiveTurn | undefined;
       const now = yield* DateTime.now;
-      const providerSession = {
+      let providerSession: OrchestrationV2ProviderSession = {
         id: input.providerSessionId,
         driver,
         providerInstanceId: instanceId,
@@ -105,6 +115,27 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       };
       const publish = (batch: ReadonlyArray<Adapter.ProviderAdapterV2Event>) =>
         Queue.offerAll(events, batch).pipe(Effect.asVoid);
+      const setSessionStatus = Effect.fn("UpstashBox.setSessionStatus")(function* (
+        status: OrchestrationV2ProviderSession["status"],
+      ) {
+        providerSession = {
+          ...providerSession,
+          status,
+          extensionStatuses: [],
+          updatedAt: yield* DateTime.now,
+        };
+        yield* publish([{ type: "provider_session.updated", driver, providerSession }]);
+      });
+      // Called from inside the bootstrap promise, so it publishes synchronously. Clients
+      // translate by key; the text is the English fallback.
+      const showSetupStep = (step: BoxSetupStep) => {
+        providerSession = {
+          ...providerSession,
+          extensionStatuses: [{ key: `upstash-box.setup.${step}`, text: SETUP_STEP_TEXT[step] }],
+          updatedAt: DateTime.nowUnsafe(),
+        };
+        Queue.offerUnsafe(events, { type: "provider_session.updated", driver, providerSession });
+      };
       const saveThread = Effect.fn("UpstashBox.saveThread")(function* (
         thread: OrchestrationV2ProviderThread,
         box: BoxHandle,
@@ -117,15 +148,24 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         instanceId,
         driver,
         providerSessionId: input.providerSessionId,
-        providerSession,
+        get providerSession() {
+          return providerSession;
+        },
         events: Stream.fromEffectRepeat(Queue.take(events)),
         ensureThread: Effect.fn("UpstashBox.ensureThread")(function* (request) {
           if (request.existingProviderThread?.nativeThreadRef?.nativeId)
             return yield* runtime.resumeThread({ providerThread: request.existingProviderThread });
           // Hex encoding is injective, shell-safe, and stable across server restarts.
           const name = `t3-${Buffer.from(request.threadId).toString("hex")}`;
-          const box = yield* ensureBox(config, name, request.runtimePolicy.repositoryUrl).pipe(
+          yield* setSessionStatus("starting");
+          const box = yield* ensureBox(
+            config,
+            name,
+            request.runtimePolicy.repositoryUrl,
+            showSetupStep,
+          ).pipe(
             Effect.provideService(BoxApi, api),
+            Effect.tapError(() => setSessionStatus("error")),
             Effect.mapError(
               () =>
                 new Adapter.ProviderAdapterEnsureThreadError({
@@ -134,6 +174,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 }),
             ),
           );
+          yield* setSessionStatus("ready");
           const at = yield* DateTime.now;
           const thread: OrchestrationV2ProviderThread = {
             id: ProviderThreadId.make(box.id),
