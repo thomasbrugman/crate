@@ -3336,7 +3336,7 @@
     }
   ],
   "1b1131295f62c44c": "Der Anbieterprozess ist beendet. Unterbrich den untergeordneten Thread oder starte ihn neu, um zu antworten.",
-  "2cc98601912fed53": "Not available in cloud threads. Ask the agent to use its Box tools.",
+  "2cc98601912fed53": "In Cloud-Threads nicht verfügbar. Bitte den Agenten, seine Box-Werkzeuge zu verwenden.",
   "da66023072c473d1": [
     "Ausgabe konnte nicht geladen werden: ",
     {
@@ -9104,10 +9104,10 @@
   "9ebced15e0d0b234": "CLAUDE_CONFIG_DIR-Pfad",
   "178f36194b25e76d": "Automatisch komprimieren nach",
   "df5cc2ff88833f21": "Inaktive Threads komprimieren",
-  "b5fa42d9412ab917": "Template Box",
-  "04c91643c3c24bb8": "Template default",
-  "13c467f9d514b497": "Box size",
-  "b2ac3183408cf717": "Medium",
+  "b5fa42d9412ab917": "Vorlagen-Box",
+  "04c91643c3c24bb8": "Standard der Vorlage",
+  "13c467f9d514b497": "Box-Größe",
+  "b2ac3183408cf717": "Mittel",
   "bf26888594faef31": "GCP-Projekt",
   "14153cce2115641e": "GCP-Standort",
   "895bcb7433b4b6d0": "ACP-Quelle",

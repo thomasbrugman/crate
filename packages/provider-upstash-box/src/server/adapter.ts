@@ -79,7 +79,6 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const scope = yield* Effect.scope;
       const events = yield* Queue.unbounded<Adapter.ProviderAdapterV2Event>();
       const boxes = new Map<string, BoxHandle>();
-      const threads = new Map<ProviderThreadId, OrchestrationV2ProviderThread>();
       let active: ActiveTurn | undefined;
       const now = yield* DateTime.now;
       let providerSession: OrchestrationV2ProviderSession = {
@@ -123,7 +122,6 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         box: BoxHandle,
       ) {
         boxes.set(box.id, box);
-        threads.set(thread.id, thread);
         yield* publish([{ type: "provider_thread.updated", driver, providerThread: thread }]);
         return thread;
       });
@@ -242,10 +240,13 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const process = Effect.gen(function* () {
             // Box supplies the prior finish.sessionId to its custom harness as --session.
             const stream = yield* Effect.tryPromise({
-              try: () => box.agent.stream({ prompt: request.message.text }),
+              try: async () => {
+                const stream = await box.agent.stream({ prompt: request.message.text });
+                turn.stream = stream;
+                return stream;
+              },
               catch: () => new BoxRuntimeError({ operation: "stream" }),
-            });
-            turn.stream = stream;
+            }).pipe(Effect.uninterruptible);
             if (turn.interrupted)
               yield* Effect.tryPromise({
                 try: () => stream.cancel(),
@@ -263,11 +264,16 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             );
           });
           yield* process.pipe(
+            Effect.onInterrupt(() =>
+              Effect.promise(async () => {
+                await turn.stream?.cancel();
+              }).pipe(Effect.ignore),
+            ),
             Effect.isFailure,
             Effect.flatMap(
               Effect.fn("UpstashBox.finishTurn")(function* (failed) {
                 if (translation.sessionId) {
-                  const thread = threads.get(request.providerThread.id) ?? request.providerThread;
+                  const thread = request.providerThread;
                   yield* saveThread(
                     {
                       ...thread,
