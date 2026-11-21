@@ -58,6 +58,19 @@ import { MuseUsageHome } from "@t3tools/provider-muse/server";
 import { makeScanCacheWriter, SCAN_CACHE_FILE_NAME } from "./usageScanCache.ts";
 
 vi.mock("node:fs/promises", { spy: true });
+vi.mock("../provider/builtInDrivers.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../provider/builtInDrivers.ts")>()),
+  BUILT_IN_USAGE_DRIVERS: [
+    (await import("../provider/Drivers/ClaudeDriver.ts")).ClaudeDriver,
+    (await import("../provider/Drivers/CodexDriver.ts")).CodexDriver,
+    (await import("@t3tools/provider-grok/server")).GrokDriver,
+    (await import("@t3tools/provider-pi/server")).PiDriver,
+    (await import("@t3tools/provider-opencode/server")).OpenCodeDriver,
+    (await import("@t3tools/provider-muse/server")).MuseDriver,
+    (await import("../provider/Drivers/AntigravityDriver.ts")).AntigravityDriver,
+    (await import("@t3tools/provider-cursor/server")).CursorDriver,
+  ],
+}));
 vi.mock("../../../../packages/provider-muse/src/server/sdk.ts", async (importOriginal) => {
   const original = await importOriginal<typeof MuseSdk>();
   return {
