@@ -448,8 +448,30 @@ describe("thread execution presentation", () => {
     ).toBe("Setting up Box");
     const cloning = {
       ...boxSession,
-      extensionStatuses: [{ key: "upstash-box.setup.clone", text: "Cloning the repository" }],
+      extensionStatuses: [
+        { key: "upstash-box.setup.connect", text: "Connecting to the Box" },
+        { key: "upstash-box.setup.check", text: "Checking the Box setup" },
+        { key: "upstash-box.setup.clone", text: "Cloning the repository" },
+      ],
     };
+    expect(
+      deriveThreadActivityRun({
+        ...starting,
+        providerSessions: [boxSession],
+      })?.boxSetupChecklist?.map((step) => step.state),
+    ).toEqual(["active", "pending", "pending", "pending", "pending", "pending"]);
+    expect(
+      deriveThreadActivityRun({ ...starting, providerSessions: [cloning] })?.boxSetupChecklist?.map(
+        (step) => step.state,
+      ),
+    ).toEqual(["done", "skipped", "done", "skipped", "skipped", "active"]);
+    for (const status of ["ready", "error"] as const) {
+      expect(
+        deriveThreadActivityRun({ ...starting, providerSessions: [{ ...cloning, status }] })
+          ?.boxSetupChecklist,
+      ).toBeUndefined();
+    }
+    expect(deriveThreadActivityRun(starting)?.boxSetupChecklist).toBeUndefined();
     expect(
       deriveThreadActivityRun({ ...starting, providerSessions: [cloning] })?.providerStartingLabel,
     ).toBe("Cloning the repository");

@@ -2111,6 +2111,7 @@ function renderFeedEntry(
         iconSubtleColor={iconSubtleColor}
         label={entry.label}
         providerStartingLabel={entry.providerStartingLabel}
+        boxSetupChecklist={entry.boxSetupChecklist}
       />
     );
   }

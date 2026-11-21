@@ -179,7 +179,10 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const showSetupStep = (step: BoxSetupStep) => {
         providerSession = {
           ...providerSession,
-          extensionStatuses: [{ key: `upstash-box.setup.${step}`, text: SETUP_STEP_TEXT[step] }],
+          extensionStatuses: [
+            ...(providerSession.extensionStatuses ?? []),
+            { key: `upstash-box.setup.${step}`, text: SETUP_STEP_TEXT[step] },
+          ],
           updatedAt: DateTime.nowUnsafe(),
         };
         Queue.offerUnsafe(events, { type: "provider_session.updated", driver, providerSession });

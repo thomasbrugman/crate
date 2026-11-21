@@ -3545,6 +3545,7 @@ export default function ChatView(props: ChatViewProps) {
                     activePendingApproval?.requestId ?? activePendingUserInput?.requestId ?? null
                   }
                   activeTurnStartedAt={activeWorkStartedAt}
+                  boxSetupChecklist={activeActivityRun?.boxSetupChecklist}
                   providerStartingLabel={
                     activeActivityRun?.providerStartingLabelMsg
                       ? messages(activeActivityRun.providerStartingLabelMsg)

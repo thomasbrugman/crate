@@ -579,7 +579,7 @@ it.effect("publishes setup status and clears it on success or failure", () =>
         [
           ["starting", ""],
           ["starting", "Connecting to the Box"],
-          ["starting", "Checking the Box setup"],
+          ["starting", "Connecting to the Box,Checking the Box setup"],
           ["ready", ""],
           ["starting", ""],
           ["starting", "Connecting to the Box"],

@@ -135,7 +135,10 @@ function boxSetupLabel(key: string | undefined) {
 function providerStarting(
   projection: ThreadStructure,
   run: OrchestrationV2ThreadProjection["runs"][number],
-): Pick<ThreadRunSummary, "providerStartingLabel" | "providerStartingLabelMsg"> {
+): Pick<
+  ThreadRunSummary,
+  "providerStartingLabel" | "providerStartingLabelMsg" | "boxSetupChecklist"
+> {
   const session = projection.providerSessions.findLast(
     (session) => session.providerInstanceId === run.providerInstanceId,
   );
@@ -143,11 +146,36 @@ function providerStarting(
   const name = driver === undefined ? undefined : PROVIDER_DISPLAY_NAMES[driver];
   const label =
     isUpstashBoxDriver(driver) && session?.status === "starting"
-      ? boxSetupLabel(session.extensionStatuses?.[0]?.key)
+      ? boxSetupLabel(session.extensionStatuses?.at(-1)?.key)
       : name === undefined
         ? msg("Starting", { $context: "a provider is launching" })
         : msg("Starting {provider}", { provider: name });
-  return { providerStartingLabel: markedTextEnglish([label]), providerStartingLabelMsg: label };
+  const steps = ["connect", "create", "check", "install", "credentials", "clone"].map(
+    (step) => `upstash-box.setup.${step}`,
+  );
+  const reached = session?.extensionStatuses ?? [];
+  const activeKey = reached.at(-1)?.key ?? steps[0];
+  const activeIndex = steps.indexOf(activeKey!);
+  return {
+    providerStartingLabel: markedTextEnglish([label]),
+    providerStartingLabelMsg: label,
+    ...(isUpstashBoxDriver(driver) && session?.status === "starting"
+      ? {
+          boxSetupChecklist: steps.map((key, index) => ({
+            key,
+            labelMsg: boxSetupLabel(key),
+            state:
+              key === activeKey
+                ? ("active" as const)
+                : reached.some((status) => status.key === key)
+                  ? ("done" as const)
+                  : index < activeIndex
+                    ? ("skipped" as const)
+                    : ("pending" as const),
+          })),
+        }
+      : {}),
+  };
 }
 
 function summarizeThreadRun(
