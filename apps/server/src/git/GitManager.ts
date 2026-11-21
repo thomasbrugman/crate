@@ -20,6 +20,8 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+import * as BoxGitHost from "../vcs/BoxGitHost.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
 import {
   GitActionProgressEvent,
   GitActionProgressPhase,
@@ -738,14 +740,15 @@ function toPullRequestHeadRemoteInfo(pr: {
   };
 }
 
-export const make = Effect.gen(function* () {
+const makeInstance = Effect.gen(function* () {
   const gitCore = yield* GitVcsDriver.GitVcsDriver;
   const sourceControlProviders = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
   const textGeneration = yield* TextGeneration.TextGeneration;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const random = yield* SecureRandom.SecureRandom;
-  const fileSystem = yield* FileSystem.FileSystem;
+  const hostFileSystem = yield* FileSystem.FileSystem;
+  const fileSystem = BoxGitHost.fileSystem(hostFileSystem);
   const path = yield* Path.Path;
 
   const sourceControlProvider = (cwd: string) => sourceControlProviders.resolve({ cwd });
@@ -2530,7 +2533,7 @@ export const make = Effect.gen(function* () {
       tempDir,
       `t3code-pr-body-${process.pid}-${yield* randomUUIDv4(cwd)}.md`,
     );
-    yield* fileSystem.writeFileString(bodyFile, generated.body).pipe(
+    yield* hostFileSystem.writeFileString(bodyFile, generated.body).pipe(
       Effect.mapError(
         (cause) =>
           new GitManagerError({
@@ -2564,7 +2567,7 @@ export const make = Effect.gen(function* () {
         title: generated.title,
         bodyFile,
       })
-      .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.ignore)));
+      .pipe(Effect.ensuring(hostFileSystem.remove(bodyFile).pipe(Effect.ignore)));
 
     // The PR already exists at this point, so a failed lookup only loses its metadata.
     const created = yield* findOpenPr(cwd, headContext).pipe(
@@ -3846,4 +3849,5 @@ export const make = Effect.gen(function* () {
   });
 });
 
+export const make = VcsThreadTarget.partition(makeInstance);
 export const layer = Layer.effect(GitManager, make);

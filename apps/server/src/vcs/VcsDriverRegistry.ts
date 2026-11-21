@@ -12,6 +12,8 @@ import { VcsUnsupportedOperationError } from "@t3tools/contracts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 import * as VcsProjectConfig from "./VcsProjectConfig.ts";
 import * as VcsDriver from "./VcsDriver.ts";
+import * as BoxGitHost from "./BoxGitHost.ts";
+import * as VcsThreadTarget from "./VcsThreadTarget.ts";
 
 const DETECTION_CACHE_CAPACITY = 2_048;
 // Detection costs three git processes per cwd; cached hits still stat disk, so TTL bounds only undetectable changes.
@@ -57,8 +59,8 @@ function parseDetectionCacheKey(key: string): {
   };
 }
 
-export const make = Effect.gen(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
+const makeInstance = Effect.gen(function* () {
+  const fileSystem = BoxGitHost.fileSystem(yield* FileSystem.FileSystem);
   const path = yield* Path.Path;
   const projectConfig = yield* VcsProjectConfig.VcsProjectConfig;
   const git = yield* GitVcsDriver.makeVcsDriver;
@@ -165,6 +167,8 @@ export const make = Effect.gen(function* () {
 
   const detect: VcsDriverRegistry["Service"]["detect"] = Effect.fn("VcsDriverRegistry.detect")(
     function* (input) {
+      if (yield* VcsThreadTarget.VcsThreadTarget)
+        return yield* detectWithDriver("git", git, input.cwd);
       const requestedKind = yield* projectConfig.resolveKind(input);
       const key = detectionCacheKey({ cwd: input.cwd, requestedKind });
       const cached = yield* Cache.get(detectionCache, key);
@@ -208,6 +212,7 @@ export const make = Effect.gen(function* () {
   });
 });
 
+export const make = VcsThreadTarget.partition(makeInstance);
 export const layer = Layer.effect(VcsDriverRegistry, make).pipe(
   Layer.provide(VcsProjectConfig.layer),
 );

@@ -216,6 +216,7 @@ import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
 import { readWorkflowScript } from "./orchestration-v2/workflowScriptQuery.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
+import * as BoxThreadResolver from "./vcs/BoxThreadResolver.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import { refreshPushedPullRequests } from "./git/refreshPushedPullRequests.ts";
@@ -3152,73 +3153,90 @@ export const layerWsRpc = (
           }),
         [WS_METHODS.assetsPersistChatAttachments]: (input) =>
           persistChatAttachments(input).pipe(Effect.map((attachments) => ({ attachments }))),
-        [WS_METHODS.subscribeVcsBranch]: (input) => vcsStatusBroadcaster.streamBranchStatus(input),
+        [WS_METHODS.subscribeVcsBranch]: (input) =>
+          BoxThreadResolver.withTargetStream(input, vcsStatusBroadcaster.streamBranchStatus(input)),
         [WS_METHODS.vcsRefreshBranch]: (input) =>
-          vcsStatusBroadcaster.refreshBranchStatus(input).pipe(Effect.asVoid),
-        [WS_METHODS.subscribeVcsStatus]: (input) => vcsStatusBroadcaster.streamStatus(input),
+          BoxThreadResolver.withTarget(
+            input,
+            vcsStatusBroadcaster.refreshBranchStatus(input).pipe(Effect.asVoid),
+          ),
+        [WS_METHODS.subscribeVcsStatus]: (input) =>
+          BoxThreadResolver.withTargetStream(input, vcsStatusBroadcaster.streamStatus(input)),
         [WS_METHODS.subscribeWorktreeSetup]: (input) => worktreeSetupTracker.stream(input.threadId),
         [WS_METHODS.worktreeSetupCancel]: (input) =>
           worktreeSetupTracker
             .cancel(input.threadId)
             .pipe(Effect.map((cancelled) => ({ cancelled }))),
         [WS_METHODS.vcsRefreshStatus]: (input) =>
-          vcsStatusBroadcaster.refreshStatus(input.cwd, { localOnly: input.localOnly ?? false }),
+          BoxThreadResolver.withTarget(
+            input,
+            vcsStatusBroadcaster.refreshStatus(input.cwd, { localOnly: input.localOnly ?? false }),
+          ),
         [WS_METHODS.vcsPull]: (input) =>
-          gitWorkflow.pullCurrentBranch(input.cwd).pipe(
-            Effect.matchCauseEffect({
-              onFailure: (cause) => Effect.failCause(cause),
-              onSuccess: (result) =>
-                refreshGitStatus(input.cwd).pipe(Effect.ignore({ log: true }), Effect.as(result)),
-            }),
+          BoxThreadResolver.withTarget(
+            input,
+            gitWorkflow.pullCurrentBranch(input.cwd).pipe(
+              Effect.matchCauseEffect({
+                onFailure: (cause) => Effect.failCause(cause),
+                onSuccess: (result) =>
+                  refreshGitStatus(input.cwd).pipe(Effect.ignore({ log: true }), Effect.as(result)),
+              }),
+            ),
           ),
         [WS_METHODS.gitRunStackedAction]: (input) =>
-          Stream.callback<GitActionProgressEvent, GitManagerServiceError>((queue) =>
-            gitWorkflow
-              .runStackedAction(input, {
-                actionId: input.actionId,
-                progressReporter: {
-                  publish: (event) => Queue.offer(queue, event).pipe(Effect.asVoid),
-                },
-              })
-              .pipe(
-                Effect.matchCauseEffect({
-                  // Earlier steps (branch, commit) may have landed before the failing one.
-                  onFailure: (cause) =>
-                    refreshGitStatus(input.cwd).pipe(Effect.andThen(Queue.failCause(queue, cause))),
-                  onSuccess: (result) =>
-                    (input.threadId === undefined
-                      ? Effect.void
-                      : linkCreatedPullRequest({
-                          threadId: input.threadId,
-                          result,
-                          commandId: serverCommandId("pr-created-link"),
-                        }).pipe(
-                          Effect.provideService(Orchestrator.OrchestratorV2, orchestrationEngine),
-                          Effect.provideService(ProjectService.ProjectService, projectService),
-                        )
-                    ).pipe(
-                      Effect.andThen(
-                        refreshPushedPullRequests(input, result).pipe(
-                          Effect.provideService(Orchestrator.OrchestratorV2, orchestrationEngine),
-                          Effect.provideService(ProjectStore.ProjectStoreV2, projectStore),
-                          Effect.provideService(
-                            PullRequestService.PullRequestService,
-                            pullRequests,
+          BoxThreadResolver.withTargetStream(
+            input,
+            Stream.callback<GitActionProgressEvent, GitManagerServiceError>((queue) =>
+              gitWorkflow
+                .runStackedAction(input, {
+                  actionId: input.actionId,
+                  progressReporter: {
+                    publish: (event) => Queue.offer(queue, event).pipe(Effect.asVoid),
+                  },
+                })
+                .pipe(
+                  Effect.matchCauseEffect({
+                    // Earlier steps (branch, commit) may have landed before the failing one.
+                    onFailure: (cause) =>
+                      refreshGitStatus(input.cwd).pipe(
+                        Effect.andThen(Queue.failCause(queue, cause)),
+                      ),
+                    onSuccess: (result) =>
+                      (input.threadId === undefined
+                        ? Effect.void
+                        : linkCreatedPullRequest({
+                            threadId: input.threadId,
+                            result,
+                            commandId: serverCommandId("pr-created-link"),
+                          }).pipe(
+                            Effect.provideService(Orchestrator.OrchestratorV2, orchestrationEngine),
+                            Effect.provideService(ProjectService.ProjectService, projectService),
+                          )
+                      ).pipe(
+                        Effect.andThen(
+                          refreshPushedPullRequests(input, result).pipe(
+                            Effect.provideService(Orchestrator.OrchestratorV2, orchestrationEngine),
+                            Effect.provideService(ProjectStore.ProjectStoreV2, projectStore),
+                            Effect.provideService(
+                              PullRequestService.PullRequestService,
+                              pullRequests,
+                            ),
                           ),
                         ),
+                        Effect.andThen(refreshGitStatus(input.cwd)),
+                        Effect.andThen(Queue.end(queue).pipe(Effect.asVoid)),
                       ),
-                      Effect.andThen(refreshGitStatus(input.cwd)),
-                      Effect.andThen(Queue.end(queue).pipe(Effect.asVoid)),
-                    ),
-                }),
-              ),
+                  }),
+                ),
+            ),
           ),
         [WS_METHODS.gitResolvePullRequest]: (input) => gitWorkflow.resolvePullRequest(input),
         [WS_METHODS.gitPreparePullRequestThread]: (input) =>
           gitWorkflow
             .preparePullRequestThread(input)
             .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-        [WS_METHODS.vcsListRefs]: (input) => gitWorkflow.listRefs(input),
+        [WS_METHODS.vcsListRefs]: (input) =>
+          BoxThreadResolver.withTarget(input, gitWorkflow.listRefs(input)),
         [WS_METHODS.vcsCreateWorktree]: (input) =>
           gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsRemoveWorktree]: (input) =>
@@ -3232,19 +3250,25 @@ export const layerWsRpc = (
             ),
           ),
         [WS_METHODS.vcsCreateRef]: (input) =>
-          gitWorkflow
-            .createRef(input)
-            .pipe(
-              Effect.tap(() =>
-                input.switchRef
-                  ? vcsStatusBroadcaster.refreshAfterCheckout(input.cwd)
-                  : refreshGitStatus(input.cwd),
+          BoxThreadResolver.withTarget(
+            input,
+            gitWorkflow
+              .createRef(input)
+              .pipe(
+                Effect.tap(() =>
+                  input.switchRef
+                    ? vcsStatusBroadcaster.refreshAfterCheckout(input.cwd)
+                    : refreshGitStatus(input.cwd),
+                ),
               ),
-            ),
+          ),
         [WS_METHODS.vcsSwitchRef]: (input) =>
-          gitWorkflow
-            .switchRef(input)
-            .pipe(Effect.tap(() => vcsStatusBroadcaster.refreshAfterCheckout(input.cwd))),
+          BoxThreadResolver.withTarget(
+            input,
+            gitWorkflow
+              .switchRef(input)
+              .pipe(Effect.tap(() => vcsStatusBroadcaster.refreshAfterCheckout(input.cwd))),
+          ),
         [WS_METHODS.vcsInit]: (input) =>
           vcsProvisioning.initRepository(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.reviewGetBranchCommits]: (input) => review.getBranchCommits(input),

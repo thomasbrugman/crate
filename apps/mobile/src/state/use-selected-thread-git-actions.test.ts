@@ -289,7 +289,7 @@ describe("automatic feature branch refs", () => {
     expect(resolveAutoFeatureBranchName(refs!.map((ref) => ref.name))).toBe("feature/update-2");
     expect(state.readRefs).toHaveBeenCalledWith({
       environmentId: "environment",
-      input: { cwd: "/repo", limit: 100, refresh: true },
+      input: { cwd: "/repo", threadId: "thread", limit: 100, refresh: true },
     });
   });
 

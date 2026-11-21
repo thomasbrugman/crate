@@ -27,6 +27,7 @@ import * as SourceControlHost from "@t3tools/source-control-core/server/SourceCo
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
 
 const PROVIDER_DETECTION_CACHE_CAPACITY = 2_048;
 const PROVIDER_DETECTION_CACHE_TTL = Duration.seconds(5);
@@ -239,7 +240,7 @@ function bindProviderContext(
 }
 
 /** @public */
-export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWithProviders")(
+const makeWithProvidersInstance = Effect.fn("makeSourceControlProviderRegistryWithProviders")(
   function* (registrations: ReadonlyArray<SourceControlProviderRegistration>) {
     const config = yield* ServerConfig.ServerConfig;
     const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -361,6 +362,11 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
     });
   },
 );
+
+/** @public */
+export const makeWithProviders = (
+  registrations: ReadonlyArray<SourceControlProviderRegistration>,
+) => VcsThreadTarget.partition(makeWithProvidersInstance(registrations));
 
 const make = Effect.gen(function* () {
   const drivers = yield* BuiltInDrivers.SourceControlDrivers;

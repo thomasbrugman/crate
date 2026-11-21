@@ -78,6 +78,7 @@ export function useSelectedThreadGitActions() {
   const { selectedThreadCwd, selectedThreadWorktreePath } = useSelectedThreadWorktree();
   const runStackedAction = useAtomCommand(
     vcsActionManager.runStackedAction({
+      ...(selectedThread ? { threadId: selectedThread.id } : {}),
       environmentId: selectedThread?.environmentId ?? null,
       cwd: selectedThreadCwd,
     }),
@@ -86,6 +87,7 @@ export function useSelectedThreadGitActions() {
 
   const selectedThreadGitRootCwd = selectedThreadProject?.workspaceRoot ?? null;
   const branchTarget = {
+    ...(selectedThread ? { threadId: selectedThread.id } : {}),
     environmentId: selectedThread?.environmentId ?? null,
     cwd: selectedThreadGitRootCwd,
     query: null,
@@ -131,11 +133,15 @@ export function useSelectedThreadGitActions() {
       return null;
     }
 
-    const target = { environmentId: selectedThread.environmentId, cwd };
+    const target = {
+      environmentId: selectedThread.environmentId,
+      cwd,
+      threadId: selectedThread.id,
+    };
     const execute = () =>
       refreshStatus({
         environmentId: selectedThread.environmentId,
-        input: { cwd },
+        input: { cwd, threadId: selectedThread.id },
       });
     const result = options?.quiet
       ? await execute()
@@ -159,7 +165,11 @@ export function useSelectedThreadGitActions() {
   useAtomMount(
     selectedThreadStatusRevalidation(
       selectedThread && selectedThreadProject && selectedThreadCwd
-        ? { environmentId: selectedThread.environmentId, cwd: selectedThreadCwd }
+        ? {
+            environmentId: selectedThread.environmentId,
+            cwd: selectedThreadCwd,
+            threadId: selectedThread.id,
+          }
         : null,
     ),
   );
@@ -188,6 +198,7 @@ export function useSelectedThreadGitActions() {
     const target = {
       environmentId: selectedThread.environmentId,
       cwd: selectedThreadCwd,
+      threadId: selectedThread.id,
     };
     setPendingConnectionError(null);
     const run = () =>
@@ -218,7 +229,12 @@ export function useSelectedThreadGitActions() {
     if (branchTarget.environmentId === null || branchTarget.cwd === null) return null;
     const result = await readRefs({
       environmentId: branchTarget.environmentId,
-      input: { cwd: branchTarget.cwd, limit: 100, refresh: true },
+      input: {
+        cwd: branchTarget.cwd,
+        ...(branchTarget.threadId ? { threadId: branchTarget.threadId } : {}),
+        limit: 100,
+        refresh: true,
+      },
     });
     if (AsyncResult.isFailure(result)) {
       const error = Cause.squash(result.cause);
@@ -263,7 +279,7 @@ export function useSelectedThreadGitActions() {
       async ({ thread, cwd }) => {
         const result = await switchRef({
           environmentId: thread.environmentId,
-          input: { cwd, refName: branch },
+          input: { cwd, refName: branch, threadId: thread.id },
         });
         if (AsyncResult.isFailure(result)) {
           return result;
@@ -289,7 +305,7 @@ export function useSelectedThreadGitActions() {
       async ({ thread, cwd }) => {
         const result = await createRef({
           environmentId: thread.environmentId,
-          input: { cwd, refName: branch, switchRef: true },
+          input: { cwd, refName: branch, switchRef: true, threadId: thread.id },
         });
         if (AsyncResult.isFailure(result)) {
           return result;
@@ -349,7 +365,7 @@ export function useSelectedThreadGitActions() {
       async ({ thread, cwd }) => {
         const result = await pull({
           environmentId: thread.environmentId,
-          input: { cwd },
+          input: { cwd, threadId: thread.id },
         });
         if (AsyncResult.isFailure(result)) {
           return result;

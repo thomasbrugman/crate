@@ -262,13 +262,13 @@ export function BranchToolbarBranchSelector({
       ? null
       : vcsEnvironment.status({
           environmentId,
-          input: { cwd: branchCwd },
+          input: { cwd: branchCwd, threadId },
         }),
   );
   const projectStatusQuery = useEnvironmentQuery(
     activeProjectCwd === null
       ? null
-      : vcsEnvironment.status({ environmentId, input: { cwd: activeProjectCwd } }),
+      : vcsEnvironment.status({ environmentId, input: { cwd: activeProjectCwd, threadId } }),
   );
   const activeProjectCheckoutRoot = projectStatusQuery.data?.workingTree.rootPath;
   const trimmedBranchQuery = branchQuery.trim();
@@ -276,6 +276,7 @@ export function BranchToolbarBranchSelector({
     {
       environmentId,
       cwd: branchCwd,
+      threadId,
       // Substring search needs sanitized names to detect new-branch collisions; refs cannot contain ASCII
       // spaces.
       query: sanitizeNewRefName(trimmedBranchQuery),
@@ -367,6 +368,7 @@ export function BranchToolbarBranchSelector({
           environmentId,
           input: {
             cwd: branchCwd,
+            threadId,
             query: resolvedActiveBranch,
             limit: 10,
           },
@@ -452,7 +454,7 @@ export function BranchToolbarBranchSelector({
   const readSelectedRef = async (worktreePath: string, listedRef: VcsRef): Promise<VcsRef> => {
     const result = await readRefs({
       environmentId,
-      input: { cwd: worktreePath, query: listedRef.name, refKind: "local", limit: 1 },
+      input: { cwd: worktreePath, threadId, query: listedRef.name, refKind: "local", limit: 1 },
     });
     return resolveConfirmedSelectedRef(listedRef, result._tag === "Success" ? result.value : null);
   };
@@ -514,6 +516,7 @@ export function BranchToolbarBranchSelector({
         environmentId,
         input: {
           cwd: selectionTarget.checkoutCwd,
+          threadId,
           refName: refName.name,
         },
       });
@@ -584,6 +587,7 @@ export function BranchToolbarBranchSelector({
         input: {
           cwd: branchCwd,
           refName: name,
+          threadId,
           switchRef: true,
         },
       });
@@ -622,7 +626,7 @@ export function BranchToolbarBranchSelector({
     if (branchCwd === null) return;
     void refreshLocalStatusForPicker({
       environmentId,
-      input: { cwd: branchCwd, localOnly: true },
+      input: { cwd: branchCwd, threadId, localOnly: true },
     });
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refs listed while the project was cloning are empty; reload them past the server's snapshot when the clone finishes
@@ -668,7 +672,7 @@ export function BranchToolbarBranchSelector({
     if (open && !isBranchMenuOpen && branchCwd !== null) {
       void refreshLocalStatusForPicker({
         environmentId,
-        input: { cwd: branchCwd, localOnly: true },
+        input: { cwd: branchCwd, threadId, localOnly: true },
       });
     }
     if (!open) {
