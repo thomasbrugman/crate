@@ -7,6 +7,52 @@ import { ensureBox } from "./bootstrap.ts";
 import { commandCodeHarness } from "./harness.ts";
 
 it.effect(
+  "classifies authentication failures without retaining SDK errors or calling with no key",
+  () =>
+    Effect.gen(function* () {
+      for (const [apiKey, status, create] of [
+        ["", undefined, false],
+        ["   ", undefined, false],
+        ["key", 401, false],
+        ["key", 403, true],
+        ["key", 500, false],
+      ] as const) {
+        let calls = 0;
+        const error = yield* ensureBox(
+          {
+            apiKey,
+            templateBoxName: "template",
+            size: "small",
+            model: "",
+            harness: "commandCode",
+            agentApiKey: "",
+          },
+          "thread-box",
+        ).pipe(
+          Effect.provideService(BoxApi, {
+            get: async () => {
+              calls++;
+              throw new BoxError("private upstream body", create ? 404 : status);
+            },
+            create: async () => {
+              calls++;
+              throw new BoxError("private upstream body", status);
+            },
+            list: async () => [],
+            checkModelKey: async () => {
+              throw new Error("unexpected model key check");
+            },
+          }),
+          Effect.flip,
+        );
+        assert.equal(error.statusCode, status);
+        assert.equal(calls, apiKey.trim() ? (create ? 2 : 1) : 0);
+        assert.notInclude(JSON.stringify(error), "private upstream body");
+      }
+    }),
+);
+
+it.effect(
   "bootstraps credentials and repositories once, supports no remote, and sanitizes clone failures",
   () =>
     Effect.gen(function* () {

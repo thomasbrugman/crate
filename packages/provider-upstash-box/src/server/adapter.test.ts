@@ -18,6 +18,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import { knownProviderFailureMessage } from "@t3tools/provider-core/server/failure";
 import {
   ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
@@ -56,12 +57,14 @@ const setup = Effect.fn("test.setupBox")(function* (
   deleteBox?: () => Promise<void>,
   harness: BoxHarness = "commandCode",
   command?: BoxHandle["exec"]["command"],
+  apiKey = "test-key",
 ) {
   const commands: string[] = [];
   const prompts: string[] = [];
   const harnesses: string[] = [];
   const lookup: {
     error?: unknown;
+    createError?: unknown;
     exec?: BoxHandle["exec"]["command"];
     statusError?: unknown;
     streamError?: unknown;
@@ -109,7 +112,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   const adapter = yield* makeUpstashBoxAdapter(
     instanceId,
     { driver: BOX_HARNESS_DRIVER_KINDS[harness], harness, agentApiKey },
-    Effect.succeed({ apiKey: "test-key", templateBoxName: "cc-harness", size: "small" }),
+    Effect.succeed({ apiKey, templateBoxName: "cc-harness", size: "small" }),
   ).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
@@ -119,6 +122,7 @@ const setup = Effect.fn("test.setupBox")(function* (
         return lookup.replacement ?? box;
       },
       create: async ({ size }) => {
+        if (lookup.createError) throw lookup.createError;
         createdSizes.push(size);
         lookup.error = undefined;
         lookup.statusError = undefined;
@@ -179,6 +183,56 @@ const setup = Effect.fn("test.setupBox")(function* (
   };
   return { runtime, turn, prompts, adapter, lookup, box, commands, harnesses, createdSizes };
 });
+
+it.effect("explains missing and rejected API keys without exposing upstream details", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      for (const harness of ["commandCode", "claudeCode", "codex"] as const) {
+        const { runtime, lookup, turn } = yield* setup(fakeStream([]), undefined, harness);
+        for (const status of [401, 403, 500]) {
+          lookup.error = new BoxError("private upstream body with test-key", status);
+          const error = yield* runtime
+            .ensureThread({ threadId, modelSelection, runtimePolicy })
+            .pipe(Effect.flip);
+          assert.equal(
+            knownProviderFailureMessage(error),
+            status === 500
+              ? undefined
+              : "Upstash Box rejected the API key. Check it in Settings → Providers.",
+          );
+          assert.notInclude(JSON.stringify(error), "private upstream body");
+          assert.notInclude(JSON.stringify(error), "test-key");
+        }
+        const missing = yield* setup(fakeStream([]), undefined, harness, undefined, "").pipe(
+          Effect.flip,
+        );
+        assert.equal(
+          knownProviderFailureMessage(missing),
+          "Upstash Box API key is missing. Add it in Settings → Providers.",
+        );
+        lookup.error = new BoxError("private upstream body with test-key", 401);
+        const resumed = yield* runtime
+          .resumeThread({ providerThread: turn.providerThread })
+          .pipe(Effect.flip);
+        assert.equal(
+          knownProviderFailureMessage(resumed),
+          "Upstash Box rejected the API key. Check it in Settings → Providers.",
+        );
+        lookup.error = new BoxError("missing", 404);
+        lookup.createError = new BoxError("private upstream body with test-key", 401);
+        const recreated = yield* runtime
+          .resumeThread({ providerThread: turn.providerThread })
+          .pipe(Effect.flip);
+        assert.equal(
+          knownProviderFailureMessage(recreated),
+          "Upstash Box rejected the API key. Check it in Settings → Providers.",
+        );
+        assert.notInclude(JSON.stringify(recreated), "private upstream body");
+        assert.notInclude(JSON.stringify(recreated), "test-key");
+      }
+    }),
+  ),
+);
 
 it.effect("uses the saved Box size for provisioning and reprovisioning", () =>
   Effect.scoped(
