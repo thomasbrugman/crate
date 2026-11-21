@@ -233,6 +233,7 @@ it.live("retains idle Boxes containing only gitignored work", () =>
         async () => {
           deleted++;
         },
+        "commandCode",
         async (command) => {
           if (!command.includes("git stash")) return { stdout: "", exitCode: 0 };
           const result = NodeChildProcess.spawnSync(
