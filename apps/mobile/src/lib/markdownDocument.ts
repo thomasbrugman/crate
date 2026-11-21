@@ -338,11 +338,12 @@ export function markdownWithInlineFileLinks(markdown: string, fileLink: RegExp):
 
 export function markdownWithPlainFilePaths(markdown: string): string {
   const root = parser.parse(markdown);
-  const definitions = new Map(
-    root.children.flatMap((node) =>
-      node.type === "definition" ? [[node.identifier, node.url] as const] : [],
-    ),
-  );
+  const definitions = new Map<string, string>();
+  for (const node of root.children) {
+    if (node.type === "definition" && !definitions.has(node.identifier)) {
+      definitions.set(node.identifier, node.url);
+    }
+  }
   const edits: MarkdownEdit[] = [];
   const visit = (node: MarkdownNode) => {
     const href =

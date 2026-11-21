@@ -21,7 +21,9 @@ describe("plain file paths for cloud replies", () => {
     ["src/first.ts", "https://example.com", "` src/first.ts `"],
   ])("uses the first reference definition (%s before %s)", (first, second, expected) => {
     const definitions = `\n\n[s]: ${first}\n[s]: ${second}`;
-    expect(markdownWithPlainFilePaths(`[source][s]${definitions}`)).toBe(`${expected}${definitions}`);
+    expect(markdownWithPlainFilePaths(`[source][s]${definitions}`)).toBe(
+      `${expected}${definitions}`,
+    );
   });
 
   it("keeps inline code and converts file links without changing external links or code blocks", () => {
