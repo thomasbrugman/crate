@@ -580,7 +580,9 @@ it.effect(
           inlineContextLength: text.length - 5,
         });
         const events = yield* collect(runtime.events);
-        assert.deepEqual(prompts, [text]);
+        assert.deepEqual(prompts, [
+          `t3stash-run:${Buffer.from(turn.attemptId).toString("hex")}\n${text}`,
+        ]);
         for (const event of events) yield* decodeEvent(event);
         const messages = events
           .filter((event) => event.type === "message.updated")
@@ -644,7 +646,13 @@ it.effect(
           lastRunOrdinal: 2,
           handoffIds: [ContextHandoffId.make("follow-up-handoff")],
         };
-        yield* runtime.startTurn({ ...turn, providerThread: current, providerTurnOrdinal: 2 });
+        const attemptId = RunAttemptId.make("follow-up-attempt");
+        yield* runtime.startTurn({
+          ...turn,
+          attemptId,
+          providerThread: current,
+          providerTurnOrdinal: 2,
+        });
         const followUp = yield* collect(runtime.events);
         const saved = followUp
           .filter((event) => event.type === "provider_thread.updated")
@@ -653,6 +661,7 @@ it.effect(
         assert.equal(saved?.lastRunOrdinal, current.lastRunOrdinal);
         assert.deepEqual(saved?.handoffIds, current.handoffIds);
         assert.equal(saved?.nativeConversationHeadRef?.nativeId, "cc-session");
+        assert.equal(prompts[1], `t3stash-run:${Buffer.from(attemptId).toString("hex")}\nhello`);
       }),
     ),
 );

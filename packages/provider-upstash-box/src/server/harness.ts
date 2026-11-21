@@ -35,7 +35,8 @@ function resolveBin() {
 }
 
 const argv = process.argv.slice(2);
-const prompt = readArg(argv, '-p') ?? readArg(argv, '--prompt') ?? '';
+// Keep the marker in argv for cleanup, but never forward it to Command Code.
+const prompt = (readArg(argv, '-p') ?? readArg(argv, '--prompt') ?? '').replace(/^t3stash-run:[0-9a-f]+\\n/, '');
 const model = readArg(argv, '--model');
 function newestSession() {
 	const projects = join(homedir(), '.commandcode', 'projects');

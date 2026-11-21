@@ -42,6 +42,7 @@ export interface BoxAgentConfig {
 
 interface ActiveTurn {
   box: BoxHandle;
+  runMarker: string;
   stream?: BoxStream;
   translation: BoxTurnTranslation;
   interrupted: boolean;
@@ -351,6 +352,8 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             harness !== "commandCode" && request.runtimePolicy.repositoryUrl
               ? `The repository is checked out at ${BOX_REPOSITORY_PATH}.\n\n${request.message.text}`
               : request.message.text;
+          const runMarker = `t3stash-run:${Buffer.from(request.attemptId).toString("hex")}\n`;
+          const streamPrompt = harness === "commandCode" ? runMarker + prompt : prompt;
           const translation = new BoxTurnTranslation(
             { ...request, providerThread },
             ids.derive,
@@ -391,7 +394,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             }
             return new BoxRuntimeError({ operation: "stream" });
           };
-          const turn: ActiveTurn = { box, translation, interrupted: false };
+          const turn: ActiveTurn = { box, runMarker, translation, interrupted: false };
           active = turn;
           yield* publish(translation.start(yield* DateTime.now));
           if (recreatedThreads.has(providerThread.id)) {
@@ -433,19 +436,19 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               try: async () => {
                 let stream: BoxStream;
                 try {
-                  stream = await box.agent.stream({ prompt });
+                  stream = await box.agent.stream({ prompt: streamPrompt });
                 } catch (error) {
                   if (!(error instanceof BoxError) || error.statusCode !== 409) throw error;
                   // A cancelled run can leave the Box rejecting work until explicitly resumed.
                   await box.resume();
-                  stream = await box.agent.stream({ prompt });
+                  stream = await box.agent.stream({ prompt: streamPrompt });
                 }
                 turn.stream = stream;
                 return stream;
               },
               catch: (error) => streamError(error),
             }).pipe(Effect.uninterruptible);
-            if (turn.interrupted) yield* cancelBoxRun(box, stream);
+            if (turn.interrupted) yield* cancelBoxRun(box, stream, runMarker);
             yield* Stream.fromAsyncIterable(stream, (error) => streamError(error, true)).pipe(
               Stream.runForEach((chunk) =>
                 Effect.gen(function* () {
@@ -456,7 +459,9 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           });
           yield* process.pipe(
             Effect.onInterrupt(() =>
-              turn.stream ? cancelBoxRun(box, turn.stream).pipe(Effect.ignore) : Effect.void,
+              turn.stream
+                ? cancelBoxRun(box, turn.stream, runMarker).pipe(Effect.ignore)
+                : Effect.void,
             ),
             Effect.isFailure,
             Effect.flatMap(
@@ -511,9 +516,9 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         interruptTurn: Effect.fn("UpstashBox.interruptTurn")(function* (request) {
           if (!active || active.translation.providerTurnId !== request.providerTurnId) return;
           active.interrupted = true;
-          const { stream, box } = active;
+          const { stream, box, runMarker } = active;
           if (stream)
-            yield* cancelBoxRun(box, stream).pipe(
+            yield* cancelBoxRun(box, stream, runMarker).pipe(
               Effect.mapError(
                 () =>
                   new Adapter.ProviderAdapterInterruptError({
@@ -539,7 +544,8 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       yield* Effect.addFinalizer(() =>
         Effect.gen(function* () {
           const turn = active;
-          if (turn?.stream) yield* cancelBoxRun(turn.box, turn.stream).pipe(Effect.ignore);
+          if (turn?.stream)
+            yield* cancelBoxRun(turn.box, turn.stream, turn.runMarker).pipe(Effect.ignore);
           yield* Queue.shutdown(events);
         }),
       );
