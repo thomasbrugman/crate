@@ -98,7 +98,8 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
   Effect.gen(function* () {
     const created: BoxConfig[] = [];
     const commands: string[] = [];
-    let cloned = false;
+    let bootstrapped = false;
+    let clones = 0;
     const box: BoxHandle = {
       id: "box-claude",
       agent: {
@@ -109,8 +110,9 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
       exec: {
         command: async (command) => {
           commands.push(command);
-          if (command.includes("git clone --")) cloned = true;
-          else if (command.startsWith("test -d")) return { stdout: "", exitCode: cloned ? 0 : 1 };
+          if (command.startsWith("test -f")) return { stdout: "", exitCode: bootstrapped ? 0 : 1 };
+          if (command.startsWith("touch ")) bootstrapped = true;
+          if (command.includes("git clone --")) clones++;
           return { stdout: "", exitCode: 0 };
         },
       },
@@ -141,8 +143,20 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
       "thread-box",
       "https://github.com/owner/repo.git",
     ).pipe(Effect.provideService(BoxApi, api));
+    const bootstrapWithoutRepository = ensureBox(
+      {
+        apiKey: "key",
+        templateBoxName: "template",
+        size: "medium",
+        harness: "claudeCode",
+        model: "anthropic/claude-opus-5",
+        agentApiKey: "",
+      },
+      "thread-box",
+    ).pipe(Effect.provideService(BoxApi, api));
     yield* bootstrap;
     yield* bootstrap;
+    yield* bootstrapWithoutRepository;
     assert.deepEqual(created[0]?.agent, {
       harness: Agent.ClaudeCode,
       model: "anthropic/claude-opus-5",
@@ -151,6 +165,11 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
     assert.equal(created[0]?.size, "medium");
     assert.isUndefined(created[0]?.env);
     assert.isFalse(commands.some((command) => command.includes("command-code")));
-    assert.equal(commands.filter((command) => command.includes("git clone --")).length, 1);
+    assert.equal(clones, 1);
+    bootstrapped = false;
+    yield* bootstrapWithoutRepository;
+    // A Box without a repository still gets the template's Git login for later clones.
+    assert.include(commands, "test ! -f ~/.git-credentials || cat ~/.git-credentials");
+    assert.equal(clones, 1);
   }),
 );

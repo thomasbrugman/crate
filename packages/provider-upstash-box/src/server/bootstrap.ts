@@ -14,6 +14,8 @@ export interface BoxRuntimeConfig {
   readonly agentApiKey: string;
 }
 
+const BOOTSTRAPPED_MARKER = "/home/boxuser/.t3stash-bootstrapped";
+
 export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
   config: BoxRuntimeConfig,
   name: string,
@@ -34,6 +36,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
       try {
         const commandCode = config.harness === "commandCode";
         const checks = [
+          `test -f ${BOOTSTRAPPED_MARKER}`,
           ...(commandCode
             ? [
                 "test -f /home/boxuser/.local/bin/t3stash-harness.mjs",
@@ -43,7 +46,6 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
             : []),
           ...(repositoryUrl ? ["test -d /workspace/home/repo/.git"] : []),
         ];
-        if (checks.length === 0) return box;
         const ready = await box.exec.command(checks.join(" && "));
         if (ready.exitCode === 0) return box;
         const template = await api.get(config.templateBoxName, config.apiKey);
@@ -65,6 +67,8 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
           );
           if (clone.exitCode !== 0) throw new Error("Repository clone failed.");
         }
+        const marked = await box.exec.command(`touch ${BOOTSTRAPPED_MARKER}`);
+        if (marked.exitCode !== 0) throw new Error("Box bootstrap could not be recorded.");
         return box;
       } catch {
         // SDK errors can include request bodies containing the template credentials.
