@@ -19,6 +19,7 @@ it.effect(
         let clones = 0;
         const commands: string[] = [];
         const writes: string[] = [];
+        const steps: string[] = [];
         const box: BoxHandle = {
           id: "box-bootstrap",
           agent: {
@@ -69,6 +70,7 @@ it.effect(
           { apiKey: "key", templateBoxName: "template", size: "small", model: "" },
           "thread-box",
           repositoryUrl,
+          (step) => steps.push(step),
         ).pipe(Effect.provideService(BoxApi, api));
         if (fails) {
           const error = yield* bootstrap.pipe(Effect.flip);
@@ -77,6 +79,16 @@ it.effect(
         } else {
           yield* bootstrap;
           yield* bootstrap;
+          assert.deepEqual(steps, [
+            "connect",
+            "create",
+            "check",
+            "install",
+            "credentials",
+            ...(repositoryUrl ? ["clone"] : []),
+            "connect",
+            "check",
+          ]);
           assert.equal(clones, repositoryUrl ? 1 : 0);
           assert.equal(writes.filter((path) => path.endsWith(".git-credentials")).length, 1);
           assert.include(commands, "chmod 600 /home/boxuser/.git-credentials");
