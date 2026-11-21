@@ -15,9 +15,11 @@ import { BoxApi, BoxRuntimeError, isMissingBox, type BoxHandle, type BoxStream }
 import { ensureBox, type BoxRuntimeConfig, type BoxSetupStep } from "./bootstrap.ts";
 import { capabilities } from "./capabilities.ts";
 import { commandCodeHarness } from "./harness.ts";
+import { cancelBoxRun } from "./stop.ts";
 import { BoxTurnTranslation, UPSTASH_BOX_PROVIDER as driver } from "./translation.ts";
 
 interface ActiveTurn {
+  box: BoxHandle;
   stream?: BoxStream;
   translation: BoxTurnTranslation;
   interrupted: boolean;
@@ -240,7 +242,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const box = boxes.get(request.providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
           const translation = new BoxTurnTranslation(request, ids.derive, yield* DateTime.now);
-          const turn: ActiveTurn = { translation, interrupted: false };
+          const turn: ActiveTurn = { box, translation, interrupted: false };
           active = turn;
           yield* publish(translation.start(yield* DateTime.now));
           const process = Effect.gen(function* () {
@@ -253,11 +255,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               },
               catch: () => new BoxRuntimeError({ operation: "stream" }),
             }).pipe(Effect.uninterruptible);
-            if (turn.interrupted)
-              yield* Effect.tryPromise({
-                try: () => stream.cancel(),
-                catch: () => new BoxRuntimeError({ operation: "cancel" }),
-              });
+            if (turn.interrupted) yield* cancelBoxRun(box, stream);
             yield* Stream.fromAsyncIterable(
               stream,
               () => new BoxRuntimeError({ operation: "stream" }),
@@ -271,9 +269,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           });
           yield* process.pipe(
             Effect.onInterrupt(() =>
-              Effect.promise(async () => {
-                await turn.stream?.cancel();
-              }).pipe(Effect.ignore),
+              turn.stream ? cancelBoxRun(box, turn.stream).pipe(Effect.ignore) : Effect.void,
             ),
             Effect.isFailure,
             Effect.flatMap(
@@ -308,17 +304,18 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         interruptTurn: Effect.fn("UpstashBox.interruptTurn")(function* (request) {
           if (!active || active.translation.providerTurnId !== request.providerTurnId) return;
           active.interrupted = true;
-          const stream = active.stream;
+          const { stream, box } = active;
           if (stream)
-            yield* Effect.tryPromise({
-              try: () => stream.cancel(),
-              catch: () =>
-                new Adapter.ProviderAdapterInterruptError({
-                  driver,
-                  providerThreadId: request.providerThread.id,
-                  providerTurnId: request.providerTurnId,
-                }),
-            });
+            yield* cancelBoxRun(box, stream).pipe(
+              Effect.mapError(
+                () =>
+                  new Adapter.ProviderAdapterInterruptError({
+                    driver,
+                    providerThreadId: request.providerThread.id,
+                    providerTurnId: request.providerTurnId,
+                  }),
+              ),
+            );
         }),
         steerTurn: (request) =>
           Effect.fail(
@@ -334,8 +331,8 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       };
       yield* Effect.addFinalizer(() =>
         Effect.gen(function* () {
-          const stream = active?.stream;
-          if (stream) yield* Effect.promise(() => stream.cancel()).pipe(Effect.ignore);
+          const turn = active;
+          if (turn?.stream) yield* cancelBoxRun(turn.box, turn.stream).pipe(Effect.ignore);
           yield* Queue.shutdown(events);
         }),
       );

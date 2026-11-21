@@ -47,7 +47,7 @@ const setup = Effect.fn("test.setupBox")(function* (
 ) {
   const prompts: string[] = [];
   const harnesses: string[] = [];
-  const lookup: { error?: unknown } = {};
+  const lookup: { error?: unknown; exec?: BoxHandle["exec"]["command"] } = {};
   const box: BoxHandle = {
     id: "box-123",
     agent: {
@@ -56,7 +56,7 @@ const setup = Effect.fn("test.setupBox")(function* (
         return typeof stream === "function" ? await stream() : stream;
       },
     },
-    exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
+    exec: { command: async (command) => lookup.exec?.(command) ?? { stdout: "", exitCode: 0 } },
     files: {
       write: async ({ content }) => {
         harnesses.push(content);
@@ -129,7 +129,7 @@ const setup = Effect.fn("test.setupBox")(function* (
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn, prompts, adapter, lookup, harnesses };
+  return { runtime, turn, prompts, adapter, lookup, harnesses, box };
 });
 
 it.effect(
@@ -175,12 +175,18 @@ it.effect("cancels a run that finishes starting while its session shuts down", (
     const starting = Promise.withResolvers<void>();
     const ready = Promise.withResolvers<BoxStream>();
     let cancelled = 0;
+    let cleaned = 0;
     yield* Effect.scoped(
       Effect.gen(function* () {
-        const { runtime, turn } = yield* setup(async () => {
+        const { runtime, turn, lookup } = yield* setup(async () => {
           starting.resolve();
           return ready.promise;
         });
+        lookup.exec = async () => {
+          assert.isAbove(cancelled, 0);
+          cleaned++;
+          return { stdout: "", exitCode: 0 };
+        };
         yield* runtime.startTurn(turn);
         yield* Effect.promise(() => starting.promise);
         yield* Effect.addFinalizer(() =>
@@ -196,6 +202,7 @@ it.effect("cancels a run that finishes starting while its session shuts down", (
       }),
     );
     assert.equal(cancelled, 1);
+    assert.isAbove(cleaned, 0);
   }),
 );
 
@@ -448,44 +455,56 @@ it.effect(
     ),
 );
 
-it.effect("cancels the active stream and emits one interrupted terminal", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const cancelled = Promise.withResolvers<void>();
-      let cancelCount = 0;
-      const { runtime, turn } = yield* setup({
-        id: "native-run",
-        cancel: async () => {
-          cancelCount++;
-          cancelled.resolve();
-        },
-        async *[Symbol.asyncIterator]() {
-          yield { type: "start", runId: "native-run" };
-          await cancelled.promise;
-        },
-      });
-      yield* runtime.startTurn(turn);
-      const started = yield* runtime.events.pipe(
-        Stream.filter(
-          (event) =>
-            event.type === "provider_turn.updated" && event.providerTurn.nativeTurnRef !== null,
-        ),
-        Stream.take(1),
-        Stream.runCollect,
-      );
-      const event = started[0];
-      assert.isDefined(event);
-      if (event?.type !== "provider_turn.updated") return yield* Effect.die("Missing start event");
-      yield* runtime.interruptTurn({
-        providerThread: turn.providerThread,
-        providerTurnId: event.providerTurn.id,
-      });
-      const events = yield* collect(runtime.events);
-      assert.equal(cancelCount, 1);
-      assert.equal(
-        events.filter((entry) => entry.type === "turn.terminal")[0]?.status,
-        "interrupted",
-      );
-    }),
-  ),
+it.effect.each(["ok", "throw", "exit"] as const)(
+  "cancels the active stream and interrupts despite %s cleanup",
+  (cleanup) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const cancelled = Promise.withResolvers<void>();
+        let cancelCount = 0;
+        const order: string[] = [];
+        const { runtime, turn, lookup } = yield* setup({
+          id: "native-run",
+          cancel: async () => {
+            cancelCount++;
+            order.push("cancel");
+            cancelled.resolve();
+          },
+          async *[Symbol.asyncIterator]() {
+            yield { type: "start", runId: "native-run" };
+            await cancelled.promise;
+          },
+        });
+        lookup.exec = async (command) => {
+          assert.include(command, "t3stash-harness.mjs");
+          order.push("kill");
+          if (cleanup === "throw") throw new Error("private cleanup failure");
+          return { stdout: "", exitCode: cleanup === "exit" ? 1 : 0 };
+        };
+        yield* runtime.startTurn(turn);
+        const started = yield* runtime.events.pipe(
+          Stream.filter(
+            (event) =>
+              event.type === "provider_turn.updated" && event.providerTurn.nativeTurnRef !== null,
+          ),
+          Stream.take(1),
+          Stream.runCollect,
+        );
+        const event = started[0];
+        assert.isDefined(event);
+        if (event?.type !== "provider_turn.updated")
+          return yield* Effect.die("Missing start event");
+        yield* runtime.interruptTurn({
+          providerThread: turn.providerThread,
+          providerTurnId: event.providerTurn.id,
+        });
+        const events = yield* collect(runtime.events);
+        assert.equal(cancelCount, 1);
+        assert.deepEqual(order, ["cancel", "kill"]);
+        assert.equal(
+          events.filter((entry) => entry.type === "turn.terminal")[0]?.status,
+          "interrupted",
+        );
+      }),
+    ),
 );
