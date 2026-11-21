@@ -20,6 +20,7 @@ type ToolItem = Extract<OrchestrationV2TurnItem, { type: "dynamic_tool" }>;
 
 export class BoxTurnTranslation {
   private text = "";
+  private textBoundary = false;
   private finished: Extract<Chunk, { type: "finish" }> | undefined;
   private startedAt: DateTime.Utc;
   private tools: ToolItem[] = [];
@@ -163,9 +164,13 @@ export class BoxTurnTranslation {
           },
         ];
       case "text-delta":
+        if (!chunk.text) return [];
+        if (this.text && this.textBoundary) this.text += "\n\n";
+        this.textBoundary = false;
         this.text += chunk.text;
         return this.messageEvents(now, true);
       case "tool-call": {
+        this.textBoundary = true;
         const ordinal = ++this.itemOrdinal;
         const item: ToolItem = {
           id: this.ids.turnItemFromProviderItem({
@@ -195,6 +200,7 @@ export class BoxTurnTranslation {
         return [{ type: "turn_item.updated", driver: UPSTASH_BOX_PROVIDER, turnItem: item }];
       }
       case "tool-result": {
+        this.textBoundary = true;
         const index = this.tools.findLastIndex(
           (item) =>
             item.status === "running" &&

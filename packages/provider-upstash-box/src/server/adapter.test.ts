@@ -284,6 +284,52 @@ it.effect(
     ),
 );
 
+it.effect(
+  "separates text across tools without splitting streaming deltas or adding empty paragraphs",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        for (const error of [false, true]) {
+          const { runtime, turn } = yield* setup(
+            fakeStream(
+              [
+                { type: "tool-call", toolName: "Read", input: {} },
+                { type: "tool-result", output: "ready" },
+                { type: "text-delta", text: "complete." },
+                { type: "tool-call", toolName: "Read", input: {} },
+                { type: "tool-result", output: "read" },
+                { type: "text-delta", text: "" },
+                { type: "text-delta", text: "The guard" },
+                { type: "text-delta", text: " works instead." },
+                { type: "tool-call", toolName: "Run", input: {} },
+                { type: "text-delta", text: "Still running" },
+                { type: "text-delta", text: " in the window." },
+                { type: "tool-result", output: "done" },
+                { type: "text-delta", text: "Result:" },
+                ...(!error ? [finish] : []),
+              ],
+              error,
+            ),
+          );
+          yield* runtime.startTurn(turn);
+          const events = yield* collect(runtime.events);
+          const message = events
+            .filter((event) => event.type === "message.updated")
+            .at(-1)?.message;
+          assert.equal(
+            message?.text,
+            "complete.\n\nThe guard works instead.\n\nStill running in the window.\n\nResult:",
+          );
+          assert.isFalse(message?.streaming);
+          assert.equal(
+            events.filter((event) => event.type === "turn.terminal")[0]?.status,
+            error ? "failed" : "completed",
+          );
+        }
+      }),
+    ),
+);
+
 it.effect("cancels the active stream and emits one interrupted terminal", () =>
   Effect.scoped(
     Effect.gen(function* () {
