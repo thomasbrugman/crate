@@ -53,6 +53,9 @@ import {
 } from "@t3tools/provider-core/server/textGenerationOperations";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
+import * as BoxGitHost from "../vcs/BoxGitHost.ts";
+import { BoxExec } from "@t3tools/provider-upstash-box/server";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProjectConfig from "../vcs/VcsProjectConfig.ts";
 import * as GitWorkflowService from "./GitWorkflowService.ts";
@@ -3204,40 +3207,75 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
     }),
   );
 
-  it.effect("includes CLAUDE.md for Claude writers only when it differs from AGENTS.md", () =>
-    Effect.gen(function* () {
-      const repoDir = yield* makeTempDir("t3code-git-manager-");
-      yield* initRepo(repoDir);
-      NodeFS.writeFileSync(NodePath.join(repoDir, "AGENTS.md"), "Use imperative subjects.\n");
-      NodeFS.copyFileSync(NodePath.join(repoDir, "AGENTS.md"), NodePath.join(repoDir, "CLAUDE.md"));
-      NodeFS.writeFileSync(NodePath.join(repoDir, "README.md"), "hello\n");
-      const commitInstructions: Array<string | undefined> = [];
+  it.effect.each([false, true])(
+    "includes distinct CLAUDE.md for Claude writers (Box: %s)",
+    (inBox) =>
+      Effect.gen(function* () {
+        const repoDir = yield* makeTempDir("t3code-git-manager-");
+        yield* initRepo(repoDir);
+        NodeFS.writeFileSync(NodePath.join(repoDir, "AGENTS.md"), "Use imperative subjects.\n");
+        NodeFS.copyFileSync(
+          NodePath.join(repoDir, "AGENTS.md"),
+          NodePath.join(repoDir, "CLAUDE.md"),
+        );
+        NodeFS.writeFileSync(NodePath.join(repoDir, "README.md"), "hello\n");
+        const commitInstructions: Array<string | undefined> = [];
+        const boxExec = BoxExec.BoxExec.of({
+          run: (input) =>
+            Effect.sync(() => {
+              const command = [input.command, ...(input.args ?? []).map(BoxGitHost.quote)].join(
+                " ",
+              );
+              const result = NodeChildProcess.spawnSync("sh", ["-c", command], {
+                cwd: input.cwd ?? repoDir,
+                encoding: "utf8",
+              });
+              return { exitCode: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
+            }),
+        });
 
-      const { manager } = yield* makeManager({
-        serverSettings: {
-          textGenerationModelSelection: {
-            instanceId: ProviderInstanceId.make("claudeAgent"),
-            model: "claude-sonnet-4-5",
+        const { manager } = yield* makeManager({
+          serverSettings: {
+            textGenerationModelSelection: {
+              instanceId: ProviderInstanceId.make("claudeAgent"),
+              model: "claude-sonnet-4-5",
+            },
           },
-        },
-        textGeneration: {
-          generateCommitMessage: (input) => {
-            commitInstructions.push(input.policy?.commitInstructions);
-            return Effect.succeed({ subject: "Update readme", body: "" });
+          textGeneration: {
+            generateCommitMessage: (input) => {
+              commitInstructions.push(input.policy?.commitInstructions);
+              return Effect.succeed({ subject: "Update readme", body: "" });
+            },
           },
-        },
-      });
+        });
 
-      yield* runStackedAction(manager, { cwd: repoDir, action: "commit" });
+        const commit = () =>
+          runStackedAction(manager, {
+            cwd: inBox ? "/host/shared" : repoDir,
+            action: "commit",
+          }).pipe(
+            Effect.provideService(BoxExec.BoxExec, boxExec),
+            Effect.provideService(
+              VcsThreadTarget.VcsThreadTarget,
+              inBox
+                ? {
+                    threadId: ThreadId.make("box-writer"),
+                    projectRoot: "/host/shared",
+                    checkoutRoot: repoDir,
+                  }
+                : undefined,
+            ),
+          );
+        yield* commit();
 
-      NodeFS.writeFileSync(NodePath.join(repoDir, "CLAUDE.md"), "Mention the Claude provider.\n");
-      NodeFS.writeFileSync(NodePath.join(repoDir, "README.md"), "hello again\n");
-      yield* runStackedAction(manager, { cwd: repoDir, action: "commit" });
+        NodeFS.writeFileSync(NodePath.join(repoDir, "CLAUDE.md"), "Mention the Claude provider.\n");
+        NodeFS.writeFileSync(NodePath.join(repoDir, "README.md"), "hello again\n");
+        yield* commit();
 
-      expect(commitInstructions[0]).toContain("Local AGENTS.md:\nUse imperative subjects.");
-      expect(commitInstructions[0]).not.toContain("Local CLAUDE.md:");
-      expect(commitInstructions[1]).toContain("Local CLAUDE.md:\nMention the Claude provider.");
-    }),
+        expect(commitInstructions[0]).toContain("Local AGENTS.md:\nUse imperative subjects.");
+        expect(commitInstructions[0]).not.toContain("Local CLAUDE.md:");
+        expect(commitInstructions[1]).toContain("Local CLAUDE.md:\nMention the Claude provider.");
+      }),
   );
 
   it.effect("keeps signature output out of recent commit subjects", () =>

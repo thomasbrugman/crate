@@ -106,6 +106,8 @@ import * as DesktopBrowserChannel from "./preview/DesktopBrowserChannel.ts";
 import * as ServerBrowserStream from "./preview/ServerBrowserStream.ts";
 import * as PreviewBrowser from "./preview/PreviewBrowser.ts";
 import * as ProcessRunner from "./processRunner.ts";
+import { BoxExec } from "@t3tools/provider-upstash-box/server";
+import * as BoxThreadResolver from "./vcs/BoxThreadResolver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -493,6 +495,16 @@ const layerReview = ReviewService.cloudLayer.pipe(
   Layer.provideMerge(layerVcsDriverRegistry),
 );
 
+const layerBoxGit = BoxExec.layer.pipe(
+  Layer.provideMerge(
+    BoxThreadResolver.layer.pipe(
+      Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
+      Layer.provide(SecretResolver.layer),
+      Layer.provide(layerServerSettings),
+    ),
+  ),
+);
+
 const layerVcs = Layer.empty.pipe(
   Layer.provideMerge(VcsProjectConfig.layer),
   Layer.provideMerge(layerVcsDriverRegistry),
@@ -743,6 +755,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(layerSourceControlProviderRegistry),
   Layer.provideMerge(layerGit),
   Layer.provideMerge(layerVcs),
+  Layer.provideMerge(layerBoxGit),
   Layer.provideMerge(Layer.mergeAll(layerTerminal, layerPreview, layerDevice)),
   Layer.provideMerge(layerPersistence),
   Layer.provideMerge(Layer.mergeAll(Keybindings.layer, UsageLimitSources.layer)),

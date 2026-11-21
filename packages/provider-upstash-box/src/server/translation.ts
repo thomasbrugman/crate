@@ -72,6 +72,10 @@ export class BoxTurnTranslation {
     return this.finished?.sessionId;
   }
 
+  get hasFinished() {
+    return this.finished !== undefined;
+  }
+
   private node(
     status: OrchestrationV2ExecutionNode["status"],
     now: DateTime.Utc,
@@ -245,7 +249,12 @@ export class BoxTurnTranslation {
     }
   }
 
-  complete(now: DateTime.Utc, interrupted = false, failed = false): ProviderAdapterV2Event[] {
+  complete(
+    now: DateTime.Utc,
+    interrupted = false,
+    failed = false,
+    failureMessage = "The connection to the Box ended before the agent finished. Send a message to retry.",
+  ): ProviderAdapterV2Event[] {
     if (this.terminal) return [];
     this.terminal = true;
     const status = interrupted ? "interrupted" : failed || !this.finished ? "failed" : "completed";
@@ -302,7 +311,7 @@ export class BoxTurnTranslation {
             failureItemOrdinal: PositiveInt.make(this.itemOrdinal + 1),
             failure: {
               class: "provider_error",
-              message: "The Box agent stream failed or ended without a finish event.",
+              message: failureMessage,
               code: null,
               retryable: null,
             },

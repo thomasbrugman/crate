@@ -4,7 +4,14 @@ import { assert, it } from "@effect/vitest";
 
 import { commandCodeHarness } from "./harness.ts";
 
-function setup() {
+function setup(
+  options: {
+    prompt?: string;
+    session?: string;
+    files?: Record<string, { mtimeMs: number; header: unknown }>;
+    unavailable?: boolean;
+  } = {},
+) {
   const pipe = () => {
     const emitter = new NodeEvents.EventEmitter();
     return Object.assign(emitter, {
@@ -19,10 +26,32 @@ function setup() {
     stderr: pipe(),
   });
   let output = "";
-  NodeVM.runInNewContext(commandCodeHarness.replace(/^import .*;$/m, ""), {
-    spawn: () => child,
+  let args: string[] = [];
+  NodeVM.runInNewContext(commandCodeHarness.replace(/^import .*;$/gm, ""), {
+    readdirSync: (path: string) => {
+      if (options.unavailable) throw new Error("unreadable");
+      return path.endsWith("/projects") ? ["project"] : Object.keys(options.files ?? {});
+    },
+    statSync: (path: string) => options.files?.[path.split("/").at(-1)!],
+    openSync: (path: string) => path.split("/").at(-1),
+    readSync: (fd: string, buffer: Buffer) =>
+      buffer.write(JSON.stringify(options.files?.[fd]?.header) + "\n"),
+    closeSync: () => undefined,
+    Buffer,
+    join: (...parts: string[]) => parts.join("/"),
+    homedir: () => "/home/boxuser",
+    spawn: (_bin: string, value: string[]) => {
+      args = [...value];
+      return child;
+    },
     process: {
-      argv: ["node", "harness", "-p", "test"],
+      argv: [
+        "node",
+        "harness",
+        "-p",
+        options.prompt ?? "test",
+        ...(options.session ? ["--session", options.session] : []),
+      ],
       env: { BOXJOB_CC_BIN: "command-code" },
       cwd: () => "/workspace/home",
       stdout: {
@@ -35,6 +64,7 @@ function setup() {
     },
   });
   return {
+    args,
     child,
     frame: (event: Record<string, unknown>) => {
       child.stdout.write(JSON.stringify({ type: "event", event }) + "\n");
@@ -50,6 +80,31 @@ function setup() {
         }),
   };
 }
+
+it("resumes the newest matching Command Code transcript only when no session was supplied", () => {
+  const files = {
+    "older.jsonl": { mtimeMs: 1, header: { type: "session", id: "older", cwd: "/workspace/home" } },
+    "newer.jsonl": { mtimeMs: 2, header: { type: "session", id: "newer", cwd: "/workspace/home" } },
+    "other.jsonl": { mtimeMs: 3, header: { type: "session", id: "other", cwd: "/other" } },
+    "broken.jsonl": { mtimeMs: 4, header: {} },
+  };
+  assert.include(setup({ files }).args.join(" "), "--resume newer");
+  assert.include(setup({ files, session: "explicit" }).args.join(" "), "--resume explicit");
+  assert.notInclude(setup().args, "--resume");
+  assert.notInclude(setup({ unavailable: true }).args, "--resume");
+});
+
+it("strips only the outer run marker before invoking Command Code", () => {
+  for (const prompt of ["hello", "t3stash-run:abcd\nliteral user text"]) {
+    const { args } = setup({ prompt: `t3stash-run:6162\n${prompt}` });
+    assert.equal(args[1], prompt);
+  }
+  const malformed = "t3stash-run:not-hex\nhello";
+  assert.equal(setup({ prompt: malformed }).args[1], malformed);
+  assert.deepEqual(setup({ prompt: "t3stash-run:6162\n" }).events(), [
+    { event: "error", data: { error: "no prompt received from the box" } },
+  ]);
+});
 
 it("preserves Command Code call IDs through box-sse-v1 for concurrent calls completing in reverse order", () => {
   const { frame, events } = setup();

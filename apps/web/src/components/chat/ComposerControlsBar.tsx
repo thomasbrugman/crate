@@ -68,6 +68,8 @@ export function ComposerControlsBar(props: {
   showProviderUnavailable: boolean;
   providerSetupInstanceId: ProviderInstanceId | undefined;
   onOpenProviderSetup: ChatComposerProps["onOpenProviderSetup"];
+  /** Set when the thread's provider is gone from this build, so only a new thread can continue. */
+  onStartNewThread: (() => void) | undefined;
   providerCatalogPending: boolean;
   isSendBusy: boolean;
   multipleModelsEnabled: boolean;
@@ -112,6 +114,7 @@ export function ComposerControlsBar(props: {
     showProviderUnavailable,
     providerSetupInstanceId,
     onOpenProviderSetup,
+    onStartNewThread,
     providerCatalogPending,
     isSendBusy,
     multipleModelsEnabled,
@@ -248,7 +251,17 @@ export function ComposerControlsBar(props: {
       onOpenProviderSetup={onOpenProviderSetup}
     />
   );
-  return showProviderUnavailable ? (
+  return showProviderUnavailable && onStartNewThread ? (
+    <ComposerControl
+      type="button"
+      onClick={onStartNewThread}
+      data-chat-provider-unavailable="true"
+      className="shrink-0"
+    >
+      <CircleAlertIcon className="size-4" />
+      {gt("Start a new thread")}
+    </ComposerControl>
+  ) : showProviderUnavailable ? (
     <ComposerControl
       type="button"
       disabled={!providerSetupInstanceId}

@@ -23,6 +23,7 @@ import { forkParked } from "../serverActivation.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
+import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import { threadHasQueuedTurnStart } from "./ThreadSettlementService.ts";
 
 export const cleanupBoxThreads = Effect.fn("ResourceCleanupService.cleanupBoxThreads")(
@@ -110,6 +111,7 @@ export const cleanupSettledBoxes = Effect.fn("ResourceCleanupService.cleanupSett
   function* (released: Set<string>) {
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const dispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
     const now = DateTime.toEpochMillis(yield* DateTime.now);
     const snapshot = yield* projections.getShellSnapshot({ location: "active" });
     for (const shell of snapshot.threads) {
@@ -120,22 +122,27 @@ export const cleanupSettledBoxes = Effect.fn("ResourceCleanupService.cleanupSett
       for (const thread of records.providerThreads) {
         const key = `${thread.id}@${quietSince}`;
         if (!isUpstashBoxDriver(thread.driver) || released.has(key)) continue;
-        yield* Effect.gen(function* () {
-          const adapter = yield* adapters.get(thread.providerInstanceId);
-          const current = yield* projections.getThreadShell(shell.id);
-          // A follow-up may have started since the snapshot was read.
-          if (current === null || settledBoxQuietSince(current, now) !== quietSince) return;
-          if (!adapter.deleteIdleThread) return;
-          if (yield* adapter.deleteIdleThread(thread)) released.add(key);
-          else
-            yield* Effect.logInfo("Kept a settled thread Box with unsaved work.", {
-              threadId: shell.id,
-            });
-        }).pipe(
-          Effect.catchCause(() =>
-            Effect.logWarning("Could not delete a settled thread Box.", { threadId: shell.id }),
-          ),
-        );
+        yield* dispatch
+          .withLock(
+            shell.id,
+            Effect.gen(function* () {
+              const adapter = yield* adapters.get(thread.providerInstanceId);
+              const current = yield* projections.getThreadShell(shell.id);
+              // Intake commits run requests under this same lock before their effects can start.
+              if (current === null || settledBoxQuietSince(current, now) !== quietSince) return;
+              if (!adapter.deleteIdleThread) return;
+              if (yield* adapter.deleteIdleThread(thread)) released.add(key);
+              else
+                yield* Effect.logInfo("Kept a settled thread Box with unsaved work.", {
+                  threadId: shell.id,
+                });
+            }),
+          )
+          .pipe(
+            Effect.catchCause(() =>
+              Effect.logWarning("Could not delete a settled thread Box.", { threadId: shell.id }),
+            ),
+          );
       }
     }
   },
@@ -145,11 +152,13 @@ export const layerSettledBoxCleanup = Layer.effectDiscard(
   Effect.gen(function* () {
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const dispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
     const released = new Set<string>();
     yield* forkParked(
       cleanupSettledBoxes(released).pipe(
         Effect.provideService(ProjectionStore.ProjectionStoreV2, projections),
         Effect.provideService(ProviderAdapterRegistry.ProviderAdapterRegistryV2, adapters),
+        Effect.provideService(ThreadCommandExecutor.ThreadCommandExecutor, dispatch),
         Effect.catchCause(() => Effect.logWarning("Could not sweep settled thread Boxes.")),
         Effect.repeat(Schedule.spaced(Duration.hours(1))),
       ),

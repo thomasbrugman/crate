@@ -42,6 +42,7 @@ export type SourceControlActionKind =
   | "preparePullRequestThread";
 
 export interface SourceControlActionScope {
+  readonly threadId?: ThreadId;
   readonly environmentId: EnvironmentId | null;
   readonly cwd: string | null;
 }
@@ -144,6 +145,7 @@ function resolveScope(scope: SourceControlActionScope) {
   return {
     environmentId: scope.environmentId,
     cwd: scope.cwd,
+    ...(scope.threadId ? { threadId: scope.threadId } : {}),
   };
 }
 
@@ -188,7 +190,7 @@ export function useVcsPullAction(scope: SourceControlActionScope) {
     scope.environmentId !== null && scope.cwd !== null
       ? vcsEnvironment.status({
           environmentId: scope.environmentId,
-          input: { cwd: scope.cwd },
+          input: { cwd: scope.cwd, ...(scope.threadId ? { threadId: scope.threadId } : {}) },
         })
       : null,
   );
@@ -207,7 +209,7 @@ export function useVcsPullAction(scope: SourceControlActionScope) {
     }
     return pull({
       environmentId: target.environmentId,
-      input: { cwd: target.cwd },
+      input: { cwd: target.cwd, ...(target.threadId ? { threadId: target.threadId } : {}) },
     });
   };
   return useAction({
@@ -227,7 +229,7 @@ export function useGitStackedAction(scope: SourceControlActionScope) {
     scope.environmentId !== null && scope.cwd !== null
       ? vcsEnvironment.status({
           environmentId: scope.environmentId,
-          input: { cwd: scope.cwd },
+          input: { cwd: scope.cwd, ...(scope.threadId ? { threadId: scope.threadId } : {}) },
         })
       : null,
   );

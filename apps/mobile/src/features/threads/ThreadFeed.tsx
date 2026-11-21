@@ -119,6 +119,8 @@ import {
 } from "@t3tools/shared/codexMarkdownDirectives";
 import { CHAT_LIST_ANCHOR_OFFSET, resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import { imageMimeType } from "@t3tools/shared/image";
+import { parseMarkdownFileLink } from "@t3tools/shared/markdownLinks";
+import { useAtomValue } from "@effect/atom-react";
 import { videoMimeType } from "@t3tools/shared/video";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { textDirection } from "@t3tools/shared/textDirection";
@@ -294,8 +296,9 @@ import {
   useQuietThreadShell,
   useThreadChipIcons,
 } from "../../state/entities";
-import { useEnvironmentPresentation } from "../../state/presentation";
+import { environmentPresentations, useEnvironmentPresentation } from "../../state/presentation";
 import { useThreadSelection } from "../../state/use-thread-selection";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useModelMentions } from "../../state/model-mentions";
@@ -1233,6 +1236,7 @@ function ThreadMediaVisibility(props: {
 type MarkdownLinkReply = Pick<OrchestrationV2ProjectedTurnItem, "sourceThreadId" | "sourceItemId">;
 
 interface MarkdownLinkHandlers {
+  readonly plainFilePaths?: boolean;
   readonly onLinkPress: (href: string, reply?: MarkdownLinkReply) => void;
   readonly fileContextMenu: (href: string) => MarkdownFileContextMenu | undefined;
   readonly onFileContextMenuAction: (
@@ -3128,6 +3132,13 @@ const THREAD_FEED_MAINTAIN_SCROLL_AT_END = {
 let lastSplitViewport: { windowWidth: number; width: number; height: number } | null = null;
 
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
+  const thread = useQuietThreadShell(props.detailRef);
+  const providers = useAtomValue(environmentPresentations.providersByEnvironmentAtom);
+  const instanceId = thread?.runtime?.providerInstanceId ?? thread?.modelSelection.instanceId;
+  const cloudThread = isUpstashBoxDriver(
+    providers.get(props.environmentId)?.find((provider) => provider.instanceId === instanceId)
+      ?.driver,
+  );
   const gt = useGT();
   const m = useMessages();
   const formatMessageTime = useMessageTimeFormatter();
@@ -3416,6 +3427,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     reply?: MarkdownLinkReply,
     withGallery?: (source: FilePreviewSource) => FilePreviewSource,
   ) => {
+    if (cloudThread && parseMarkdownFileLink(href)) return;
     markdownLinkRequest.current?.abort();
     const request = new AbortController();
     markdownLinkRequest.current = request;
@@ -3522,6 +3534,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     workspaceRoot: props.workspaceRoot ?? null,
   });
   const markdownLinkHandlers: MarkdownLinkHandlers = {
+    plainFilePaths: cloudThread,
     fileEmbedLabel: (href, standalone) =>
       markdownFileEmbedLabel(
         href,

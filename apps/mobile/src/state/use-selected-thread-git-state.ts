@@ -17,6 +17,7 @@ export function useSelectedThreadGitState() {
   const { selectedThreadCwd } = useSelectedThreadWorktree();
 
   const selectedThreadGitTarget = {
+    ...(selectedThread ? { threadId: selectedThread.id } : {}),
     environmentId: selectedThread?.environmentId ?? null,
     cwd: selectedThreadCwd,
   };
@@ -31,6 +32,7 @@ export function useSelectedThreadGitState() {
   );
 
   const selectedThreadBranchTarget = {
+    ...(selectedThread ? { threadId: selectedThread.id } : {}),
     environmentId: selectedThread?.environmentId ?? null,
     cwd: selectedThreadCwd,
     query: null,

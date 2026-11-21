@@ -1576,6 +1576,7 @@
     },
     " and bring the local files git does not track."
   ],
+  "bd5def9c42115de5": "This path is on the server machine. Cloud threads clone the project's pushed remote; unpushed changes are not copied to the Box.",
   "77494a56d6315a2e": "Clone over",
   "1c7a3992dd8e38af": "Copy ignored files",
   "7d4bb884e519b298": "Files are copied after the clone finishes. Folders git ignores whole, like node_modules, are left out.",
@@ -2676,6 +2677,7 @@
   "7f6d34983e89a91c": "Delete action",
   "84435bd5cb8cfac0": "Edit Action",
   "2d1f6668f713dca9": "Add Action",
+  "73bedbce4c29257a": "Actions are saved for this project but do not run in cloud threads.",
   "da1b3bc9635dcdc8": "Actions are project-scoped commands you can run from the top bar or keybindings.",
   "4614a422f1430cd7": "Name",
   "d3502e7db0cdb998": "Keybinding",
@@ -3252,6 +3254,7 @@
   "e8e73f3ce06abbce": "Check that its environment is connected and up to date, then try again.",
   "6b45252b76f5ca2e": "Unable to add thread",
   "da13069e7a3a8ffd": "Expand composer",
+  "2242587c6b44cce0": "Start a new thread to continue",
   "d3356b4524173b25": "Enable a provider in Settings",
   "3d3f30f1a1c4fc52": "Ask anything...",
   "305d6d72f1220d98": "Finding pull request...",
@@ -3265,6 +3268,7 @@
   "9a3db19d3e12dea6": "Type your answer",
   "ea8fec0f7052e43e": "Type your own answer, or leave this blank to use the selected option",
   "56d9080d3ab28e39": "Choose a project above to start a thread",
+  "bbc21d1967578281": "This thread's provider is no longer available. Start a new thread to continue.",
   "6d66186eedd8009b": "Enable a provider in Settings to send a message",
   "977ead973131917d": "Live transcription",
   "412187d16dc11adf": [
@@ -3276,6 +3280,7 @@
       "v": "v"
     }
   ],
+  "eb51025bee426871": "Attachments and file previews are not available in cloud threads. File mentions use the server checkout; only pushed files are available in the Box.",
   "3dbc42464b2bfb20": "Fast and Ultrafast are unavailable with this ChatGPT connection. Use an existing Codex CLI login for speed options your account supports.",
   "5c0eb4217bb673bd": "Using ChatGPT plan",
   "3e545d70d0c3535c": "Thread breadcrumb",
@@ -3391,6 +3396,7 @@
   "061c0c9f27104d23": "No skills found. Try / to browse provider commands.",
   "0a6fbecab03f7ef3": "No matching files or folders.",
   "0e7b21ab11721ca7": "No matching command.",
+  "754d11d1f210a398": "Start a new thread",
   "2029db2cc30beb6d": "Open provider settings",
   "517cfb8f24123f5b": "No provider available",
   "7ff1a0ef1490668d": "Clipboard API is unavailable while copying Codex feedback thread ID.",
@@ -4068,7 +4074,6 @@
   "4276743ee60a3c62": "{count, plural, one {{count} comment} other {{count} comments}}",
   "42f634397f3960aa": "Show in thread details",
   "e3738ef0423ddfe7": "Reset to default",
-  "4b3d3f47606c22e2": "Not available in cloud threads. Ask the agent to use its Box tools.",
   "ae10d34e11064fec": "Version Control",
   "8ab1235557b08956": "Choose what to show",
   "e8f045adbbaf328e": "Added to the composer",

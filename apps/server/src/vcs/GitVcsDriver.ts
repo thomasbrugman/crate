@@ -7,6 +7,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
+import * as BoxGitHost from "./BoxGitHost.ts";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -50,6 +51,7 @@ import * as CheckoutCloner from "./CheckoutCloner.ts";
 import * as CheckpointUntrackedBlobs from "./checkpointUntrackedBlobs.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";
+import * as VcsThreadTarget from "./VcsThreadTarget.ts";
 
 export interface ExecuteGitInput {
   readonly operation: string;
@@ -583,50 +585,50 @@ const hasStderrLine = (stderr: string, prefixes: ReadonlyArray<string>) =>
 /** Operation of the error raised when Git cannot say whether a cwd is a work tree. */
 export const WORK_TREE_PROBE_OPERATION = "GitVcsDriver.probeWorkTree";
 
-const gitCommand = Effect.fn("GitVcsDriver.gitCommand")(
-  (
-    process: VcsProcess.VcsProcess["Service"],
-    operation: string,
-    cwd: string,
-    args: ReadonlyArray<string>,
-    options?: {
-      readonly stdin?: string;
-      readonly onSpawn?: () => void;
-      readonly env?: NodeJS.ProcessEnv;
-      readonly allowNonZeroExit?: boolean;
-      readonly timeoutMs?: number;
-      readonly maxOutputBytes?: number;
-      readonly outputMode?: VcsProcess.VcsProcessInput["outputMode"];
-      readonly appendTruncationMarker?: boolean;
-    },
-  ) =>
-    process.run({
-      operation,
-      command: "git",
-      args: ["-C", cwd, ...args],
-      cwd,
-      spawnCwd: globalThis.process.cwd(),
-      ...(options?.stdin !== undefined ? { stdin: options.stdin } : {}),
-      ...(options?.onSpawn !== undefined ? { onSpawn: options.onSpawn } : {}),
-      ...(options?.env !== undefined ? { env: options.env } : {}),
-      ...(options?.allowNonZeroExit !== undefined
-        ? { allowNonZeroExit: options.allowNonZeroExit }
-        : {}),
-      ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
-      ...(options?.maxOutputBytes !== undefined ? { maxOutputBytes: options.maxOutputBytes } : {}),
-      ...(options?.outputMode !== undefined ? { outputMode: options.outputMode } : {}),
-      ...(options?.appendTruncationMarker !== undefined
-        ? { appendTruncationMarker: options.appendTruncationMarker }
-        : {}),
-    }),
-);
+const gitCommand = Effect.fn("GitVcsDriver.gitCommand")(function* (
+  process: VcsProcess.VcsProcess["Service"],
+  operation: string,
+  cwd: string,
+  args: ReadonlyArray<string>,
+  options?: {
+    readonly stdin?: string;
+    readonly onSpawn?: () => void;
+    readonly env?: NodeJS.ProcessEnv;
+    readonly allowNonZeroExit?: boolean;
+    readonly timeoutMs?: number;
+    readonly maxOutputBytes?: number;
+    readonly outputMode?: VcsProcess.VcsProcessInput["outputMode"];
+    readonly appendTruncationMarker?: boolean;
+  },
+) {
+  const target = yield* VcsThreadTarget.VcsThreadTarget;
+  return yield* process.run({
+    operation,
+    command: "git",
+    args: target ? args : ["-C", cwd, ...args],
+    cwd,
+    ...(target ? {} : { spawnCwd: globalThis.process.cwd() }),
+    ...(options?.stdin !== undefined ? { stdin: options.stdin } : {}),
+    ...(options?.onSpawn !== undefined ? { onSpawn: options.onSpawn } : {}),
+    ...(options?.env !== undefined ? { env: options.env } : {}),
+    ...(options?.allowNonZeroExit !== undefined
+      ? { allowNonZeroExit: options.allowNonZeroExit }
+      : {}),
+    ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+    ...(options?.maxOutputBytes !== undefined ? { maxOutputBytes: options.maxOutputBytes } : {}),
+    ...(options?.outputMode !== undefined ? { outputMode: options.outputMode } : {}),
+    ...(options?.appendTruncationMarker !== undefined
+      ? { appendTruncationMarker: options.appendTruncationMarker }
+      : {}),
+  });
+});
 
 const HEAD_MOVES_SCAN_LIMIT = 512;
 const HEAD_MARK_TRAILER = "T3-Head-Moved-At";
 const HEAD_MARK_TRAILER_PATTERN = new RegExp(`^${HEAD_MARK_TRAILER}: (\\d+) (\\d+)$`, "m");
 
 export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
+  const fileSystem = BoxGitHost.fileSystem(yield* FileSystem.FileSystem);
   const path = yield* Path.Path;
   const vcsProcess = yield* VcsProcess.VcsProcess;
   const random = yield* SecureRandom.SecureRandom;

@@ -65,6 +65,7 @@ import {
  * their inline chips, folds large pastes into text attachments, and confirms removing a referenced image.
  */
 export function useComposerAttachmentIntake(input: {
+  readonly unavailableReason?: string | undefined;
   readonly activeThreadId: ChatComposerProps["activeThreadId"];
   readonly activePendingProgress: PendingUserInputProgress | null;
   readonly activePendingIsResponding: boolean;
@@ -130,6 +131,10 @@ export function useComposerAttachmentIntake(input: {
     },
   ): Promise<boolean> => {
     if (!activeThreadId || files.length === 0 || isRevertingCheckpointRef.current) return false;
+    if (input.unavailableReason) {
+      toastManager.add({ type: "error", title: input.unavailableReason });
+      return false;
+    }
     if (
       pendingUserInputs.length > 0 &&
       (!supportsQuestionAttachments ||
@@ -420,7 +425,7 @@ export function useComposerAttachmentIntake(input: {
     bypassAutoAttachment: boolean,
     selectionOverride?: { start: number; end: number },
   ): boolean => {
-    if (isLiteralPendingAnswer) return false;
+    if (isLiteralPendingAnswer || input.unavailableReason) return false;
     const questionCanAttach =
       pendingUserInputs.length === 0 ||
       (supportsQuestionAttachments &&

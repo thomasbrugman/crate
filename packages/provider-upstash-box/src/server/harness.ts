@@ -12,6 +12,9 @@ export const commandCodeHarness = `#!/usr/bin/env node
  */
 
 import { spawn, execFileSync } from 'node:child_process';
+import { readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 function readArg(argv, name) {
 	const i = argv.indexOf(name);
@@ -32,9 +35,40 @@ function resolveBin() {
 }
 
 const argv = process.argv.slice(2);
-const prompt = readArg(argv, '-p') ?? readArg(argv, '--prompt') ?? '';
+// Keep the marker in argv for cleanup, but never forward it to Command Code.
+const prompt = (readArg(argv, '-p') ?? readArg(argv, '--prompt') ?? '').replace(/^t3stash-run:[0-9a-f]+\\n/, '');
 const model = readArg(argv, '--model');
-const session = readArg(argv, '--session');
+function newestSession() {
+	const projects = join(homedir(), '.commandcode', 'projects');
+	const cwd = process.env.BOXJOB_CC_CWD || process.cwd();
+	let newest;
+	try {
+		for (const project of readdirSync(projects)) {
+			let files;
+			try { files = readdirSync(join(projects, project)); } catch { continue; }
+			for (const file of files) {
+				if (!file.endsWith('.jsonl')) continue;
+				try {
+					const path = join(projects, project, file);
+					const mtime = statSync(path).mtimeMs;
+					if (newest && newest.mtime >= mtime) continue;
+					const fd = openSync(path, 'r');
+					let header;
+					try {
+						const buffer = Buffer.alloc(8192);
+						const length = readSync(fd, buffer, 0, buffer.length, 0);
+						header = JSON.parse(buffer.subarray(0, length).toString().split('\\n')[0]);
+					} finally { closeSync(fd); }
+					if (header.type === 'session' && header.cwd === cwd && typeof header.id === 'string' && header.id)
+						newest = { id: header.id, mtime };
+				} catch {}
+			}
+		}
+	} catch {}
+	return newest?.id;
+}
+
+const session = readArg(argv, '--session') || newestSession();
 
 if (!prompt) {
 	emit('error', { error: 'no prompt received from the box' });

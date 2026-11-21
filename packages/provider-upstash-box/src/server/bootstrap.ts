@@ -1,9 +1,19 @@
 import { BoxError, type BoxConfig } from "@upstash/box";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { BoxHarness } from "../harnesses.ts";
-import { BoxApi, BoxRuntimeError, boxConfig, isMissingBox, type BoxHandle } from "./BoxApi.ts";
+import {
+  BoxApi,
+  BoxRuntimeError,
+  boxConfig,
+  isMissingBox,
+  isMissingStoredKey,
+  type BoxHandle,
+} from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
+
+const isBoxRuntimeError = Schema.is(BoxRuntimeError);
 
 /** The thread's Box environment plus the agent that runs inside it. */
 export interface BoxRuntimeConfig {
@@ -36,9 +46,16 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
       } catch (error) {
         if (!isMissingBox(error)) throw error;
         onProgress("create");
-        box = await api.create(
-          boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) }),
-        );
+        box = await api
+          .create(boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) }))
+          .catch((createError: unknown) => {
+            if (!isMissingStoredKey(createError)) throw createError;
+            throw new BoxRuntimeError({
+              operation: "create",
+              statusCode: 400,
+              missingStoredKey: true,
+            });
+          });
       }
       try {
         const installHarness = () =>
@@ -98,12 +115,14 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
       }
     },
     catch: (error) =>
-      new BoxRuntimeError({
-        operation: "bootstrap",
-        ...(error instanceof BoxError && error.statusCode !== undefined
-          ? { statusCode: error.statusCode }
-          : {}),
-      }),
+      isBoxRuntimeError(error) && error.missingStoredKey
+        ? error
+        : new BoxRuntimeError({
+            operation: "bootstrap",
+            ...(error instanceof BoxError && error.statusCode !== undefined
+              ? { statusCode: error.statusCode }
+              : {}),
+          }),
   });
 });
 

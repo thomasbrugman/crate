@@ -108,7 +108,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   // A No project thread's folder sits inside the shared scratch root, so it must never get git.
   // Until the config and project load, a No project thread looks like any other folder.
   const offersGit =
-    !props.cloudThread &&
+    (!props.cloudThread || props.isGitRepo) &&
     props.gitCwd !== null &&
     serverConfig !== undefined &&
     project !== null &&
@@ -275,7 +275,8 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                       <GitActionsControl
                         compact={density !== "full"}
                         showActions={visible.gitActions}
-                        showChanges={visible.changes}
+                        showChanges={visible.changes && !props.cloudThread}
+                        openInEditorAvailable={!props.cloudThread}
                         gitCwd={props.gitCwd}
                         workspaceMutationId={props.workspaceMutationId}
                         activeThreadRef={activeThreadRef}
