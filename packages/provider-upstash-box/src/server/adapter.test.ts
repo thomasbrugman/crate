@@ -36,6 +36,7 @@ import { BoxApi, type BoxHandle, type BoxStream } from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
 
 const instanceId = ProviderInstanceId.make("box-test");
+const agentApiKey = "agent-credential-789";
 const threadId = ThreadId.make("thread-box-test");
 const modelSelection = { instanceId, model: "default" };
 const runtimePolicy = {
@@ -107,7 +108,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   };
   const adapter = yield* makeUpstashBoxAdapter(
     instanceId,
-    { driver: BOX_HARNESS_DRIVER_KINDS[harness], harness, agentApiKey: "" },
+    { driver: BOX_HARNESS_DRIVER_KINDS[harness], harness, agentApiKey },
     Effect.succeed({ apiKey: "test-key", templateBoxName: "cc-harness", size: "small" }),
   ).pipe(
     Effect.provide(IdAllocator.layer),
@@ -313,13 +314,13 @@ it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitiz
   ),
 );
 
-function fakeStream(chunks: ReadonlyArray<Chunk>, error = false): BoxStream {
+function fakeStream(chunks: ReadonlyArray<Chunk>, error: unknown = false): BoxStream {
   return {
     id: "native-run",
     cancel: async () => undefined,
     async *[Symbol.asyncIterator]() {
       yield* chunks;
-      if (error) throw new Error("private upstream error must not escape");
+      if (error) throw error === true ? new Error("private upstream error must not escape") : error;
     },
   };
 }
@@ -722,23 +723,95 @@ it.effect("splits assistant messages around tools without duplicating finish out
   ),
 );
 
-it.effect(
-  "accepts an empty completed answer but fails an empty or throwing stream without leaking upstream errors",
-  () =>
+it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
+  "accepts an empty answer and distinguishes failed streams without leaking upstream errors (%s)",
+  (harness) =>
     Effect.scoped(
       Effect.gen(function* () {
-        for (const [stream, status] of [
-          [fakeStream([{ ...finish, output: "" }]), "completed"],
-          [fakeStream([]), "failed"],
-          [fakeStream([{ type: "text-delta", text: "partial" }], true), "failed"],
+        const connection =
+          "The connection to the Box ended before the agent finished. Send a message to retry.";
+        const gone = "This thread's Box stopped mid-turn. Send a message to start a new one.";
+        for (const [stream, status, message, statusError] of [
+          [fakeStream([{ ...finish, output: "" }]), "completed", undefined, undefined],
+          [fakeStream([]), "failed", connection, undefined],
+          [
+            fakeStream([{ type: "text-delta", text: "partial" }], true),
+            "failed",
+            connection,
+            undefined,
+          ],
+          [
+            fakeStream([], new BoxError("harness exited")),
+            "failed",
+            "The Box agent reported an error: harness exited. Send a message to retry.",
+            undefined,
+          ],
+          [
+            fakeStream([], new BoxError("")),
+            "failed",
+            "The Box agent reported an error. Send a message to retry.",
+            undefined,
+          ],
+          [fakeStream([], new BoxError("private upstream body", 404)), "failed", gone, undefined],
+          [
+            async () => {
+              throw new BoxError("private upstream body", 404);
+            },
+            "failed",
+            gone,
+            undefined,
+          ],
+          [
+            async () => {
+              throw new BoxError("private upstream body", 503);
+            },
+            "failed",
+            connection,
+            undefined,
+          ],
+          [
+            async () => {
+              throw new BoxError("private upstream body");
+            },
+            "failed",
+            connection,
+            undefined,
+          ],
+          [
+            fakeStream([], new BoxError("private upstream body", 403)),
+            "failed",
+            connection,
+            undefined,
+          ],
+          [
+            fakeStream(
+              [],
+              new BoxError("Stream timed out", undefined, {
+                cause: new Error("private upstream cause"),
+              }),
+            ),
+            "failed",
+            connection,
+            undefined,
+          ],
+          [fakeStream([], true), "failed", gone, new BoxError("private upstream body", 404)],
+          [fakeStream([]), "failed", gone, new BoxError("private upstream body", 404)],
+          [
+            fakeStream([], true),
+            "failed",
+            connection,
+            new Error("private upstream status failure"),
+          ],
         ] as const) {
-          const { runtime, turn, lookup } = yield* setup(stream);
+          const { runtime, turn, lookup } = yield* setup(stream, undefined, harness);
+          lookup.statusError = statusError;
           yield* runtime.startTurn(turn);
           const events = yield* collect(runtime.events);
           for (const event of events) yield* decodeEvent(event);
           const terminals = events.filter((event) => event.type === "turn.terminal");
           assert.lengthOf(terminals, 1);
           assert.equal(terminals[0]?.status, status);
+          assert.equal(terminals[0]?.failure?.message, message);
           assert.notInclude(JSON.stringify(events), "private upstream");
           assert.equal(lookup.resumes, 0);
           if (status === "failed")
@@ -747,6 +820,47 @@ it.effect(
                 .streaming ?? false,
             );
         }
+      }),
+    ),
+);
+
+it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
+  "redacts and bounds only messages from agent stream error events (%s)",
+  (harness) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const secret = "opaque_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const { runtime, turn } = yield* setup(
+          fakeStream(
+            [],
+            new BoxError(
+              `harness failed: test-key ${agentApiKey} api_key=labelled-secret Bearer bearer-secret sk-abcdefghijklmnop ${secret} https://user:pass@example.test/path?token=url-secret\u001b[31m ${"detail ".repeat(80)}`,
+            ),
+          ),
+          undefined,
+          harness,
+        );
+        yield* runtime.startTurn(turn);
+        const events = yield* collect(runtime.events);
+        const terminal = events.find((event) => event.type === "turn.terminal");
+        assert.equal(terminal?.status, "failed");
+        const message = terminal?.failure?.message ?? "";
+        assert.include(message, "The Box agent reported an error: harness failed:");
+        assert.include(message, "[REDACTED]");
+        assert.include(message, "…");
+        assert.isAtMost(message.length, 270);
+        for (const value of [
+          "test-key",
+          agentApiKey,
+          "labelled-secret",
+          "bearer-secret",
+          "sk-abcdefghijklmnop",
+          secret,
+          "user:pass",
+          "url-secret",
+          "\u001b",
+        ])
+          assert.notInclude(JSON.stringify(events), value);
       }),
     ),
 );

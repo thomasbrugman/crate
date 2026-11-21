@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -67,6 +68,8 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
   credentials: "Copying credentials from the template Box",
   clone: "Cloning the repository",
 };
+
+const boxStoppedMessage = "This thread's Box stopped mid-turn. Send a message to start a new one.";
 
 export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(function* (
   instanceId: ProviderInstanceId,
@@ -343,6 +346,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const providerThread = request.providerThread;
           const box = boxes.get(providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
+          const { apiKey } = yield* environment;
           // Managed agents start in the Box workspace, so they are told where the clone is.
           const prompt =
             harness !== "commandCode" && request.runtimePolicy.repositoryUrl
@@ -355,6 +359,41 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             ids.derive,
             yield* DateTime.now,
           );
+          let failureMessage: string | undefined;
+          const streamError = (error: unknown, fromAgentStream = false) => {
+            if (isMissingBox(error)) failureMessage = boxStoppedMessage;
+            else if (
+              fromAgentStream &&
+              error instanceof BoxError &&
+              error.statusCode === undefined &&
+              error.cause === undefined
+            ) {
+              let raw = error.message;
+              for (const key of [agent.agentApiKey, apiKey]) {
+                if (key) raw = raw.replaceAll(key, "[REDACTED]");
+              }
+              const detail = raw.trim()
+                ? makeProviderFailure({ message: raw })
+                    .message.replace(
+                      /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu,
+                      "[REDACTED]",
+                    )
+                    .replace(
+                      /\b(?:sk|ghp|gho|github_pat|upstash|qstash)[_-][A-Za-z0-9_-]+\b/gu,
+                      "[REDACTED]",
+                    )
+                    .replace(/\b[A-Za-z0-9_+/=-]{32,}\b/gu, "[REDACTED]")
+                    .replace(/\s+/gu, " ")
+                    .trim()
+                : "";
+              const short =
+                detail.length > 200 ? `${Array.from(detail).slice(0, 199).join("")}…` : detail;
+              failureMessage = short
+                ? `The Box agent reported an error: ${short}. Send a message to retry.`
+                : "The Box agent reported an error. Send a message to retry.";
+            }
+            return new BoxRuntimeError({ operation: "stream" });
+          };
           const turn: ActiveTurn = { box, runMarker, translation, interrupted: false };
           active = turn;
           yield* publish(translation.start(yield* DateTime.now));
@@ -407,13 +446,10 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 turn.stream = stream;
                 return stream;
               },
-              catch: () => new BoxRuntimeError({ operation: "stream" }),
+              catch: (error) => streamError(error),
             }).pipe(Effect.uninterruptible);
             if (turn.interrupted) yield* cancelBoxRun(box, stream, runMarker);
-            yield* Stream.fromAsyncIterable(
-              stream,
-              () => new BoxRuntimeError({ operation: "stream" }),
-            ).pipe(
+            yield* Stream.fromAsyncIterable(stream, (error) => streamError(error, true)).pipe(
               Stream.runForEach((chunk) =>
                 Effect.gen(function* () {
                   yield* publish(translation.accept(chunk, yield* DateTime.now));
@@ -430,6 +466,19 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             Effect.isFailure,
             Effect.flatMap(
               Effect.fn("UpstashBox.finishTurn")(function* (failed) {
+                if (
+                  !turn.interrupted &&
+                  (failed || !translation.hasFinished) &&
+                  failureMessage !== boxStoppedMessage
+                ) {
+                  yield* Effect.promise(async () => {
+                    try {
+                      await box.getStatus();
+                    } catch (error) {
+                      if (isMissingBox(error)) failureMessage = boxStoppedMessage;
+                    }
+                  }).pipe(Effect.timeoutOption("3 seconds"));
+                }
                 if (translation.sessionId) {
                   const thread = providerThread;
                   yield* saveThread(
@@ -446,7 +495,14 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   );
                 }
                 active = undefined;
-                yield* publish(translation.complete(yield* DateTime.now, turn.interrupted, failed));
+                yield* publish(
+                  translation.complete(
+                    yield* DateTime.now,
+                    turn.interrupted,
+                    failed,
+                    failureMessage,
+                  ),
+                );
               }),
             ),
             Effect.ensuring(
