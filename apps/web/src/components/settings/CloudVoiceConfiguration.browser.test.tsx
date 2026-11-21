@@ -10,6 +10,11 @@ import { useEnvironmentScope, usePreparedConnection } from "../../state/session"
 import { VoiceSettingsPanel } from "./VoiceSettingsPanel";
 import { SettingsScopeProvider } from "./SettingsScopeContext";
 
+vi.mock(import("@t3tools/client-runtime/provider-clients"), async (original) => ({
+  ...(await original()),
+  ...(await import("../../../test/fixtures/legacyProviderClients")),
+}));
+
 vi.mock(import("../../state/session"), { spy: true });
 vi.mock("../../env", async (original) => ({
   ...(await original<typeof import("../../env")>()),
