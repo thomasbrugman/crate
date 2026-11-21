@@ -24,7 +24,17 @@ export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
 export class BoxRuntimeError extends Schema.TaggedError<BoxRuntimeError>()("BoxRuntimeError", {
   operation: Schema.String,
   statusCode: Schema.optional(Schema.Number),
+  /** Box creation was refused because the account has no stored key for the agent's model. */
+  missingStoredKey: Schema.optional(Schema.Boolean),
 }) {}
+
+export function isMissingStoredKey(error: unknown): boolean {
+  return (
+    error instanceof BoxError &&
+    error.statusCode === 400 &&
+    /stored agent api key is not configured/i.test(error.message)
+  );
+}
 
 export interface BoxStream extends AsyncIterable<Chunk> {
   readonly id: string;

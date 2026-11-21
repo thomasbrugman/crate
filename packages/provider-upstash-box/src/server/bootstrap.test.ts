@@ -191,3 +191,35 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
     assert.equal(clones, 1);
   }),
 );
+
+it.effect("reports a refused Box creation for a missing stored model key", () =>
+  Effect.gen(function* () {
+    const error = yield* ensureBox(
+      {
+        apiKey: "key",
+        templateBoxName: "template",
+        size: "small",
+        harness: "claudeCode",
+        model: "anthropic/claude-opus-5",
+        agentApiKey: "",
+      },
+      "thread-box",
+    ).pipe(
+      Effect.flip,
+      Effect.provideService(BoxApi, {
+        get: async () => {
+          throw new BoxError("missing", 404);
+        },
+        create: async () => {
+          throw new BoxError(
+            "stored agent API key is not configured for the selected agent/model",
+            400,
+          );
+        },
+        list: async () => [],
+        checkModelKey: async () => 200,
+      }),
+    );
+    assert.isTrue(error.missingStoredKey);
+  }),
+);
