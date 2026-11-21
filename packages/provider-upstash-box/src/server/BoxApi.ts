@@ -14,6 +14,8 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
 import type { BoxHarness } from "../harnesses.ts";
+
+export type ManagedAgentHarness = Exclude<BoxHarness, "commandCode">;
 import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
 
 export const BOX_WORKSPACE_PATH = "/workspace/home";
@@ -49,6 +51,8 @@ export class BoxApi extends Context.Service<
     readonly get: (id: string, apiKey: string) => Promise<BoxHandle>;
     readonly create: (config: BoxConfig) => Promise<BoxHandle>;
     readonly list: (apiKey: string) => Promise<unknown>;
+    /** The HTTP status the model provider answers a cheap authenticated request with. */
+    readonly checkModelKey: (harness: ManagedAgentHarness, apiKey: string) => Promise<number>;
   }
 >()("@t3tools/provider-upstash-box/server/BoxApi") {}
 
@@ -56,6 +60,22 @@ export const layer = Layer.succeed(BoxApi, {
   get: (id, apiKey) => Box.get(id, { apiKey }),
   create: (config) => Box.create(config),
   list: (apiKey) => Box.list({ apiKey }),
+  checkModelKey: async (harness, apiKey) => {
+    // @effect-diagnostics-next-line globalFetch:off - This service is the Promise boundary the Box SDK already uses.
+    const response = await fetch(
+      harness === "claudeCode"
+        ? "https://api.anthropic.com/v1/models?limit=1"
+        : "https://api.openai.com/v1/models",
+      {
+        headers:
+          harness === "claudeCode"
+            ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
+            : { authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    return response.status;
+  },
 });
 
 export function isMissingBox(error: unknown): boolean {

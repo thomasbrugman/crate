@@ -66,6 +66,7 @@ it.effect(
             return box;
           },
           list: async () => [],
+          checkModelKey: async () => 200,
         };
         const bootstrap = ensureBox(
           {
@@ -146,6 +147,7 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
         return box;
       },
       list: async () => [],
+      checkModelKey: async () => 200,
     };
     const bootstrap = ensureBox(
       {

@@ -78,6 +78,7 @@ const setup = Effect.fn("test.setupBox")(function* (
       },
       create: async () => box,
       list: async () => [],
+      checkModelKey: async () => 200,
     }),
   );
   const runtime = yield* adapter.openSession({
