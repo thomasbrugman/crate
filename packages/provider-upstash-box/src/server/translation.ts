@@ -1,6 +1,5 @@
 import {
   PositiveInt,
-  ProviderDriverKind,
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ProviderThread,
@@ -15,7 +14,6 @@ import type {
 import type { Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 
-export const UPSTASH_BOX_PROVIDER = ProviderDriverKind.make("upstashBox");
 type ToolItem = Extract<OrchestrationV2TurnItem, { type: "dynamic_tool" }>;
 
 export class BoxTurnTranslation {
@@ -41,7 +39,7 @@ export class BoxTurnTranslation {
     this.thread = input.providerThread;
     const nativeItemId = `${input.attemptId}:assistant`;
     this.message = {
-      id: ids.messageFromProviderItem({ driver: UPSTASH_BOX_PROVIDER, nativeItemId }),
+      id: ids.messageFromProviderItem({ driver: input.providerThread.driver, nativeItemId }),
       threadId: input.threadId,
       runId: input.runId,
       nodeId: input.rootNodeId,
@@ -55,7 +53,7 @@ export class BoxTurnTranslation {
       updatedAt: now,
     };
     this.turn = {
-      id: ids.providerTurn({ driver: UPSTASH_BOX_PROVIDER, nativeTurnId: input.attemptId }),
+      id: ids.providerTurn({ driver: input.providerThread.driver, nativeTurnId: input.attemptId }),
       providerThreadId: input.providerThread.id,
       nodeId: input.rootNodeId,
       runAttemptId: input.attemptId,
@@ -101,11 +99,11 @@ export class BoxTurnTranslation {
     return [
       {
         type: "provider_turn.updated",
-        driver: UPSTASH_BOX_PROVIDER,
+        driver: this.thread.driver,
         threadId: this.input.threadId,
         providerTurn: this.turn,
       },
-      { type: "node.updated", driver: UPSTASH_BOX_PROVIDER, node: this.node("running", now) },
+      { type: "node.updated", driver: this.thread.driver, node: this.node("running", now) },
     ];
   }
 
@@ -113,13 +111,13 @@ export class BoxTurnTranslation {
     this.message = { ...this.message, text: this.text, streaming, updatedAt: now };
     this.messageOrdinal ??= ++this.itemOrdinal;
     return [
-      { type: "message.updated", driver: UPSTASH_BOX_PROVIDER, message: this.message },
+      { type: "message.updated", driver: this.thread.driver, message: this.message },
       {
         type: "turn_item.updated",
-        driver: UPSTASH_BOX_PROVIDER,
+        driver: this.thread.driver,
         turnItem: {
           id: this.ids.turnItemFromProviderItem({
-            driver: UPSTASH_BOX_PROVIDER,
+            driver: this.thread.driver,
             nativeItemId: `${this.input.attemptId}:assistant:${this.messageIndex}`,
           }),
           threadId: this.input.threadId,
@@ -151,7 +149,7 @@ export class BoxTurnTranslation {
         this.turn = {
           ...this.turn,
           nativeTurnRef: {
-            driver: UPSTASH_BOX_PROVIDER,
+            driver: this.thread.driver,
             nativeId: chunk.runId,
             strength: "strong",
           },
@@ -159,7 +157,7 @@ export class BoxTurnTranslation {
         return [
           {
             type: "provider_turn.updated",
-            driver: UPSTASH_BOX_PROVIDER,
+            driver: this.thread.driver,
             threadId: this.input.threadId,
             providerTurn: this.turn,
           },
@@ -177,7 +175,7 @@ export class BoxTurnTranslation {
           this.message = {
             ...this.message,
             id: this.ids.messageFromProviderItem({
-              driver: UPSTASH_BOX_PROVIDER,
+              driver: this.thread.driver,
               nativeItemId: `${this.input.attemptId}:assistant:${this.messageIndex}`,
             }),
             text: "",
@@ -189,7 +187,7 @@ export class BoxTurnTranslation {
         const ordinal = ++this.itemOrdinal;
         const item: ToolItem = {
           id: this.ids.turnItemFromProviderItem({
-            driver: UPSTASH_BOX_PROVIDER,
+            driver: this.thread.driver,
             nativeItemId: `${this.input.attemptId}:tool:${ordinal}`,
           }),
           threadId: this.input.threadId,
@@ -198,7 +196,7 @@ export class BoxTurnTranslation {
           providerThreadId: this.thread.id,
           providerTurnId: this.turn.id,
           nativeItemRef: chunk.toolCallId
-            ? { driver: UPSTASH_BOX_PROVIDER, nativeId: chunk.toolCallId, strength: "weak" }
+            ? { driver: this.thread.driver, nativeId: chunk.toolCallId, strength: "weak" }
             : null,
           parentItemId: null,
           ordinal,
@@ -214,14 +212,17 @@ export class BoxTurnTranslation {
         this.tools.push(item);
         return [
           ...events,
-          { type: "turn_item.updated", driver: UPSTASH_BOX_PROVIDER, turnItem: item },
+          { type: "turn_item.updated", driver: this.thread.driver, turnItem: item },
         ];
       }
       case "tool-result": {
-        const index = this.tools.findLastIndex(
+        const candidates = this.tools.filter((item) => item.status === "running");
+        const index = this.tools.findIndex(
           (item) =>
             item.status === "running" &&
-            (!chunk.toolCallId || item.nativeItemRef?.nativeId === chunk.toolCallId),
+            (chunk.toolCallId
+              ? item.nativeItemRef?.nativeId === chunk.toolCallId
+              : candidates.length === 1 && item.nativeItemRef === null),
         );
         const previous = this.tools[index];
         if (!previous) return [];
@@ -233,7 +234,7 @@ export class BoxTurnTranslation {
           updatedAt: now,
         };
         this.tools[index] = item;
-        return [{ type: "turn_item.updated", driver: UPSTASH_BOX_PROVIDER, turnItem: item }];
+        return [{ type: "turn_item.updated", driver: this.thread.driver, turnItem: item }];
       }
       case "finish":
         this.finished = chunk;
@@ -267,7 +268,7 @@ export class BoxTurnTranslation {
       .filter((item) => item.status === "running")
       .map((item) => ({
         type: "turn_item.updated",
-        driver: UPSTASH_BOX_PROVIDER,
+        driver: this.thread.driver,
         turnItem: {
           ...item,
           status: status === "completed" ? "failed" : status,
@@ -279,15 +280,15 @@ export class BoxTurnTranslation {
     events.push(
       {
         type: "provider_turn.updated",
-        driver: UPSTASH_BOX_PROVIDER,
+        driver: this.thread.driver,
         threadId: this.input.threadId,
         providerTurn: this.turn,
       },
-      { type: "node.updated", driver: UPSTASH_BOX_PROVIDER, node: this.node(status, now) },
+      { type: "node.updated", driver: this.thread.driver, node: this.node(status, now) },
     );
     const terminal = {
       type: "turn.terminal" as const,
-      driver: UPSTASH_BOX_PROVIDER,
+      driver: this.thread.driver,
       providerThreadId: this.thread.id,
       providerTurnId: this.turn.id,
       runOrdinal: PositiveInt.make(this.input.runOrdinal),

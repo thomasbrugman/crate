@@ -22,7 +22,7 @@ describe("nextTextGeneratorId", () => {
 
     expect(nextTextGeneratorId("openai", settings, providers)).toBe("openai-4");
     // A driver's default instance id is taken even before it has a snapshot or config.
-    expect(nextTextGeneratorId("upstashBox", settings, [])).toBe("upstashBox-2");
+    expect(nextTextGeneratorId("boxCommandCode", settings, [])).toBe("boxCommandCode-2");
     expect(nextTextGeneratorId("openrouter", settings, providers)).toBe("openrouter");
   });
 });

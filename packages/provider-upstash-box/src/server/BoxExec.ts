@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
 import * as BoxApi from "./BoxApi.ts";
+import { isUpstashBoxDriver } from "../harnesses.ts";
 
 export class BoxExecError extends Schema.TaggedError<BoxExecError>()("BoxExecError", {
   threadId: ThreadId,
@@ -81,8 +82,8 @@ export const make = Effect.gen(function* () {
       const persisted = thread.providerThread;
       if (
         persisted.appThreadId !== input.threadId ||
-        persisted.driver !== "upstashBox" ||
-        persisted.nativeThreadRef?.driver !== "upstashBox"
+        (!isUpstashBoxDriver(persisted.driver) && persisted.driver !== "upstashBox") ||
+        persisted.nativeThreadRef?.driver !== persisted.driver
       )
         return yield* fail("not_box_thread");
       const nativeId = persisted.nativeThreadRef.nativeId;

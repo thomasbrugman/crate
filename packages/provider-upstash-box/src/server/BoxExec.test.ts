@@ -7,6 +7,7 @@ import * as NodeChildProcess from "node:child_process";
 
 import * as BoxApi from "./BoxApi.ts";
 import * as BoxExec from "./BoxExec.ts";
+import { BOX_HARNESS_DRIVER_KINDS } from "../harnesses.ts";
 
 const threadId = ThreadId.make("exec-thread");
 const thread: BoxExec.BoxExecThread = {
@@ -86,12 +87,28 @@ it.effect("uses persisted Box identity, checkout defaults, and literal cwd/argum
         },
       );
     }
-    const exec = yield* service({ command: async () => ({ exitCode: 0, stdout: "" }) });
-    assert.deepEqual(yield* exec.run({ threadId, command: "true" }), {
-      exitCode: 0,
-      stdout: "",
-      stderr: "",
-    });
+    for (const driver of [
+      thread.providerThread.driver,
+      ...Object.values(BOX_HARNESS_DRIVER_KINDS),
+    ]) {
+      const exec = yield* service({
+        resolve: () =>
+          Effect.succeed({
+            ...thread,
+            providerThread: {
+              ...thread.providerThread,
+              driver,
+              nativeThreadRef: { ...thread.providerThread.nativeThreadRef!, driver },
+            },
+          }),
+        command: async () => ({ exitCode: 0, stdout: "" }),
+      });
+      assert.deepEqual(yield* exec.run({ threadId, command: "true" }), {
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+      });
+    }
   }),
 );
 

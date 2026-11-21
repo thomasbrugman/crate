@@ -154,6 +154,7 @@ export interface RightPanelTabsProps {
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
+  cloudThread?: boolean;
   filesAvailable: boolean;
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
@@ -324,6 +325,7 @@ function SurfaceMenuItem(props: {
 }
 
 function RightPanelEmptyState(props: {
+  cloudThread?: boolean;
   onAddBrowser: () => void;
   onAddBrowserInProfile: (profileId: string) => void;
   browserProfiles: ReadonlyArray<{ readonly id: string; readonly name: string }>;
@@ -379,7 +381,9 @@ function RightPanelEmptyState(props: {
       icon: FileDiff,
       shortcut: "D",
       available: props.diffAvailable,
-      disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.diff),
+      disabledReason: props.cloudThread
+        ? messages(msg("Not available in cloud threads. Ask the agent to use its Box tools."))
+        : messages(SURFACE_UNAVAILABLE_HINTS.diff),
       onClick: props.onAddDiff,
     },
     {
@@ -1198,7 +1202,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       icon: FileDiff,
       shortcut: "D",
       available: props.diffAvailable,
-      disabledReason: messages(SURFACE_DISABLED_REASONS.diff),
+      disabledReason: props.cloudThread
+        ? messages(msg("Not available in cloud threads. Ask the agent to use its Box tools."))
+        : messages(SURFACE_DISABLED_REASONS.diff),
       onClick: props.onAddDiff,
     },
     {
@@ -1633,6 +1639,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
         {props.activeSurfaceId === null ? (
           <RightPanelEmptyState
+            cloudThread={props.cloudThread === true}
             onAddBrowser={props.onAddBrowser}
             onAddBrowserInProfile={props.onAddBrowserInProfile}
             browserProfiles={browserProfiles}
