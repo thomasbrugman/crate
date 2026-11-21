@@ -5,6 +5,7 @@ import {
 } from "./components/chat/composerAttachmentFiles";
 import { elementContextToPreviewAnnotation } from "./lib/elementContext";
 import {
+  BoxSize,
   ResponseContextRecord,
   ElementContextDetails,
   DEFAULT_MODEL,
@@ -351,8 +352,10 @@ const PersistedComposerThreadDraftState = Schema.Struct({
   modelSelectionExplicit: Schema.optionalKey(Schema.Boolean),
   runtimeMode: Schema.optionalKey(RuntimeMode),
   interactionMode: Schema.optionalKey(ProviderInteractionMode),
+  boxSize: Schema.optionalKey(BoxSize),
 });
 type PersistedComposerThreadDraftState = typeof PersistedComposerThreadDraftState.Type;
+const isBoxSize = Schema.is(BoxSize);
 
 type ProviderOptionSelectionsByProvider = Partial<
   Record<string, ReadonlyArray<ProviderOptionSelection>>
@@ -480,6 +483,7 @@ export interface ComposerThreadDraftState {
   modelSelectionExplicit?: boolean;
   runtimeMode: RuntimeMode | null;
   interactionMode: ProviderInteractionMode | null;
+  boxSize?: BoxSize;
 }
 
 export function composerDraftHasUserContent(
@@ -667,6 +671,7 @@ interface ComposerDraftStoreState {
     threadRef: ComposerThreadTarget,
     interactionMode: ProviderInteractionMode | null | undefined,
   ) => void;
+  setBoxSize: (draftId: DraftId, boxSize: BoxSize | undefined) => void;
   addImage: (threadRef: ComposerThreadTarget, image: ComposerImageAttachment) => boolean;
   addImages: (
     threadRef: ComposerThreadTarget,
@@ -921,6 +926,7 @@ function composerDraftContent({
   modelSelectionExplicit: _modelSelectionExplicit,
   runtimeMode: _runtimeMode,
   interactionMode: _interactionMode,
+  boxSize: _boxSize,
   ...content
 }: ComposerThreadDraftState) {
   return content;
@@ -1024,7 +1030,8 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
     Object.keys(draft.modelSelectionByProvider).length === 0 &&
     draft.activeProvider === null &&
     draft.runtimeMode === null &&
-    draft.interactionMode === null
+    draft.interactionMode === null &&
+    draft.boxSize === undefined
   );
 }
 
@@ -2203,6 +2210,7 @@ function normalizePersistedDraftsByThreadId(
       terminalContexts.map((context) => terminalContextReference({ ...context, text: "" })),
     );
     const legacyDraftCandidate = draftValue as LegacyPersistedComposerThreadDraftState;
+    const boxSize = isBoxSize(draftCandidate.boxSize) ? draftCandidate.boxSize : undefined;
     let modelSelectionByProvider: Partial<Record<ProviderInstanceId, ModelSelection>> = {};
     let activeProvider: ProviderInstanceId | null = null;
     let modelSelectionExplicit: true | undefined = undefined;
@@ -2261,7 +2269,8 @@ function normalizePersistedDraftsByThreadId(
       replyTo === null &&
       !hasModelData &&
       !runtimeMode &&
-      !interactionMode
+      !interactionMode &&
+      boxSize === undefined
     ) {
       continue;
     }
@@ -2296,6 +2305,7 @@ function normalizePersistedDraftsByThreadId(
         : {}),
       ...(runtimeMode ? { runtimeMode } : {}),
       ...(interactionMode ? { interactionMode } : {}),
+      ...(boxSize === undefined ? {} : { boxSize }),
     };
   }
 
@@ -2395,7 +2405,8 @@ export function partializeComposerDraftStoreState(
       draft.replyTo === null &&
       !hasModelData &&
       draft.runtimeMode === null &&
-      draft.interactionMode === null
+      draft.interactionMode === null &&
+      draft.boxSize === undefined
     ) {
       continue;
     }
@@ -2465,6 +2476,7 @@ export function partializeComposerDraftStoreState(
         : {}),
       ...(draft.runtimeMode ? { runtimeMode: draft.runtimeMode } : {}),
       ...(draft.interactionMode ? { interactionMode: draft.interactionMode } : {}),
+      ...(draft.boxSize === undefined ? {} : { boxSize: draft.boxSize }),
     };
     persistedDraftsByThreadKey[threadKey] = persistedDraft;
   }
@@ -2740,6 +2752,7 @@ function toHydratedThreadDraft(
     ...(persistedDraft.modelSelectionExplicit ? { modelSelectionExplicit: true } : {}),
     runtimeMode: persistedDraft.runtimeMode ?? null,
     interactionMode: persistedDraft.interactionMode ?? null,
+    ...(persistedDraft.boxSize === undefined ? {} : { boxSize: persistedDraft.boxSize }),
   };
 }
 
@@ -3486,6 +3499,18 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                   }
                 : {}),
             };
+          });
+        },
+        setBoxSize: (draftId, boxSize) => {
+          set((state) => {
+            const existing = state.draftsByThreadKey[draftId];
+            if (existing?.boxSize === boxSize) return state;
+            const { boxSize: _oldBoxSize, ...base } = existing ?? createEmptyThreadDraft();
+            const nextDraft = { ...base, ...(boxSize === undefined ? {} : { boxSize }) };
+            const draftsByThreadKey = { ...state.draftsByThreadKey };
+            if (shouldRemoveDraft(nextDraft)) delete draftsByThreadKey[draftId];
+            else draftsByThreadKey[draftId] = nextDraft;
+            return { draftsByThreadKey };
           });
         },
         setRuntimeMode: (threadRef, runtimeMode) => {

@@ -9,6 +9,7 @@ import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationV2CheckpointUnavailableError,
   WS_METHODS,
+  type BoxSize,
   type ChatAttachment,
   MessageId,
   type ModelSelection,
@@ -164,6 +165,7 @@ interface StartThreadBootstrap {
     readonly projectId: ProjectId;
     readonly title: string;
     readonly modelSelection: ModelSelection;
+    readonly boxSize?: BoxSize;
     readonly runtimeMode: RuntimeMode;
     readonly interactionMode: ProviderInteractionMode;
     readonly branch: string | null;
@@ -803,6 +805,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       title: input.titleSeed ?? thread.title,
       generateTitle: input.titleSeed !== undefined,
       modelSelection: input.modelSelection ?? thread.modelSelection,
+      ...(bootstrap?.boxSize === undefined ? {} : { boxSize: bootstrap.boxSize }),
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       workspaceStrategy,

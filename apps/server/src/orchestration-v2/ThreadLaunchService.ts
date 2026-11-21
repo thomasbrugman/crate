@@ -4,6 +4,7 @@ import * as TerminalManager from "../terminal/Manager.ts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   CommandId,
+  type BoxSize,
   type ChatAttachment,
   type MessageId,
   type ModelSelection,
@@ -97,6 +98,7 @@ export interface ThreadLaunchInput {
   readonly title: string;
   readonly generateTitle?: boolean;
   readonly modelSelection: ModelSelection;
+  readonly boxSize?: BoxSize;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
   readonly workspaceStrategy: ThreadLaunchWorkspaceStrategy;
@@ -1398,6 +1400,7 @@ const make = Effect.gen(function* () {
                 projectId: input.projectId,
                 title: input.title,
                 modelSelection: input.modelSelection,
+                ...(cloud && input.boxSize !== undefined ? { boxSize: input.boxSize } : {}),
                 runtimeMode: input.runtimeMode,
                 interactionMode: input.interactionMode,
                 branch: initialBranch,

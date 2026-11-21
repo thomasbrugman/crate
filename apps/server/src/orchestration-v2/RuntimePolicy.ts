@@ -201,6 +201,9 @@ export const layerFromProjectStore: Layer.Layer<
           interactionMode: input.thread.interactionMode,
           cwd,
           ...(repositoryUrl === undefined ? {} : { repositoryUrl }),
+          ...(instance?.driverKind === "upstashBox" && input.thread.boxSize !== undefined
+            ? { boxSize: input.thread.boxSize }
+            : {}),
           ...(maxRuntimeMode === undefined ? {} : { maxRuntimeMode }),
         });
       }),

@@ -205,6 +205,7 @@ import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
 import { GuestPendingMessages } from "./chat/GuestShareControls";
 import { useDeviceState } from "~/state/device";
 import { BranchToolbar, type BranchToolbarHandle } from "./BranchToolbar";
+import { BoxSizePicker } from "./chat/BoxSizePicker";
 import { ComposerContextPermissions } from "./ComposerContextPermissions";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import { isEditableFocused } from "../lib/editableFocus";
@@ -1818,6 +1819,7 @@ export default function ChatView(props: ChatViewProps) {
           providerSubagentModels,
           reportedModelSelection,
         );
+  const boxSizeDraftId = !embedded && isLocalDraftThread && cloudThread ? draftId : null;
   const showComposerContextStrip =
     !embedded &&
     shouldShowComposerContextStrip({
@@ -3863,7 +3865,8 @@ export default function ChatView(props: ChatViewProps) {
                             data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
                             className="relative z-0"
                           >
-                            {showComposerContextStrip && !cloudThread && (
+                            {((showComposerContextStrip && !cloudThread) ||
+                              boxSizeDraftId !== null) && (
                               <div className="pointer-events-auto">
                                 <BranchToolbar
                                   forceNewWorktree={multipleModelSelections !== null}
@@ -3904,7 +3907,21 @@ export default function ChatView(props: ChatViewProps) {
                                       : undefined
                                   }
                                   availableEnvironments={logicalProjectEnvironments}
-                                  {...(isServerThread
+                                  environmentAccessory={
+                                    boxSizeDraftId === null ? null : (
+                                      <BoxSizePicker
+                                        draftId={boxSizeDraftId}
+                                        providerConfig={
+                                          activeProviderInstanceId === null
+                                            ? undefined
+                                            : settings.providerInstances[activeProviderInstanceId]
+                                                ?.config
+                                        }
+                                        disabled={isSendBusy}
+                                      />
+                                    )
+                                  }
+                                  {...(isServerThread || cloudThread
                                     ? {}
                                     : {
                                         trailing: (

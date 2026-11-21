@@ -768,6 +768,10 @@ export function useComposerSend(input: ComposerSendInput) {
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
     } = sendCtx;
+    const boxSize =
+      isLocalDraftThread && ctxSelectedProvider === "upstashBox"
+        ? useComposerDraftStore.getState().getComposerDraft(composerDraftTarget)?.boxSize
+        : undefined;
     const { images: composerImages, previewAnnotations: composerPreviewAnnotations } =
       mergeDirectPreviewAnnotation({
         images: sendContextImages,
@@ -1445,6 +1449,7 @@ export function useComposerSend(input: ComposerSendInput) {
                       projectId: activeProject.id,
                       title,
                       modelSelection: threadCreateModelSelection,
+                      ...(boxSize === undefined ? {} : { boxSize }),
                       runtimeMode,
                       interactionMode: DEFAULT_INTERACTION_MODE,
                       branch: activeThreadBranch,

@@ -102,10 +102,17 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         events: Stream.fromEffectRepeat(Queue.take(events)),
         ensureThread: Effect.fn("UpstashBox.ensureThread")(function* (request) {
           if (request.existingProviderThread?.nativeThreadRef?.nativeId)
-            return yield* runtime.resumeThread({ providerThread: request.existingProviderThread });
+            return yield* runtime.resumeThread({
+              providerThread: request.existingProviderThread,
+              runtimePolicy: request.runtimePolicy,
+            });
           // Hex encoding is injective, shell-safe, and stable across server restarts.
           const name = `t3-${Buffer.from(request.threadId).toString("hex")}`;
-          const box = yield* ensureBox(config, name, request.runtimePolicy.repositoryUrl).pipe(
+          const box = yield* ensureBox(
+            { ...config, size: request.runtimePolicy.boxSize ?? config.size },
+            name,
+            request.runtimePolicy.repositoryUrl,
+          ).pipe(
             Effect.provideService(BoxApi, api),
             Effect.mapError(
               () =>
@@ -165,7 +172,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               return yield* unsupported("Recreating a Box without an app thread identity");
             return yield* runtime.ensureThread({
               threadId,
-              runtimePolicy: input.runtimePolicy,
+              runtimePolicy: request.runtimePolicy ?? input.runtimePolicy,
               modelSelection: input.modelSelection,
             });
           }

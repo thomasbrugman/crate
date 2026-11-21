@@ -371,7 +371,7 @@ function launchInput(input: {
   };
 }
 
-it.effect("launches Box threads without host worktrees, branches, or setup", () => {
+it.effect("persists the Box size and launches Box threads without host workspace setup", () => {
   const cloudAdapter = { ...adapter, driver: ProviderDriverKind.make("upstashBox") };
   const harness = makeHarness({
     adapters: [cloudAdapter],
@@ -395,13 +395,15 @@ it.effect("launches Box threads without host worktrees, branches, or setup", () 
   });
   return Effect.gen(function* () {
     const launches = yield* ThreadLaunch.ThreadLaunchService;
-    const result = yield* launches.launch(
-      launchInput({
+    const result = yield* launches.launch({
+      ...launchInput({
         command: "command:cloud",
         thread: "thread:cloud",
         workspace: { type: "worktree", baseRef: "main" },
       }),
-    );
+      boxSize: "large",
+    });
+    assert.equal(result.projection.thread.boxSize, "large");
     assert.equal(result.projection.thread.worktreePath, null);
     assert.equal(result.projection.thread.branch, null);
     assert.equal(harness.createWorktree.mock.calls.length, 0);

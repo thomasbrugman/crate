@@ -471,7 +471,7 @@ function ProviderCommandArguments({
   );
 }
 
-function readProviderConfigString(config: unknown, key: string): string {
+export function readProviderConfigString(config: unknown, key: string): string {
   if (config === null || typeof config !== "object") return "";
   const value = (config as Record<string, unknown>)[key];
   return typeof value === "string" ? value : "";

@@ -1,4 +1,5 @@
 import {
+  BoxSize,
   makeProviderSettingsSchema,
   secretSetting,
   SettingsSecretValue,
@@ -31,7 +32,7 @@ export const UpstashBoxSettings = makeProviderSettingsSchema(
         providerSettingsForm: { placeholder: "Template default" },
       }),
     ),
-    size: Schema.Literals(["small", "medium", "large"]).pipe(
+    size: BoxSize.pipe(
       Schema.withDecodingDefault(Effect.succeed("small" as const)),
       Schema.annotateKey({
         title: "Box size",
