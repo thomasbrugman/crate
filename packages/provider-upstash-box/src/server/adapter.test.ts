@@ -24,6 +24,7 @@ import * as Stream from "effect/Stream";
 
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import { BoxApi, type BoxHandle, type BoxStream } from "./BoxApi.ts";
+import { commandCodeHarness } from "./harness.ts";
 
 const instanceId = ProviderInstanceId.make("box-test");
 const threadId = ThreadId.make("thread-box-test");
@@ -45,6 +46,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   deleteBox?: () => Promise<void>,
 ) {
   const prompts: string[] = [];
+  const harnesses: string[] = [];
   const lookup: { error?: unknown } = {};
   const box: BoxHandle = {
     id: "box-123",
@@ -55,7 +57,11 @@ const setup = Effect.fn("test.setupBox")(function* (
       },
     },
     exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
-    files: { write: async () => undefined },
+    files: {
+      write: async ({ content }) => {
+        harnesses.push(content);
+      },
+    },
     delete: deleteBox ?? (async () => undefined),
   };
   const adapter = yield* makeUpstashBoxAdapter(instanceId, {
@@ -123,7 +129,7 @@ const setup = Effect.fn("test.setupBox")(function* (
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn, prompts, adapter, lookup };
+  return { runtime, turn, prompts, adapter, lookup, harnesses };
 });
 
 it.effect(
@@ -242,14 +248,25 @@ it.effect(
   () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const { runtime, turn, prompts } = yield* setup(
+        const { runtime, turn, prompts, harnesses } = yield* setup(
           fakeStream([
             { type: "start", runId: "native-run" },
             { type: "tool-result", output: "orphan" },
-            { type: "tool-call", toolName: "Read", input: { path: "first" } },
-            { type: "tool-call", toolName: "Write", input: { path: "second" } },
-            { type: "tool-result", output: [{ type: "text", text: "wrote second" }] },
-            { type: "tool-result", output: "read first" },
+            { type: "tool-call", toolCallId: "read", toolName: "Read", input: { path: "first" } },
+            {
+              type: "tool-call",
+              toolCallId: "write",
+              toolName: "Write",
+              input: { path: "second" },
+            },
+            { type: "tool-result", output: "ambiguous" },
+            { type: "tool-result", toolCallId: "unknown", output: "orphan" },
+            {
+              type: "tool-result",
+              toolCallId: "write",
+              output: [{ type: "text", text: "wrote second" }],
+            },
+            { type: "tool-result", toolCallId: "read", output: "read first" },
             { type: "text-delta", text: "hel" },
             { type: "text-delta", text: "lo" },
             finish,
@@ -257,6 +274,8 @@ it.effect(
           ]),
         );
         const text = "Earlier context\n\nhello";
+        yield* runtime.resumeThread({ providerThread: turn.providerThread });
+        assert.deepEqual(harnesses, [commandCodeHarness, commandCodeHarness]);
         yield* runtime.startTurn({
           ...turn,
           providerThread: {
@@ -300,6 +319,12 @@ it.effect(
         assert.deepEqual(
           completedTools.map((event) => event.turnItem.title),
           ["Write", "Read"],
+        );
+        assert.deepEqual(
+          completedTools.map((event) =>
+            event.turnItem.type === "dynamic_tool" ? event.turnItem.output : null,
+          ),
+          [[{ type: "text", text: "wrote second" }], "read first"],
         );
         const turns = events.filter((event) => event.type === "provider_turn.updated");
         assert.deepEqual(turns.at(-1)?.providerTurn.tokenUsage, {

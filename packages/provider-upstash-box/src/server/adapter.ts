@@ -14,6 +14,7 @@ import * as Stream from "effect/Stream";
 import { BoxApi, BoxRuntimeError, isMissingBox, type BoxHandle, type BoxStream } from "./BoxApi.ts";
 import { ensureBox, type BoxRuntimeConfig, type BoxSetupStep } from "./bootstrap.ts";
 import { capabilities } from "./capabilities.ts";
+import { commandCodeHarness } from "./harness.ts";
 import { BoxTurnTranslation, UPSTASH_BOX_PROVIDER as driver } from "./translation.ts";
 
 interface ActiveTurn {
@@ -187,7 +188,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const box = yield* Effect.tryPromise({
             try: async () => {
               try {
-                return await api.get(nativeId, config.apiKey);
+                const box = await api.get(nativeId, config.apiKey);
+                await box.files.write({
+                  path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
+                  content: commandCodeHarness,
+                });
+                return box;
               } catch (error) {
                 if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
                 return null;
