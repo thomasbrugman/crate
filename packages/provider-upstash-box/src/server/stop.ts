@@ -2,8 +2,9 @@ import * as Effect from "effect/Effect";
 
 import { BoxRuntimeError, type BoxHandle, type BoxStream } from "./BoxApi.ts";
 
-export const killHarnessTrees = `node <<'T3_KILL_HARNESS'
+export const killHarnessTrees = (runMarker: string) => `node <<'T3_KILL_HARNESS'
 const fs = require('node:fs');
+const marker = ${JSON.stringify(runMarker)};
 const rows = new Map();
 for (const name of fs.readdirSync('/proc')) {
   if (!/^\\d+$/.test(name) || Number(name) <= 1) continue;
@@ -30,13 +31,15 @@ function killTree(pid) {
   }
 }
 for (const [pid, row] of rows)
-  if (row.argv.some(arg => arg === 't3stash-harness.mjs' || arg.endsWith('/t3stash-harness.mjs')))
+  if (marker && row.argv.some(arg => arg === 't3stash-harness.mjs' || arg.endsWith('/t3stash-harness.mjs')) &&
+      row.argv.some(arg => arg.startsWith(marker)))
     killTree(pid);
 T3_KILL_HARNESS`;
 
 export const cancelBoxRun = Effect.fn("UpstashBox.cancelBoxRun")(function* (
   box: BoxHandle,
   stream: BoxStream,
+  runMarker: string,
 ) {
   yield* Effect.tryPromise({
     try: () => stream.cancel(),
@@ -48,7 +51,7 @@ export const cancelBoxRun = Effect.fn("UpstashBox.cancelBoxRun")(function* (
     Effect.ensuring(
       Effect.tryPromise({
         try: async () => {
-          const result = await box.exec.command(killHarnessTrees);
+          const result = await box.exec.command(killHarnessTrees(runMarker));
           if (result.exitCode !== 0) throw new Error("Process cleanup failed");
         },
         catch: () => new BoxRuntimeError({ operation: "kill-harness" }),
