@@ -366,7 +366,13 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               fromAgentStream &&
               error instanceof BoxError &&
               error.statusCode === undefined &&
-              error.cause === undefined
+              error.cause === undefined &&
+              Reflect.ownKeys(error).every(
+                (key) =>
+                  typeof key === "string" &&
+                  ["message", "stack", "name", "statusCode", "cause"].includes(key),
+              ) &&
+              !/[{}]/u.test(error.message)
             ) {
               let raw = error.message;
               for (const key of [agent.agentApiKey, apiKey]) {

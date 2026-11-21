@@ -70,10 +70,52 @@ export class BoxApi extends Context.Service<
   }
 >()("@t3tools/provider-upstash-box/server/BoxApi") {}
 
+function projectBox(box: Box): BoxHandle {
+  return {
+    id: box.id,
+    agent: {
+      stream: async (options) => {
+        const stream = await box.agent.stream(options);
+        return {
+          get id() {
+            return stream.id;
+          },
+          cancel: async () => {
+            await stream.cancel();
+          },
+          async *[Symbol.asyncIterator]() {
+            yield* stream;
+          },
+        };
+      },
+    },
+    exec: {
+      command: async (command) => {
+        const result = await box.exec.command(command);
+        return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+      },
+    },
+    files: {
+      write: async (options) => {
+        await box.files.write(options);
+      },
+    },
+    delete: async () => {
+      await box.delete();
+    },
+    resume: async () => {
+      await box.resume();
+    },
+    getStatus: async () => ({ status: (await box.getStatus()).status }),
+  };
+}
+
 export const layer = Layer.succeed(BoxApi, {
-  get: (id, apiKey) => Box.get(id, { apiKey }),
-  create: (config) => Box.create(config),
-  list: (apiKey) => Box.list({ apiKey }),
+  get: async (id, apiKey) => projectBox(await Box.get(id, { apiKey })),
+  create: async (config) => projectBox(await Box.create(config)),
+  list: async (apiKey) => {
+    await Box.list({ apiKey });
+  },
   checkModelKey: async (harness, apiKey) => {
     // @effect-diagnostics-next-line globalFetch:off - This service is the Promise boundary the Box SDK already uses.
     const response = await fetch(

@@ -123,7 +123,7 @@ export const make = Effect.gen(function* () {
       effect.pipe(
         Effect.mapError((cause) =>
           isBoxExecError(cause)
-            ? cause
+            ? new BoxExec.BoxExecError({ threadId, reason: cause.reason })
             : new BoxExec.BoxExecError({ threadId, reason: "resolve_failed" }),
         ),
       ),

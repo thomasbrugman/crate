@@ -77,7 +77,9 @@ export const make = Effect.gen(function* () {
         return yield* fail("invalid_input");
       const thread = yield* resolver
         .resolve(input.threadId)
-        .pipe(Effect.mapError((error) => (isBoxExecError(error) ? error : fail("resolve_failed"))));
+        .pipe(
+          Effect.mapError((error) => fail(isBoxExecError(error) ? error.reason : "resolve_failed")),
+        );
       if (!thread) return yield* fail("thread_unavailable");
       const persisted = thread.providerThread;
       if (
