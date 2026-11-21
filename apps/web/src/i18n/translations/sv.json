@@ -1576,6 +1576,7 @@
     },
     " och ta med de lokala filer som git inte spårar."
   ],
+  "bd5def9c42115de5": "Den här sökvägen finns på servern. Molntrådar klonar projektets pushade fjärrarkiv; ändringar som inte har pushats kopieras inte till Box.",
   "77494a56d6315a2e": "Klona via",
   "1c7a3992dd8e38af": "Kopiera ignorerade filer",
   "7d4bb884e519b298": "Filerna kopieras när kloningen är klar. Mappar som git ignorerar helt, som node_modules, utelämnas.",
@@ -2676,6 +2677,7 @@
   "7f6d34983e89a91c": "Ta bort åtgärd",
   "84435bd5cb8cfac0": "Redigera åtgärd",
   "2d1f6668f713dca9": "Lägg till åtgärd",
+  "73bedbce4c29257a": "Åtgärder sparas för det här projektet men körs inte i molntrådar.",
   "da1b3bc9635dcdc8": "Åtgärder är projektspecifika kommandon som du kan köra från det övre fältet eller med kortkommandon.",
   "4614a422f1430cd7": "Namn",
   "d3502e7db0cdb998": "Kortkommando",
@@ -3276,6 +3278,7 @@
       "v": "v"
     }
   ],
+  "eb51025bee426871": "Bilagor och filförhandsvisningar är inte tillgängliga i molntrådar. Filomnämnanden använder serverns arbetskopia; endast pushade filer är tillgängliga i Box.",
   "3dbc42464b2bfb20": "Snabb och Ultrasnabb är inte tillgängliga med den här ChatGPT-anslutningen. Använd en befintlig Codex CLI-inloggning för de hastighetsalternativ ditt konto stöder.",
   "5c0eb4217bb673bd": "Använder ChatGPT-abonnemang",
   "3e545d70d0c3535c": "Trådens sökväg",
@@ -4067,7 +4070,6 @@
   "4276743ee60a3c62": "{count, plural, one {{count} kommentar} other {{count} kommentarer}}",
   "42f634397f3960aa": "Visa i tråddetaljer",
   "e3738ef0423ddfe7": "Återställ till standard",
-  "4b3d3f47606c22e2": "Inte tillgängligt i molntrådar. Be agenten att använda sina Box-verktyg.",
   "ae10d34e11064fec": "Versionshantering",
   "8ab1235557b08956": "Välj vad som ska visas",
   "e8f045adbbaf328e": "Tillagd i inmatningsfältet",

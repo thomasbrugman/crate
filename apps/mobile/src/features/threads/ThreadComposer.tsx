@@ -1,3 +1,4 @@
+import { isBoxThreadDriver } from "@t3tools/client-runtime/provider-clients";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
@@ -353,6 +354,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       ) ?? null
     );
   })();
+  const cloudThread = isBoxThreadDriver(selectedProviderStatus?.driver);
   const openDraftDocument = (attachment: ComposerDocumentAttachment) => {
     Keyboard.dismiss();
     navigation.navigate("ThreadAttachment", {
@@ -490,6 +492,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   );
   const contextImports = useAtomValue(composerContextImportsAtom);
   const sendBlockedReason =
+    (cloudThread && hasEditingAttachments
+      ? gt("Not available in cloud threads. Ask the agent to use its Box tools.")
+      : null) ??
     (queuedEdit?.saving === true ? gt("Saving…") : null) ??
     props.sendBlockedReason ??
     (pendingPastedTextAttachmentCount > 0 ? gt("Attaching pasted text") : null) ??
@@ -591,7 +596,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     draftKey: composerDraftKey,
     readResetGeneration,
     blocked: isSubmissionLocked || sendBlockedReason !== null,
-    onPasteImages: props.onNativePasteImages,
+    onPasteImages: (uris) =>
+      cloudThread ? Promise.resolve(false) : props.onNativePasteImages(uris),
     onSubmit: (followUp) => void handleSend(followUp),
   });
 
@@ -791,6 +797,13 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
           />
         ) : null}
 
+        {cloudThread ? (
+          <Text className="px-3 py-2 text-xs text-foreground-muted">
+            {gt(
+              "Attachments and file previews are not available in cloud threads. File mentions use the server checkout; only pushed files are available in the Box.",
+            )}
+          </Text>
+        ) : null}
         <ComposerSurface
           animateLayout={false}
           style={{
@@ -832,13 +845,15 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
               compact
               hidden={showsCompactDictation}
             >
-              <ComposerAttachmentButton
-                size={usesLargeControls ? "large" : "regular"}
-                disabled={isSubmissionLocked}
-                supportsFiles={props.serverConfig !== null}
-                onPickMedia={props.onPickDraftMedia}
-                onPickFiles={props.onPickDraftFiles}
-              />
+              {cloudThread ? null : (
+                <ComposerAttachmentButton
+                  size={usesLargeControls ? "large" : "regular"}
+                  disabled={isSubmissionLocked}
+                  supportsFiles={props.serverConfig !== null}
+                  onPickMedia={props.onPickDraftMedia}
+                  onPickFiles={props.onPickDraftFiles}
+                />
+              )}
               <Animated.View
                 className="min-w-0 flex-1"
                 onLayout={compactEditor.onEditorLayout}
@@ -867,6 +882,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   draftKey={composerDraftKey}
                   environmentId={props.environmentId}
                   onOpenMention={(path) => {
+                    if (cloudThread) return;
                     Keyboard.dismiss();
                     if (props.isDraft) {
                       navigation.navigate("NewTaskFile", {
@@ -897,7 +913,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   }}
                   onSelectionChange={composerMenu.onSelectionChange}
                   onPasteImages={(uris) => {
-                    if (isSubmissionLocked) return;
+                    if (isSubmissionLocked || cloudThread) return;
                     pendingNativeImagePasteCountRef.current += 1;
                     void nativeImageSubmit.pasteImages(uris).finally(() => {
                       pendingNativeImagePasteCountRef.current -= 1;
@@ -927,6 +943,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                         paste.text.length >
                       PROVIDER_SEND_TURN_MAX_INPUT_CHARS;
                     const canAttach =
+                      !cloudThread &&
                       maxBytes !== null &&
                       countComposerDraftAttachmentsAfterSelection(composerDraftKey, {
                         text: paste.value,

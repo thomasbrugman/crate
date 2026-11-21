@@ -1575,6 +1575,7 @@
     },
     " klonen und die lokalen Dateien mitnehmen, die git nicht verfolgt."
   ],
+  "bd5def9c42115de5": "Dieser Pfad liegt auf dem Server. Cloud-Threads klonen das gepushte Remote-Repository des Projekts; nicht gepushte Änderungen werden nicht in die Box kopiert.",
   "77494a56d6315a2e": "Klonen über",
   "1c7a3992dd8e38af": "Ignorierte Dateien kopieren",
   "7d4bb884e519b298": "Dateien werden nach dem Klonen kopiert. Ordner, die git komplett ignoriert, etwa node_modules, werden ausgelassen.",
@@ -2343,7 +2344,7 @@
   "5c78a8ae7b71af1d": "Terminal",
   "cba3e832ece50257": "Dateien",
   "83ac3423d6dfc4a7": "Diff",
-  "4b3d3f47606c22e2": "In Cloud-Threads nicht verfügbar. Bitte den Agenten, seine Box-Werkzeuge zu verwenden.",
+  "4b3d3f47606c22e2": "In Cloud-Threads nicht verfügbar. Bitte den Agenten, seine Box-Tools zu verwenden.",
   "da16af47eff38ae9": "Pull Request",
   "ad3929f0103925d7": "Verknüpfte Elemente",
   "ac0de2a59d9c8860": "Gerät",
@@ -2677,6 +2678,7 @@
   "7f6d34983e89a91c": "Aktion löschen",
   "84435bd5cb8cfac0": "Aktion bearbeiten",
   "2d1f6668f713dca9": "Aktion hinzufügen",
+  "73bedbce4c29257a": "Aktionen werden für dieses Projekt gespeichert, aber nicht in Cloud-Threads ausgeführt.",
   "da1b3bc9635dcdc8": "Aktionen sind projektbezogene Befehle, die du über die obere Leiste oder Tastenkürzel ausführen kannst.",
   "4614a422f1430cd7": "Name",
   "d3502e7db0cdb998": "Tastenkürzel",
@@ -3277,6 +3279,7 @@
       "v": "v"
     }
   ],
+  "eb51025bee426871": "Anhänge und Dateivorschauen sind in Cloud-Threads nicht verfügbar. Dateiverweise nutzen den Server-Checkout; nur gepushte Dateien sind in der Box verfügbar.",
   "3dbc42464b2bfb20": "Fast und Ultrafast sind mit dieser ChatGPT-Verbindung nicht verfügbar. Verwende ein vorhandenes Codex-CLI-Login für die Geschwindigkeitsoptionen, die dein Konto unterstützt.",
   "5c0eb4217bb673bd": "ChatGPT-Abo wird verwendet",
   "3e545d70d0c3535c": "Thread-Pfad",
@@ -4069,7 +4072,6 @@
   "4276743ee60a3c62": "{count, plural, one {{count} Kommentar} other {{count} Kommentare}}",
   "42f634397f3960aa": "In Thread-Details anzeigen",
   "e3738ef0423ddfe7": "Auf Standard zurücksetzen",
-  "4b3d3f47606c22e2": "In Cloud-Threads nicht verfügbar. Bitte den Agenten, seine Box-Tools zu verwenden.",
   "ae10d34e11064fec": "Versionskontrolle",
   "8ab1235557b08956": "Wähle, was angezeigt wird",
   "e8f045adbbaf328e": "Zum Eingabefeld hinzugefügt",

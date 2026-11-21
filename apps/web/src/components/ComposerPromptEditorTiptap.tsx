@@ -290,8 +290,9 @@ function ComposerMentionNodeView({ node }: NodeViewProps) {
   const gt = useGT();
   const actions = use(ComposerContextActionsContext);
   const path = (node.attrs.path as string) ?? "";
-  const nativeDrag = useNativeFileDrag(actions.environmentId, () =>
-    resolvePathLinkTarget(path, actions.cwd ?? ""),
+  const nativeDrag = useNativeFileDrag(
+    actions.filePreviewUnavailableReason ? null : actions.environmentId,
+    () => resolvePathLinkTarget(path, actions.cwd ?? ""),
   );
   const chip = (
     <ContextChip
@@ -299,8 +300,11 @@ function ComposerMentionNodeView({ node }: NodeViewProps) {
       kind={documentChipKindForFileName(path) ?? "mention"}
       dir="ltr"
       render={<button type="button" />}
-      onClick={() => actions.openMention(path)}
-      aria-label={gt("Preview {path}", { path })}
+      onClick={() => {
+        if (!actions.filePreviewUnavailableReason) actions.openMention(path);
+      }}
+      aria-disabled={Boolean(actions.filePreviewUnavailableReason)}
+      aria-label={actions.filePreviewUnavailableReason ?? gt("Preview {path}", { path })}
       contentEditable={false}
       spellCheck={false}
       data-composer-mention-chip="true"
@@ -319,11 +323,13 @@ function ComposerMentionNodeView({ node }: NodeViewProps) {
       <Tooltip>
         <TooltipTrigger render={chip} />
         <TooltipPopup side="top">
-          <WorkspaceEntryTooltip
-            path={path}
-            environmentId={actions.environmentId}
-            cwd={actions.cwd}
-          />
+          {actions.filePreviewUnavailableReason ?? (
+            <WorkspaceEntryTooltip
+              path={path}
+              environmentId={actions.environmentId}
+              cwd={actions.cwd}
+            />
+          )}
         </TooltipPopup>
       </Tooltip>
     </NodeViewWrapper>

@@ -1576,6 +1576,7 @@
     },
     " and bring the local files git does not track."
   ],
+  "bd5def9c42115de5": "This path is on the server machine. Cloud threads clone the project's pushed remote; unpushed changes are not copied to the Box.",
   "77494a56d6315a2e": "Clone over",
   "1c7a3992dd8e38af": "Copy ignored files",
   "7d4bb884e519b298": "Files are copied after the clone finishes. Folders git ignores whole, like node_modules, are left out.",
@@ -2676,6 +2677,7 @@
   "7f6d34983e89a91c": "Delete action",
   "84435bd5cb8cfac0": "Edit Action",
   "2d1f6668f713dca9": "Add Action",
+  "73bedbce4c29257a": "Actions are saved for this project but do not run in cloud threads.",
   "da1b3bc9635dcdc8": "Actions are project-scoped commands you can run from the top bar or keybindings.",
   "4614a422f1430cd7": "Name",
   "d3502e7db0cdb998": "Keybinding",
@@ -3276,6 +3278,7 @@
       "v": "v"
     }
   ],
+  "eb51025bee426871": "Attachments and file previews are not available in cloud threads. File mentions use the server checkout; only pushed files are available in the Box.",
   "3dbc42464b2bfb20": "Fast and Ultrafast are unavailable with this ChatGPT connection. Use an existing Codex CLI login for speed options your account supports.",
   "5c0eb4217bb673bd": "Using ChatGPT plan",
   "3e545d70d0c3535c": "Thread breadcrumb",
@@ -4068,7 +4071,6 @@
   "4276743ee60a3c62": "{count, plural, one {{count} comment} other {{count} comments}}",
   "42f634397f3960aa": "Show in thread details",
   "e3738ef0423ddfe7": "Reset to default",
-  "4b3d3f47606c22e2": "Not available in cloud threads. Ask the agent to use its Box tools.",
   "ae10d34e11064fec": "Version Control",
   "8ab1235557b08956": "Choose what to show",
   "e8f045adbbaf328e": "Added to the composer",

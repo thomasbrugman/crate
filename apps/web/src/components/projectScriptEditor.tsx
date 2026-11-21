@@ -138,6 +138,7 @@ export function editorRequestForScript(
 
 export function ProjectScriptEditorDialog({
   environmentId,
+  runUnavailableReason,
   editScope = AuthOrchestrationOperateScope,
   request,
   scripts,
@@ -146,6 +147,7 @@ export function ProjectScriptEditorDialog({
   onClose,
 }: {
   environmentId: EnvironmentId;
+  runUnavailableReason?: string | undefined;
   editScope?: typeof AuthOrchestrationOperateScope | typeof AuthSettingsWriteScope;
   request: ProjectScriptEditorRequest | null;
   scripts: ReadonlyArray<ProjectScript>;
@@ -198,6 +200,7 @@ export function ProjectScriptEditorDialog({
             <ProjectScriptEditorForm
               key={shown.key}
               environmentId={environmentId}
+              runUnavailableReason={runUnavailableReason}
               editScope={editScope}
               request={shown.request}
               scripts={scripts}
@@ -255,6 +258,7 @@ export function ProjectScriptEditorDialog({
 
 function ProjectScriptEditorForm({
   environmentId,
+  runUnavailableReason,
   editScope,
   request,
   scripts,
@@ -265,6 +269,7 @@ function ProjectScriptEditorForm({
   onClose,
 }: {
   environmentId: EnvironmentId;
+  runUnavailableReason?: string | undefined;
   editScope: typeof AuthOrchestrationOperateScope | typeof AuthSettingsWriteScope;
   request: ProjectScriptEditorRequest;
   scripts: ReadonlyArray<ProjectScript>;
@@ -420,7 +425,11 @@ function ProjectScriptEditorForm({
       <DialogHeader>
         <DialogTitle>{isEditing ? <T>Edit Action</T> : <T>Add Action</T>}</DialogTitle>
         <DialogDescription>
-          <T>Actions are project-scoped commands you can run from the top bar or keybindings.</T>
+          {runUnavailableReason ? (
+            <T>Actions are saved for this project but do not run in cloud threads.</T>
+          ) : (
+            <T>Actions are project-scoped commands you can run from the top bar or keybindings.</T>
+          )}
         </DialogDescription>
       </DialogHeader>
       <DialogPanel>

@@ -7,11 +7,31 @@ import { ENRICHED_INLINE_FILE_LINK_REGEX } from "./enrichedLinkPresentation";
 import {
   markdownForNativeRendering,
   markdownWithInlineFileLinks,
+  markdownWithPlainFilePaths,
   markdownWithHtml,
 } from "./markdownDocument";
 
 const rewrite = (markdown: string) =>
   markdownWithInlineFileLinks(markdown, ENRICHED_INLINE_FILE_LINK_REGEX);
+
+describe("plain file paths for cloud replies", () => {
+  it("keeps inline code and converts file links without changing external links or code blocks", () => {
+    expect(
+      markdownWithPlainFilePaths("`src/a.ts` [source](src/a.ts#L2) [web](https://example.com)"),
+    ).toBe("`src/a.ts` ` src/a.ts#L2 ` [web](https://example.com)");
+    expect(markdownWithPlainFilePaths("[source][s]\n\n[s]: /workspace/repo/a.ts")).toBe(
+      "` /workspace/repo/a.ts `\n\n[s]: /workspace/repo/a.ts",
+    );
+    const code = "```md\n[source](src/a.ts)\n```";
+    expect(markdownWithPlainFilePaths(code)).toBe(code);
+    expect(markdownWithPlainFilePaths("[source](./src/a`b.ts)")).toBe("`` ./src/a`b.ts ``");
+  });
+
+  it.each(["", "[broken](", "[web](https://example.com)", "[anchor](#section)"])(
+    "leaves empty, malformed and non-file input unchanged: %s",
+    (markdown) => expect(markdownWithPlainFilePaths(markdown)).toBe(markdown),
+  );
+});
 
 describe("absolute paths in prose", () => {
   it("become links without corrupting the source around them", () => {

@@ -1,3 +1,4 @@
+import { isBoxThreadDriver } from "@t3tools/client-runtime/provider-clients";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useGT, useMessages } from "gt-react";
@@ -1319,8 +1320,6 @@ export default function ChatView(props: ChatViewProps) {
   const supportsPullRequests = serverConfig !== null;
   const attachmentEnvironmentConfig = environmentById.get(environmentId)?.serverConfig ?? null;
   const attachmentUploadsCapabilityKnown = attachmentEnvironmentConfig !== null;
-  const supportsQuestionAttachments = attachmentEnvironmentConfig !== null;
-  const supportsAttachmentUploads = attachmentEnvironmentConfig !== null;
   const advertisedFileAttachmentBytes =
     attachmentEnvironmentConfig?.environment.capabilities.fileAttachments?.maxUploadBytes ?? null;
   const maxFileAttachmentBytes =
@@ -1391,6 +1390,9 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
+  const cloudThread = isBoxThreadDriver(selectedProvider);
+  const supportsQuestionAttachments = attachmentEnvironmentConfig !== null && !cloudThread;
+  const supportsAttachmentUploads = attachmentEnvironmentConfig !== null && !cloudThread;
   const conversationProviderStatus =
     providerStatuses.find((status) => status.instanceId === activeRuntime?.providerInstanceId) ??
     activeProviderStatus;
@@ -1686,7 +1688,6 @@ export default function ChatView(props: ChatViewProps) {
     turnDiffSummaries.at(-1)?.completedAt ?? null,
   );
 
-  const cloudThread = activeProviderStatus?.driver === "upstashBox";
   const projectScriptsAvailable = false;
   const gitStatusCwd = cloudThread ? null : (activeThread?.worktreePath ?? gitCwd);
   const gitStatusAtom =
@@ -3718,6 +3719,7 @@ export default function ChatView(props: ChatViewProps) {
                                 environmentId={environmentId}
                                 attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                                 supportsAttachmentUploads={supportsAttachmentUploads}
+                                cloudThread={cloudThread}
                                 supportsQuestionAttachments={supportsQuestionAttachments}
                                 maxFileAttachmentBytes={maxFileAttachmentBytes}
                                 routeKind={routeKind}

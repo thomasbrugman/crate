@@ -364,6 +364,7 @@ export interface ChatComposerProps {
   canOperateThread: boolean;
   attachmentUploadsCapabilityKnown: boolean;
   supportsAttachmentUploads: boolean;
+  cloudThread?: boolean;
   supportsQuestionAttachments: boolean;
   maxFileAttachmentBytes: number | null;
   routeKind: "server" | "draft";
@@ -724,6 +725,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const previewFile = composerFiles.find((file) => file.id === previewFileId);
   const composerContextActions = {
     environmentId,
+    filePreviewUnavailableReason: props.cloudThread
+      ? gt("Not available in cloud threads. Ask the agent to use its Box tools.")
+      : undefined,
     cwd: gitCwd ?? undefined,
     projectId: activeProjectId ?? undefined,
     expandImage: (imageId: string) => {
@@ -786,6 +790,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     m,
   );
   const attachmentBlockReason =
+    (props.cloudThread &&
+    (composerImages.length > 0 ||
+      composerFiles.length > 0 ||
+      (editingQueuedAttachments?.length ?? 0) > 0)
+      ? gt("Not available in cloud threads. Ask the agent to use its Box tools.")
+      : null) ??
     (questionAttachmentTarget &&
     !supportsQuestionAttachments &&
     (composerImages.length > 0 || composerFiles.length > 0)
@@ -2715,6 +2725,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const { addComposerAttachments, removeComposerImage, foldPastedText } =
     useComposerAttachmentIntake({
+      unavailableReason: props.cloudThread
+        ? gt("Not available in cloud threads. Ask the agent to use its Box tools.")
+        : undefined,
       activeThreadId,
       activePendingProgress,
       activePendingIsResponding,
@@ -3417,12 +3430,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         onRemoveFile={removeComposerFileFromDraft}
       />
     ) : null;
-  const composerAttachButton = showComposerAttachAction ? (
-    <ComposerAttachButton
-      addComposerAttachments={addComposerAttachments}
-      focusComposer={focusComposer}
-    />
-  ) : null;
+  const composerAttachButton =
+    showComposerAttachAction && !props.cloudThread ? (
+      <ComposerAttachButton
+        addComposerAttachments={addComposerAttachments}
+        focusComposer={focusComposer}
+      />
+    ) : null;
   return (
     <form
       ref={composerFormRef}
@@ -3478,6 +3492,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     >
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
+          {props.cloudThread ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">
+              <T>
+                Attachments and file previews are not available in cloud threads. File mentions use
+                the server checkout; only pushed files are available in the Box.
+              </T>
+            </div>
+          ) : null}
           <ComposerBannerStack items={shelfItems} />
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>

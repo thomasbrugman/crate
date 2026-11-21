@@ -336,6 +336,44 @@ export function markdownWithInlineFileLinks(markdown: string, fileLink: RegExp):
   return transformNativeMarkdown(markdown, fileLink, false);
 }
 
+export function markdownWithPlainFilePaths(markdown: string): string {
+  const root = parser.parse(markdown);
+  const definitions = new Map(
+    root.children.flatMap((node) =>
+      node.type === "definition" ? [[node.identifier, node.url] as const] : [],
+    ),
+  );
+  const edits: MarkdownEdit[] = [];
+  const visit = (node: MarkdownNode) => {
+    const href =
+      node.type === "link"
+        ? node.url
+        : node.type === "linkReference"
+          ? definitions.get(node.identifier)
+          : undefined;
+    const file = href === undefined ? null : parseMarkdownFileLink(href);
+    if (
+      file &&
+      node.position?.start.offset !== undefined &&
+      node.position.end.offset !== undefined
+    ) {
+      const path = href!;
+      const delimiter = "`".repeat(
+        Math.max(0, ...[...path.matchAll(/`+/g)].map(([run]) => run.length)) + 1,
+      );
+      edits.push({
+        start: node.position.start.offset,
+        end: node.position.end.offset,
+        content: `${delimiter} ${path} ${delimiter}`,
+      });
+    } else if (node.type !== "link" && node.type !== "linkReference" && "children" in node) {
+      node.children.forEach(visit);
+    }
+  };
+  visit(root);
+  return applyMarkdownEdits(markdown, edits);
+}
+
 function transformNativeMarkdown(
   markdown: string,
   fileLink: RegExp | undefined,

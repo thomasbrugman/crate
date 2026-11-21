@@ -1576,6 +1576,7 @@
     },
     " e traga os arquivos locais que o git não rastreia."
   ],
+  "bd5def9c42115de5": "Este caminho fica no servidor. As conversas na nuvem clonam o repositório remoto do projeto; alterações não enviadas não são copiadas para o Box.",
   "77494a56d6315a2e": "Clonar via",
   "1c7a3992dd8e38af": "Copiar arquivos ignorados",
   "7d4bb884e519b298": "Os arquivos são copiados depois que o clone termina. Pastas que o git ignora por inteiro, como node_modules, ficam de fora.",
@@ -2343,7 +2344,7 @@
   "5c78a8ae7b71af1d": "Terminal",
   "cba3e832ece50257": "Arquivos",
   "83ac3423d6dfc4a7": "Diff",
-  "4b3d3f47606c22e2": "Não disponível em conversas na nuvem. Peça ao agente para usar as ferramentas do Box.",
+  "4b3d3f47606c22e2": "Não disponível em conversas na nuvem. Peça ao agente para usar suas ferramentas do Box.",
   "da16af47eff38ae9": "Pull request",
   "ad3929f0103925d7": "Itens vinculados",
   "ac0de2a59d9c8860": "Dispositivo",
@@ -2676,6 +2677,7 @@
   "7f6d34983e89a91c": "Excluir ação",
   "84435bd5cb8cfac0": "Editar ação",
   "2d1f6668f713dca9": "Adicionar ação",
+  "73bedbce4c29257a": "As ações são salvas para este projeto, mas não são executadas nas conversas na nuvem.",
   "da1b3bc9635dcdc8": "Ações são comandos do projeto que você pode executar pela barra superior ou por atalhos de teclado.",
   "4614a422f1430cd7": "Nome",
   "d3502e7db0cdb998": "Atalho de teclado",
@@ -3276,6 +3278,7 @@
       "v": "v"
     }
   ],
+  "eb51025bee426871": "Anexos e prévias de arquivos não estão disponíveis nas conversas na nuvem. As menções a arquivos usam a cópia do servidor; apenas arquivos enviados ao remoto estão disponíveis no Box.",
   "3dbc42464b2bfb20": "Fast e Ultrafast não estão disponíveis com esta conexão do ChatGPT. Use um login existente do Codex CLI para as opções de velocidade que sua conta permite.",
   "5c0eb4217bb673bd": "Usando o plano do ChatGPT",
   "3e545d70d0c3535c": "Trilha da thread",
@@ -4066,7 +4069,6 @@
   "4276743ee60a3c62": "{count, plural, one {{count} comentário} other {{count} comentários}}",
   "42f634397f3960aa": "Mostrar nos detalhes da thread",
   "e3738ef0423ddfe7": "Redefinir para o padrão",
-  "4b3d3f47606c22e2": "Não disponível em conversas na nuvem. Peça ao agente para usar suas ferramentas do Box.",
   "ae10d34e11064fec": "Controle de versão",
   "8ab1235557b08956": "Escolha o que mostrar",
   "e8f045adbbaf328e": "Adicionado ao editor de mensagens",

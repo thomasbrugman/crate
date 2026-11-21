@@ -1,3 +1,4 @@
+import { isBoxThreadDriver } from "@t3tools/client-runtime/provider-clients";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { msg, T, useGT, useMessages } from "gt-react";
@@ -169,7 +170,8 @@ import { rightPanelHostRef, useRightPanelStore } from "../rightPanelStore";
 import { useOpenIssueLink } from "../lib/openIssueLink";
 import { issueTrackerEnvironment } from "../state/issueTrackers";
 import { useEnvironmentQuery } from "../state/query";
-import { readThreadShell, useProjects } from "../state/entities";
+import { readThreadShell, useProjects, useQuietThreadShell } from "../state/entities";
+import { useEnvironmentProviders } from "../state/environments";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
 import { assetEnvironment } from "../state/assets";
@@ -598,6 +600,15 @@ function useChatMarkdownState({
   });
   const pullRequestLinking = usePullRequestLinking(threadRef?.environmentId);
   const environmentId = threadRef?.environmentId ?? explicitEnvironmentId ?? null;
+  const thread = useQuietThreadShell(threadRef ?? null);
+  const providers = useEnvironmentProviders();
+  const instanceId = thread?.runtime?.providerInstanceId ?? thread?.modelSelection.instanceId;
+  const cloudThread = isBoxThreadDriver(
+    environmentId === null
+      ? undefined
+      : providers.get(environmentId)?.find((provider) => provider.instanceId === instanceId)
+          ?.driver,
+  );
   const canOperateHost = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canOperatePreview = useEnvironmentScope(environmentId, AuthPreviewOperateScope);
   const isClientHost = useAtomValue(clientHostEnvironmentAtom(environmentId));
@@ -924,6 +935,7 @@ function useChatMarkdownState({
     copyMarkdown: string,
     mediaSource?: string,
   ) => {
+    if (cloudThread) return <code>{mediaSource ?? fileLinkMeta.filePath}</code>;
     const resolveHostPath = () =>
       resolveMarkdownFileHostPath({
         meta: fileLinkMeta,
@@ -1018,6 +1030,7 @@ function useChatMarkdownState({
   };
 
   const componentState = {
+    cloudThread,
     canOperateHost,
     canOperatePreview,
     cwd,
@@ -1528,8 +1541,15 @@ const CHAT_MARKDOWN_COMPONENTS = {
     );
   },
   code: function MarkdownCode({ node, children, className, ...props }) {
-    const { cwd, imageBaseDir, inlineCodeFileLinkMetaByText, fileLinkChip, mathEnabled, inline } =
-      use(ChatMarkdownRendererContext);
+    const {
+      cwd,
+      imageBaseDir,
+      inlineCodeFileLinkMetaByText,
+      fileLinkChip,
+      mathEnabled,
+      inline,
+      cloudThread,
+    } = use(ChatMarkdownRendererContext);
     const math = mathEnabled ? mathKind(className) : null;
     if (math) {
       return (
@@ -1543,8 +1563,9 @@ const CHAT_MARKDOWN_COMPONENTS = {
     if (node?.properties?.dataInlineCode != null) {
       const codeText = nodeToPlainText(children);
       const fileLinkMeta =
-        inlineCodeFileLinkMetaByText.get(codeText.trim()) ??
-        resolveInlineCodeFileLinkMeta(codeText, cwd, imageBaseDir ?? cwd);
+        !cloudThread &&
+        (inlineCodeFileLinkMetaByText.get(codeText.trim()) ??
+          resolveInlineCodeFileLinkMeta(codeText, cwd, imageBaseDir ?? cwd));
       if (fileLinkMeta) {
         return fileLinkChip(
           fileLinkMeta,

@@ -16,6 +16,10 @@ export const openRouterIcon: ProviderIcon = {
 
 export const providerClients = makeProviderClientRegistry([upstashBoxClient]);
 
+export function isBoxThreadDriver(driver: string | null | undefined): boolean {
+  return driver === "upstashBox";
+}
+
 export function getProviderClient(driver: string | null | undefined) {
   return isProviderDriverKind(driver) ? providerClients.get(driver) : undefined;
 }
