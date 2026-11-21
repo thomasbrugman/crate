@@ -78,14 +78,14 @@ it.effect(
           yield* bootstrap;
           yield* bootstrap;
           assert.deepEqual(steps, [
-            "Connecting to the Box",
-            "Creating the Box",
-            "Checking the Box setup",
-            "Installing Command Code",
-            "Copying credentials from the template Box",
-            ...(repositoryUrl ? ["Cloning the repository"] : []),
-            "Connecting to the Box",
-            "Checking the Box setup",
+            "connect",
+            "create",
+            "check",
+            "install",
+            "credentials",
+            ...(repositoryUrl ? ["clone"] : []),
+            "connect",
+            "check",
           ]);
           assert.equal(clones, repositoryUrl ? 1 : 0);
           assert.equal(writes.filter((path) => path.endsWith(".git-credentials")).length, 1);

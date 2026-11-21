@@ -12,7 +12,7 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
 import { BoxApi, BoxRuntimeError, isMissingBox, type BoxHandle, type BoxStream } from "./BoxApi.ts";
-import { ensureBox, type BoxRuntimeConfig } from "./bootstrap.ts";
+import { ensureBox, type BoxRuntimeConfig, type BoxSetupStep } from "./bootstrap.ts";
 import { capabilities } from "./capabilities.ts";
 import { BoxTurnTranslation, UPSTASH_BOX_PROVIDER as driver } from "./translation.ts";
 
@@ -21,6 +21,15 @@ interface ActiveTurn {
   translation: BoxTurnTranslation;
   interrupted: boolean;
 }
+
+const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
+  connect: "Connecting to the Box",
+  create: "Creating the Box",
+  check: "Checking the Box setup",
+  install: "Installing Command Code",
+  credentials: "Copying credentials from the template Box",
+  clone: "Cloning the repository",
+};
 
 export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(function* (
   instanceId: ProviderInstanceId,
@@ -99,11 +108,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         };
         yield* publish([{ type: "provider_session.updated", driver, providerSession }]);
       });
-      // Called from inside the bootstrap promise, so it publishes synchronously.
-      const showSetupStep = (text: string) => {
+      // Called from inside the bootstrap promise, so it publishes synchronously. Clients
+      // translate by key; the text is the English fallback.
+      const showSetupStep = (step: BoxSetupStep) => {
         providerSession = {
           ...providerSession,
-          extensionStatuses: [{ key: "upstash-box.setup", text }],
+          extensionStatuses: [{ key: `upstash-box.setup.${step}`, text: SETUP_STEP_TEXT[step] }],
           updatedAt: DateTime.nowUnsafe(),
         };
         Queue.offerUnsafe(events, { type: "provider_session.updated", driver, providerSession });

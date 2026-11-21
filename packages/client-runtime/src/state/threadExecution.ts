@@ -75,7 +75,7 @@ export function deriveProviderExtensionStatuses(
         readonly providerSessions: ReadonlyArray<
           Pick<
             OrchestrationV2ProviderSession,
-            "id" | "providerInstanceId" | "status" | "extensionStatuses"
+            "id" | "driver" | "providerInstanceId" | "status" | "extensionStatuses"
           >
         >;
       })
@@ -93,7 +93,8 @@ export function deriveProviderExtensionStatuses(
       session.providerInstanceId === instanceId &&
       (activeThread === undefined || session.id === activeThread.providerSessionId),
   );
-  return session === undefined || session.status === "stopped"
+  // Box setup steps are shown as the run's starting label instead.
+  return session === undefined || session.status === "stopped" || session.driver === "upstashBox"
     ? EMPTY_EXTENSION_STATUSES
     : (session.extensionStatuses ?? EMPTY_EXTENSION_STATUSES);
 }
@@ -111,6 +112,25 @@ function latestMatchingRun(
   );
 }
 
+function boxSetupLabel(key: string | undefined) {
+  switch (key) {
+    case "upstash-box.setup.connect":
+      return msg("Connecting to the Box");
+    case "upstash-box.setup.create":
+      return msg("Creating the Box");
+    case "upstash-box.setup.check":
+      return msg("Checking the Box setup");
+    case "upstash-box.setup.install":
+      return msg("Installing Command Code");
+    case "upstash-box.setup.credentials":
+      return msg("Copying credentials from the template Box");
+    case "upstash-box.setup.clone":
+      return msg("Cloning the repository");
+    default:
+      return msg("Setting up Box");
+  }
+}
+
 function providerStarting(
   projection: ThreadStructure,
   run: OrchestrationV2ThreadProjection["runs"][number],
@@ -122,7 +142,7 @@ function providerStarting(
   const name = driver === undefined ? undefined : PROVIDER_DISPLAY_NAMES[driver];
   const label =
     driver === "upstashBox" && session?.status === "starting"
-      ? msg("Setting up Box")
+      ? boxSetupLabel(session.extensionStatuses?.[0]?.key)
       : name === undefined
         ? msg("Starting", { $context: "a provider is launching" })
         : msg("Starting {provider}", { provider: name });

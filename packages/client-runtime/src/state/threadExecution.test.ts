@@ -92,6 +92,7 @@ describe("thread execution presentation", () => {
       providerSessions: [
         {
           id: sessionId,
+          driver: ProviderDriverKind.make("pi"),
           providerInstanceId: instanceId,
           status: "ready" as const,
           extensionStatuses: statuses,
@@ -116,6 +117,14 @@ describe("thread execution presentation", () => {
       deriveProviderExtensionStatuses({
         ...projection,
         providerSessions: [{ ...projection.providerSessions[0]!, status: "stopped" }],
+      }),
+    ).toEqual([]);
+    expect(
+      deriveProviderExtensionStatuses({
+        ...projection,
+        providerSessions: [
+          { ...projection.providerSessions[0]!, driver: ProviderDriverKind.make("upstashBox") },
+        ],
       }),
     ).toEqual([]);
     expect(
@@ -437,6 +446,13 @@ describe("thread execution presentation", () => {
       deriveThreadActivityRun({ ...starting, providerSessions: [boxSession] })
         ?.providerStartingLabel,
     ).toBe("Setting up Box");
+    const cloning = {
+      ...boxSession,
+      extensionStatuses: [{ key: "upstash-box.setup.clone", text: "Cloning the repository" }],
+    };
+    expect(
+      deriveThreadActivityRun({ ...starting, providerSessions: [cloning] })?.providerStartingLabel,
+    ).toBe("Cloning the repository");
     expect(
       deriveThreadActivityRun({
         ...starting,

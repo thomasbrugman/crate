@@ -38,16 +38,13 @@ import type { ThreadNowItem } from "./ThreadNow";
 
 export function extensionStatusBannerItem(
   statuses: NonNullable<OrchestrationV2ProviderSession["extensionStatuses"]>,
-  providerName: string,
 ): ComposerBannerStackItem | null {
   if (statuses.length === 0) return null;
   return {
-    id: "provider-extension-status",
+    id: "pi-extension-status",
     variant: "default",
     icon: <span>▸</span>,
-    title: (
-      <output>{`${providerName} · ${statuses.map((status) => status.text).join(" · ")}`}</output>
-    ),
+    title: <output>{`Pi · ${statuses.map((status) => status.text).join(" · ")}`}</output>,
   };
 }
 
