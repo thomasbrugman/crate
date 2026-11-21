@@ -40,6 +40,8 @@ function service(
     exec: { command: options.command ?? unexpected },
     files: { write: unexpected },
     delete: unexpected,
+    resume: unexpected,
+    getStatus: unexpected,
   };
   return BoxExec.make.pipe(
     Effect.provideService(BoxExec.BoxExecThreadResolver, {
@@ -55,6 +57,7 @@ function service(
         }),
       create: unexpected,
       list: unexpected,
+      checkModelKey: unexpected,
     }),
   );
 }
