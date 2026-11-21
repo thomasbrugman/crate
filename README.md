@@ -60,7 +60,7 @@ T3 Code yet.
 
 ## Status
 
-The repo is the T3 Code v0.1.10 tree with this README in front of it. Nothing of t3stash is built
+The repo is the T3 Code v0.1.11 tree with this README in front of it. Nothing of t3stash is built
 yet. Upstream's README is in [UPSTREAM.md](./UPSTREAM.md).
 
 Questions to answer before writing any of it:
