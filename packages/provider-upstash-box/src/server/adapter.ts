@@ -70,7 +70,6 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const scope = yield* Effect.scope;
       const events = yield* Queue.unbounded<Adapter.ProviderAdapterV2Event>();
       const boxes = new Map<string, BoxHandle>();
-      const threads = new Map<ProviderThreadId, OrchestrationV2ProviderThread>();
       let active: ActiveTurn | undefined;
       const now = yield* DateTime.now;
       const providerSession = {
@@ -93,7 +92,6 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         box: BoxHandle,
       ) {
         boxes.set(box.id, box);
-        threads.set(thread.id, thread);
         yield* publish([{ type: "provider_thread.updated", driver, providerThread: thread }]);
         return thread;
       });
@@ -217,7 +215,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           if (request.runtimePolicy.runtimeMode !== "full-access")
             return yield* unsupported("Restricted runtime policies");
           const providerThread = yield* runtime.resumeThread({
-            providerThread: threads.get(request.providerThread.id) ?? request.providerThread,
+            providerThread: request.providerThread,
             threadId: request.threadId,
           });
           const box = boxes.get(providerThread.nativeThreadRef?.nativeId ?? "");
@@ -234,18 +232,20 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             // Box supplies the prior finish.sessionId to its custom harness as --session.
             const stream = yield* Effect.tryPromise({
               try: async () => {
+                let stream: BoxStream;
                 try {
-                  return await box.agent.stream({ prompt: request.message.text });
+                  stream = await box.agent.stream({ prompt: request.message.text });
                 } catch (error) {
                   if (!(error instanceof BoxError) || error.statusCode !== 409) throw error;
                   // A cancelled run can leave the Box rejecting work until explicitly resumed.
                   await box.resume();
-                  return await box.agent.stream({ prompt: request.message.text });
+                  stream = await box.agent.stream({ prompt: request.message.text });
                 }
+                turn.stream = stream;
+                return stream;
               },
               catch: () => new BoxRuntimeError({ operation: "stream" }),
-            });
-            turn.stream = stream;
+            }).pipe(Effect.uninterruptible);
             if (turn.interrupted)
               yield* Effect.tryPromise({
                 try: () => stream.cancel(),
@@ -263,11 +263,16 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             );
           });
           yield* process.pipe(
+            Effect.onInterrupt(() =>
+              Effect.promise(async () => {
+                await turn.stream?.cancel();
+              }).pipe(Effect.ignore),
+            ),
             Effect.isFailure,
             Effect.flatMap(
               Effect.fn("UpstashBox.finishTurn")(function* (failed) {
                 if (translation.sessionId) {
-                  const thread = threads.get(providerThread.id) ?? providerThread;
+                  const thread = providerThread;
                   yield* saveThread(
                     {
                       ...thread,

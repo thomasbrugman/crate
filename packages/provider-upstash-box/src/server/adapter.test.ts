@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import {
   MessageId,
+  ContextHandoffId,
   NodeId,
   ProjectId,
   ProviderInstanceId,
@@ -40,7 +41,7 @@ const finish: Chunk = {
 };
 
 const setup = Effect.fn("test.setupBox")(function* (
-  stream: BoxStream,
+  stream: BoxStream | (() => Promise<BoxStream>),
   deleteBox?: () => Promise<void>,
 ) {
   const prompts: string[] = [];
@@ -59,7 +60,7 @@ const setup = Effect.fn("test.setupBox")(function* (
         prompts.push(prompt);
         if (lookup.error) throw lookup.error;
         if (lookup.streamError) throw lookup.streamError;
-        return stream;
+        return typeof stream === "function" ? await stream() : stream;
       },
     },
     exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
@@ -185,6 +186,35 @@ function fakeStream(chunks: ReadonlyArray<Chunk>, error = false): BoxStream {
     },
   };
 }
+
+it.effect("cancels a run that finishes starting while its session shuts down", () =>
+  Effect.gen(function* () {
+    const starting = Promise.withResolvers<void>();
+    const ready = Promise.withResolvers<BoxStream>();
+    let cancelled = 0;
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const { runtime, turn } = yield* setup(async () => {
+          starting.resolve();
+          return ready.promise;
+        });
+        yield* runtime.startTurn(turn);
+        yield* Effect.promise(() => starting.promise);
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() =>
+            ready.resolve({
+              ...fakeStream([]),
+              cancel: async () => {
+                cancelled++;
+              },
+            }),
+          ),
+        );
+      }),
+    );
+    assert.equal(cancelled, 1);
+  }),
+);
 
 const decodeEvent = Schema.decodeEffect(ProviderAdapterV2Event);
 const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>
@@ -341,6 +371,21 @@ it.effect(
           events.filter((event) => event.type === "turn.terminal")[0]?.status,
           "completed",
         );
+        const current = {
+          ...turn.providerThread,
+          firstRunOrdinal: 1,
+          lastRunOrdinal: 2,
+          handoffIds: [ContextHandoffId.make("follow-up-handoff")],
+        };
+        yield* runtime.startTurn({ ...turn, providerThread: current, providerTurnOrdinal: 2 });
+        const followUp = yield* collect(runtime.events);
+        const saved = followUp
+          .filter((event) => event.type === "provider_thread.updated")
+          .at(-1)?.providerThread;
+        assert.equal(saved?.firstRunOrdinal, current.firstRunOrdinal);
+        assert.equal(saved?.lastRunOrdinal, current.lastRunOrdinal);
+        assert.deepEqual(saved?.handoffIds, current.handoffIds);
+        assert.equal(saved?.nativeConversationHeadRef?.nativeId, "cc-session");
       }),
     ),
 );
