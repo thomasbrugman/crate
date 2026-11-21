@@ -1,7 +1,23 @@
-import { Agent, Box, BoxError, type BoxConfig, type Chunk, type StreamOptions } from "@upstash/box";
+import {
+  Agent,
+  Box,
+  BoxApiKey,
+  BoxError,
+  type BoxConfig,
+  type Chunk,
+  type ClaudeCode,
+  type OpenAICodex,
+  type StreamOptions,
+} from "@upstash/box";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+
+import type { BoxHarness } from "../harnesses.ts";
+import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
+
+export const BOX_WORKSPACE_PATH = "/workspace/home";
+export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
 
 export class BoxRuntimeError extends Schema.TaggedError<BoxRuntimeError>()("BoxRuntimeError", {
   operation: Schema.String,
@@ -52,24 +68,41 @@ export function boxConfig(input: {
   apiKey: string;
   name: string;
   size: BoxConfig["size"];
+  harness: BoxHarness;
   model: string;
+  agentApiKey: string;
   repositoryUrl?: string;
 }): BoxConfig {
-  return {
+  const base = {
     apiKey: input.apiKey,
     name: input.name,
     runtime: "node",
     size: input.size ?? "small",
     keepAlive: false,
     labels: ["t3stash"],
-    env: {
-      BOXJOB_CC_BIN: "/home/boxuser/.local/bin/command-code",
-      BOXJOB_CC_CWD: input.repositoryUrl ? "/workspace/home/repo" : "/workspace/home",
-      ...(input.model ? { BOXJOB_CC_MODEL: input.model } : {}),
-    },
-    agent: {
-      harness: Agent.Custom,
-      customHarness: { command: "node", args: ["/home/boxuser/.local/bin/t3stash-harness.mjs"] },
-    },
+  } satisfies BoxConfig;
+  if (input.harness === "commandCode")
+    return {
+      ...base,
+      env: {
+        BOXJOB_CC_BIN: "/home/boxuser/.local/bin/command-code",
+        BOXJOB_CC_CWD: input.repositoryUrl ? BOX_REPOSITORY_PATH : BOX_WORKSPACE_PATH,
+        ...(input.model && input.model !== COMMAND_CODE_TEMPLATE_MODEL
+          ? { BOXJOB_CC_MODEL: input.model }
+          : {}),
+      },
+      agent: {
+        harness: Agent.Custom,
+        customHarness: { command: "node", args: ["/home/boxuser/.local/bin/t3stash-harness.mjs"] },
+      },
+    };
+  const apiKey = input.agentApiKey || BoxApiKey.StoredKey;
+  return {
+    ...base,
+    // The SDK types models as its enums; custom slugs pass through to the Box API unchanged.
+    agent:
+      input.harness === "claudeCode"
+        ? { harness: Agent.ClaudeCode, model: input.model as ClaudeCode, apiKey }
+        : { harness: Agent.Codex, model: input.model as OpenAICodex, apiKey },
   };
 }

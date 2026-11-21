@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import {
   latestExecutedRun,
   latestRootProviderFailure,
@@ -94,7 +95,7 @@ export function deriveProviderExtensionStatuses(
       (activeThread === undefined || session.id === activeThread.providerSessionId),
   );
   // Box setup steps are shown as the run's starting label instead.
-  return session === undefined || session.status === "stopped" || session.driver === "upstashBox"
+  return session === undefined || session.status === "stopped" || isUpstashBoxDriver(session.driver)
     ? EMPTY_EXTENSION_STATUSES
     : (session.extensionStatuses ?? EMPTY_EXTENSION_STATUSES);
 }
@@ -141,7 +142,7 @@ function providerStarting(
   const driver = session?.driver;
   const name = driver === undefined ? undefined : PROVIDER_DISPLAY_NAMES[driver];
   const label =
-    driver === "upstashBox" && session?.status === "starting"
+    isUpstashBoxDriver(driver) && session?.status === "starting"
       ? boxSetupLabel(session.extensionStatuses?.[0]?.key)
       : name === undefined
         ? msg("Starting", { $context: "a provider is launching" })

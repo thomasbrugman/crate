@@ -22,6 +22,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import { BoxApi, type BoxHandle, type BoxStream } from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
@@ -44,6 +45,7 @@ const finish: Chunk = {
 const setup = Effect.fn("test.setupBox")(function* (
   stream: BoxStream | (() => Promise<BoxStream>),
   deleteBox?: () => Promise<void>,
+  harness: BoxHarness = "commandCode",
 ) {
   const prompts: string[] = [];
   const harnesses: string[] = [];
@@ -82,12 +84,11 @@ const setup = Effect.fn("test.setupBox")(function* (
       return { status: "idle" };
     },
   };
-  const adapter = yield* makeUpstashBoxAdapter(instanceId, {
-    apiKey: "test-key",
-    templateBoxName: "cc-harness",
-    size: "small",
-    model: "",
-  }).pipe(
+  const adapter = yield* makeUpstashBoxAdapter(
+    instanceId,
+    { driver: BOX_HARNESS_DRIVER_KINDS[harness], harness, agentApiKey: "" },
+    Effect.succeed({ apiKey: "test-key", templateBoxName: "cc-harness", size: "small" }),
+  ).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
       get: async (id) => {
@@ -249,68 +250,76 @@ const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>
     Stream.runCollect,
   );
 
-it.effect("recreates a deleted Box before a follow-up even when the thread stays loaded", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const { runtime, turn, lookup, box } = yield* setup(fakeStream([finish]));
-      assert.isTrue(runtime.revalidateLoadedThreads);
-      lookup.streamError = new BoxError("deleted", 404);
-      yield* runtime.startTurn(turn);
-      const failed = yield* collect(runtime.events);
-      assert.equal(failed.at(-1)?.type, "turn.terminal");
-      assert.equal(failed.find((e) => e.type === "turn.terminal")?.status, "failed");
-      assert.isFalse(
-        failed.some((e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice"),
-      );
-      lookup.streamError = undefined;
-      lookup.statusError = new BoxError("deleted", 404);
-      lookup.replacement = {
-        ...box,
-        id: "replacement-box",
-        agent: { stream: async () => fakeStream([finish]) },
-      };
-      const replacement = yield* runtime.resumeThread({
-        providerThread: turn.providerThread,
-        threadId,
-        modelSelection,
-        runtimePolicy,
-      });
-      assert.equal(replacement.nativeThreadRef?.nativeId, "replacement-box");
-      yield* runtime.startTurn({ ...turn, providerThread: replacement });
-      const recovered = yield* collect(runtime.events);
-      assert.equal(runtime.providerSession.status, "ready");
-      assert.equal(recovered.find((e) => e.type === "turn.terminal")?.status, "completed");
-      const thread = recovered.find(
-        (e) =>
-          e.type === "provider_thread.updated" &&
-          e.providerThread.nativeThreadRef?.nativeId === "replacement-box",
-      );
-      assert.isDefined(thread);
-      if (thread?.type !== "provider_thread.updated") return;
-      assert.equal(thread.providerThread.id, turn.providerThread.id);
-      assert.isNull(thread.providerThread.nativeConversationHeadRef);
-      assert.equal(lookup.resumes, 0);
-      const notices = recovered.filter(
-        (e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice",
-      );
-      assert.lengthOf(notices, 1);
-      const notice = notices[0];
-      if (notice?.type !== "turn_item.updated" || notice.turnItem.type !== "system_notice") return;
-      assert.equal(notice.turnItem.level, "warning");
-      assert.equal(
-        notice.turnItem.message,
-        "This thread's Box was gone, so a new one was started. The agent doesn't have the earlier conversation, and uncommitted changes from the old Box are lost.",
-      );
-      assert.equal(notice.turnItem.threadId, turn.threadId);
-      assert.equal(notice.turnItem.runId, turn.runId);
-      for (const event of recovered) yield* decodeEvent(event);
-      yield* runtime.startTurn({ ...turn, providerThread: thread.providerThread });
-      const next = yield* collect(runtime.events);
-      assert.isFalse(
-        next.some((e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice"),
-      );
-    }),
-  ),
+it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
+  "recreates a deleted Box before a follow-up even when the thread stays loaded (%s)",
+  (harness) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { runtime, turn, lookup, box } = yield* setup(
+          fakeStream([finish]),
+          undefined,
+          harness,
+        );
+        assert.equal(runtime.driver, BOX_HARNESS_DRIVER_KINDS[harness]);
+        assert.isTrue(runtime.revalidateLoadedThreads);
+        lookup.streamError = new BoxError("deleted", 404);
+        yield* runtime.startTurn(turn);
+        const failed = yield* collect(runtime.events);
+        assert.equal(failed.at(-1)?.type, "turn.terminal");
+        assert.equal(failed.find((e) => e.type === "turn.terminal")?.status, "failed");
+        assert.isFalse(
+          failed.some((e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice"),
+        );
+        lookup.streamError = undefined;
+        lookup.statusError = new BoxError("deleted", 404);
+        lookup.replacement = {
+          ...box,
+          id: "replacement-box",
+          agent: { stream: async () => fakeStream([finish]) },
+        };
+        const replacement = yield* runtime.resumeThread({
+          providerThread: turn.providerThread,
+          threadId,
+          modelSelection,
+          runtimePolicy,
+        });
+        assert.equal(replacement.nativeThreadRef?.nativeId, "replacement-box");
+        yield* runtime.startTurn({ ...turn, providerThread: replacement });
+        const recovered = yield* collect(runtime.events);
+        assert.equal(runtime.providerSession.status, "ready");
+        assert.equal(recovered.find((e) => e.type === "turn.terminal")?.status, "completed");
+        const thread = recovered.find(
+          (e) =>
+            e.type === "provider_thread.updated" &&
+            e.providerThread.nativeThreadRef?.nativeId === "replacement-box",
+        );
+        assert.isDefined(thread);
+        if (thread?.type !== "provider_thread.updated") return;
+        assert.equal(thread.providerThread.id, turn.providerThread.id);
+        assert.isNull(thread.providerThread.nativeConversationHeadRef);
+        assert.equal(lookup.resumes, 0);
+        const notices = recovered.filter(
+          (e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice",
+        );
+        assert.lengthOf(notices, 1);
+        const notice = notices[0];
+        if (notice?.type !== "turn_item.updated" || notice.turnItem.type !== "system_notice")
+          return;
+        assert.equal(notice.turnItem.level, "warning");
+        assert.equal(
+          notice.turnItem.message,
+          "This thread's Box was gone, so a new one was started. The agent doesn't have the earlier conversation, and uncommitted changes from the old Box are lost.",
+        );
+        assert.equal(notice.turnItem.threadId, turn.threadId);
+        assert.equal(notice.turnItem.runId, turn.runId);
+        for (const event of recovered) yield* decodeEvent(event);
+        yield* runtime.startTurn({ ...turn, providerThread: thread.providerThread });
+        const next = yield* collect(runtime.events);
+        assert.isFalse(
+          next.some((e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice"),
+        );
+      }),
+    ),
 );
 
 it.effect(
@@ -323,24 +332,30 @@ it.effect(
           [401, false],
           [409, true],
         ] as const) {
-          const { adapter, turn, lookup } = yield* setup(fakeStream([finish]));
-          const runtime = yield* adapter.openSession({
-            threadId,
-            providerSessionId: ProviderSessionId.make("restarted-session"),
-            modelSelection,
-            runtimePolicy,
-          });
-          yield* runtime.resumeThread({ providerThread: turn.providerThread });
-          lookup.streamError = new BoxError("private upstream error", status);
-          if (resumeFails) lookup.resumeError = new Error("private upstream error");
-          yield* runtime.startTurn(turn);
-          const events = yield* collect(runtime.events);
-          assert.equal(
-            events.find((e) => e.type === "turn.terminal")?.status,
-            status === 409 && !resumeFails ? "completed" : "failed",
-          );
-          assert.equal(lookup.resumes, status === 409 ? 1 : 0);
-          assert.notInclude(JSON.stringify(events), "private upstream error");
+          for (const harness of ["commandCode", "claudeCode", "codex"] as const) {
+            const { adapter, turn, lookup } = yield* setup(
+              fakeStream([finish]),
+              undefined,
+              harness,
+            );
+            const runtime = yield* adapter.openSession({
+              threadId,
+              providerSessionId: ProviderSessionId.make("restarted-session"),
+              modelSelection,
+              runtimePolicy,
+            });
+            yield* runtime.resumeThread({ providerThread: turn.providerThread });
+            lookup.streamError = new BoxError("private upstream error", status);
+            if (resumeFails) lookup.resumeError = new Error("private upstream error");
+            yield* runtime.startTurn(turn);
+            const events = yield* collect(runtime.events);
+            assert.equal(
+              events.find((e) => e.type === "turn.terminal")?.status,
+              status === 409 && !resumeFails ? "completed" : "failed",
+            );
+            assert.equal(lookup.resumes, status === 409 ? 1 : 0);
+            assert.notInclude(JSON.stringify(events), "private upstream error");
+          }
         }
       }),
     ),

@@ -123,7 +123,7 @@ describe("thread execution presentation", () => {
       deriveProviderExtensionStatuses({
         ...projection,
         providerSessions: [
-          { ...projection.providerSessions[0]!, driver: ProviderDriverKind.make("upstashBox") },
+          { ...projection.providerSessions[0]!, driver: ProviderDriverKind.make("boxCommandCode") },
         ],
       }),
     ).toEqual([]);
@@ -441,7 +441,7 @@ describe("thread execution presentation", () => {
     const starting = { ...v2Projection, runs: [openRun], providerSessions: [session] };
 
     expect(deriveThreadActivityRun(starting)?.providerStartingLabel).toBe("Starting Claude");
-    const boxSession = { ...session, driver: ProviderDriverKind.make("upstashBox") };
+    const boxSession = { ...session, driver: ProviderDriverKind.make("boxCommandCode") };
     expect(
       deriveThreadActivityRun({ ...starting, providerSessions: [boxSession] })
         ?.providerStartingLabel,

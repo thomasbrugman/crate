@@ -6,7 +6,7 @@ vi.mock("../state/environments", () => ({
     environmentId === "missing"
       ? undefined
       : [
-          { instanceId: "box", driver: "upstashBox" },
+          { instanceId: "box", driver: "boxCommandCode" },
           { instanceId: "local", driver: "codex" },
         ],
 }));

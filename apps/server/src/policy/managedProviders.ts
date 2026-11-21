@@ -23,7 +23,7 @@ import { kiroClient } from "@t3tools/provider-kiro/client";
 import { museClient } from "@t3tools/provider-muse/client";
 import { openCodeClient } from "@t3tools/provider-opencode/client";
 import { piClient } from "@t3tools/provider-pi/client";
-import { upstashBoxClient } from "@t3tools/provider-upstash-box/client";
+import { boxProviderClients } from "@t3tools/provider-upstash-box/client";
 import type { ProviderClientDefinition } from "@t3tools/provider-core/client";
 
 interface KnownDriver {
@@ -44,7 +44,7 @@ const known = (
   ] as const;
 
 const PACKAGED_CLIENTS: ReadonlyArray<ProviderClientDefinition> = [
-  upstashBoxClient,
+  ...boxProviderClients,
   cursorClient,
   grokClient,
   fxClient,
