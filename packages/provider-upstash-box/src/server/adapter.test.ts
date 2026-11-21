@@ -178,6 +178,11 @@ it.live("retains idle Boxes containing only gitignored work", () =>
       );
       const repo = NodePath.join(home, "repo");
       yield* Effect.promise(() => NodeFSP.mkdir(repo));
+      for (const name of [".claude", ".codex", ".cursor", ".local"]) {
+        const path = NodePath.join(home, name);
+        yield* Effect.promise(() => NodeFSP.mkdir(path));
+        yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(path, "config.json"), "{}"));
+      }
       yield* Effect.promise(() =>
         NodeFSP.writeFile(NodePath.join(repo, ".gitignore"), ".env\n*.sqlite\n"),
       );
@@ -222,6 +227,11 @@ it.live("retains idle Boxes containing only gitignored work", () =>
         assert.equal(deleted, 1);
         yield* Effect.promise(() => NodeFSP.unlink(path));
       }
+      yield* Effect.promise(() => NodeFSP.rm(repo, { recursive: true }));
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(home, "notes.txt"), "fixture"));
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
     }),
   ),
 );
