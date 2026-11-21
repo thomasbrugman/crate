@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 
 import { BoxApi, type BoxHandle } from "./BoxApi.ts";
 import { ensureBox } from "./bootstrap.ts";
+import { commandCodeHarness } from "./harness.ts";
 
 it.effect(
   "bootstraps credentials and repositories once, supports no remote, and sanitizes clone failures",
@@ -19,6 +20,7 @@ it.effect(
         let clones = 0;
         const commands: string[] = [];
         const writes: string[] = [];
+        const harnesses: string[] = [];
         const box: BoxHandle = {
           id: "box-bootstrap",
           agent: {
@@ -39,8 +41,9 @@ it.effect(
             },
           },
           files: {
-            write: async ({ path }) => {
+            write: async ({ path, content }) => {
               writes.push(path);
+              if (path.endsWith("t3stash-harness.mjs")) harnesses.push(content);
             },
           },
           delete: async () => undefined,
@@ -78,6 +81,7 @@ it.effect(
           assert.equal(clones, repositoryUrl ? 1 : 0);
           assert.equal(writes.filter((path) => path.endsWith(".git-credentials")).length, 1);
           assert.include(commands, "chmod 600 /home/boxuser/.git-credentials");
+          assert.deepEqual(harnesses, [commandCodeHarness, commandCodeHarness]);
         }
         assert.equal(
           created[0]?.env?.BOXJOB_CC_CWD,

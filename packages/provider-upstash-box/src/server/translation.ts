@@ -195,10 +195,13 @@ export class BoxTurnTranslation {
         return [{ type: "turn_item.updated", driver: UPSTASH_BOX_PROVIDER, turnItem: item }];
       }
       case "tool-result": {
-        const index = this.tools.findLastIndex(
+        const candidates = this.tools.filter((item) => item.status === "running");
+        const index = this.tools.findIndex(
           (item) =>
             item.status === "running" &&
-            (!chunk.toolCallId || item.nativeItemRef?.nativeId === chunk.toolCallId),
+            (chunk.toolCallId
+              ? item.nativeItemRef?.nativeId === chunk.toolCallId
+              : candidates.length === 1 && item.nativeItemRef === null),
         );
         const previous = this.tools[index];
         if (!previous) return [];
