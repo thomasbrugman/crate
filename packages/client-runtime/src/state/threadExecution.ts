@@ -115,14 +115,17 @@ function providerStarting(
   projection: ThreadStructure,
   run: OrchestrationV2ThreadProjection["runs"][number],
 ): Pick<ThreadRunSummary, "providerStartingLabel" | "providerStartingLabelMsg"> {
-  const driver = projection.providerSessions.findLast(
+  const session = projection.providerSessions.findLast(
     (session) => session.providerInstanceId === run.providerInstanceId,
-  )?.driver;
+  );
+  const driver = session?.driver;
   const name = driver === undefined ? undefined : PROVIDER_DISPLAY_NAMES[driver];
   const label =
-    name === undefined
-      ? msg("Starting", { $context: "a provider is launching" })
-      : msg("Starting {provider}", { provider: name });
+    driver === "upstashBox" && session?.status === "starting"
+      ? msg("Setting up Box")
+      : name === undefined
+        ? msg("Starting", { $context: "a provider is launching" })
+        : msg("Starting {provider}", { provider: name });
   return { providerStartingLabel: markedTextEnglish([label]), providerStartingLabelMsg: label };
 }
 
@@ -137,7 +140,12 @@ function summarizeThreadRun(
     runId: run.id,
     status: run.status,
     requestedAt: DateTime.formatIso(run.requestedAt),
-    startedAt: run.startedAt === null ? null : DateTime.formatIso(run.startedAt),
+    startedAt:
+      run.workStartedAt !== undefined
+        ? DateTime.formatIso(run.workStartedAt)
+        : run.startedAt === null
+          ? null
+          : DateTime.formatIso(run.startedAt),
     completedAt: run.completedAt === null ? null : DateTime.formatIso(run.completedAt),
     assistantMessageId:
       projection.messages.findLast(

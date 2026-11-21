@@ -170,6 +170,32 @@ const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>
     Stream.runCollect,
   );
 
+it.effect("publishes setup status and clears it on success or failure", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, lookup } = yield* setup(fakeStream([]));
+      assert.equal(runtime.providerSession.status, "ready");
+      lookup.error = new Error("private bootstrap failure");
+      yield* runtime.ensureThread({ threadId, modelSelection, runtimePolicy }).pipe(Effect.flip);
+      assert.equal(runtime.providerSession.status, "error");
+      const events = yield* runtime.events.pipe(
+        Stream.takeUntil(
+          (event) =>
+            event.type === "provider_session.updated" && event.providerSession.status === "error",
+        ),
+        Stream.runCollect,
+      );
+      assert.deepEqual(
+        events
+          .filter((event) => event.type === "provider_session.updated")
+          .map((event) => event.providerSession.status),
+        ["starting", "ready", "starting", "error"],
+      );
+      assert.notInclude(JSON.stringify(events), "private bootstrap failure");
+    }),
+  ),
+);
+
 it.effect(
   "translates a fake stream into accumulated text, paired tools, continuation identity and usage",
   () =>

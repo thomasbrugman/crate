@@ -1,5 +1,6 @@
 import {
   ProviderThreadId,
+  type OrchestrationV2ProviderSession,
   type OrchestrationV2ProviderThread,
   type ProviderInstanceId,
 } from "@t3tools/contracts";
@@ -72,7 +73,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const threads = new Map<ProviderThreadId, OrchestrationV2ProviderThread>();
       let active: ActiveTurn | undefined;
       const now = yield* DateTime.now;
-      const providerSession = {
+      let providerSession: OrchestrationV2ProviderSession = {
         id: input.providerSessionId,
         driver,
         providerInstanceId: instanceId,
@@ -87,6 +88,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       };
       const publish = (batch: ReadonlyArray<Adapter.ProviderAdapterV2Event>) =>
         Queue.offerAll(events, batch).pipe(Effect.asVoid);
+      const setSessionStatus = Effect.fn("UpstashBox.setSessionStatus")(function* (
+        status: OrchestrationV2ProviderSession["status"],
+      ) {
+        providerSession = { ...providerSession, status, updatedAt: yield* DateTime.now };
+        yield* publish([{ type: "provider_session.updated", driver, providerSession }]);
+      });
       const saveThread = Effect.fn("UpstashBox.saveThread")(function* (
         thread: OrchestrationV2ProviderThread,
         box: BoxHandle,
@@ -100,15 +107,19 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         instanceId,
         driver,
         providerSessionId: input.providerSessionId,
-        providerSession,
+        get providerSession() {
+          return providerSession;
+        },
         events: Stream.fromEffectRepeat(Queue.take(events)),
         ensureThread: Effect.fn("UpstashBox.ensureThread")(function* (request) {
           if (request.existingProviderThread?.nativeThreadRef?.nativeId)
             return yield* runtime.resumeThread({ providerThread: request.existingProviderThread });
           // Hex encoding is injective, shell-safe, and stable across server restarts.
           const name = `t3-${Buffer.from(request.threadId).toString("hex")}`;
+          yield* setSessionStatus("starting");
           const box = yield* ensureBox(config, name, request.runtimePolicy.repositoryUrl).pipe(
             Effect.provideService(BoxApi, api),
+            Effect.tapError(() => setSessionStatus("error")),
             Effect.mapError(
               () =>
                 new Adapter.ProviderAdapterEnsureThreadError({
@@ -117,6 +128,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 }),
             ),
           );
+          yield* setSessionStatus("ready");
           const at = yield* DateTime.now;
           const thread: OrchestrationV2ProviderThread = {
             id: ProviderThreadId.make(box.id),
