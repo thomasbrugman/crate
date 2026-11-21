@@ -836,5 +836,9 @@ export class ProviderAdapterV2 extends Context.Service<
     readonly deleteThread?: (
       thread: OrchestrationV2ProviderThread,
     ) => Effect.Effect<void, ProviderAdapterV2Error>;
+    /** Deletes the thread's remote resources unless they hold unsaved work; true once none remain. */
+    readonly deleteIdleThread?: (
+      thread: OrchestrationV2ProviderThread,
+    ) => Effect.Effect<boolean, ProviderAdapterV2Error>;
   }
 >()("@t3tools/provider-core/server/ProviderAdapter/ProviderAdapterV2") {}

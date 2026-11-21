@@ -21,6 +21,17 @@ interface ActiveTurn {
   interrupted: boolean;
 }
 
+// Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
+// untracked files, stashes, or commits missing from the remote; without a repository, no files.
+const SAVED_WORK_CHECK = [
+  "if [ -d /workspace/home/repo/.git ]; then",
+  "cd /workspace/home/repo &&",
+  'status=$(git status --porcelain) && test -z "$status" &&',
+  'stash=$(git stash list) && test -z "$stash" &&',
+  'unpushed=$(git rev-list --count HEAD --branches --not --remotes) && test "$unpushed" = 0;',
+  'else files=$(ls -A /workspace/home) && test -z "$files"; fi',
+].join(" ");
+
 export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(function* (
   instanceId: ProviderInstanceId,
   config: BoxRuntimeConfig,
@@ -34,29 +45,37 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         detail: `${operation} is not supported by Upstash Box`,
       }),
     );
+  const removeBox = (thread: OrchestrationV2ProviderThread, keepUnsavedWork: boolean) => {
+    const nativeId =
+      thread.nativeThreadRef?.nativeId ??
+      (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
+    return Effect.tryPromise({
+      try: async () => {
+        if (!nativeId) return true;
+        try {
+          const box = await api.get(nativeId, config.apiKey);
+          if (keepUnsavedWork && (await box.exec.command(SAVED_WORK_CHECK)).exitCode !== 0)
+            return false;
+          await box.delete();
+        } catch (error) {
+          if (!isMissingBox(error)) throw error;
+        }
+        return true;
+      },
+      catch: () =>
+        new Adapter.ProviderAdapterProtocolError({
+          driver,
+          detail: "Could not delete the thread Box.",
+        }),
+    });
+  };
   return Adapter.ProviderAdapterV2.of({
     instanceId,
     driver,
     deleteThread: Effect.fn("UpstashBox.deleteThread")(function* (thread) {
-      const nativeId =
-        thread.nativeThreadRef?.nativeId ??
-        (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
-      if (!nativeId) return;
-      yield* Effect.tryPromise({
-        try: async () => {
-          try {
-            await (await api.get(nativeId, config.apiKey)).delete();
-          } catch (error) {
-            if (!isMissingBox(error)) throw error;
-          }
-        },
-        catch: () =>
-          new Adapter.ProviderAdapterProtocolError({
-            driver,
-            detail: "Could not delete the thread Box.",
-          }),
-      });
+      yield* removeBox(thread, false);
     }),
+    deleteIdleThread: Effect.fn("UpstashBox.deleteIdleThread")((thread) => removeBox(thread, true)),
     getCapabilities: Effect.fn("UpstashBox.getCapabilities")(() => Effect.succeed(capabilities)),
     planSelectionTransition: Effect.fn("UpstashBox.planSelectionTransition")((input) =>
       Effect.succeed(

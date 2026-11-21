@@ -421,6 +421,10 @@ export const layerProduction = Layer.mergeAll(
   layerAgentSessionScannerProvided,
   layerAgentSessionImporterProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
+  ResourceCleanupService.layerSettledBoxCleanup.pipe(
+    Layer.provide(ProjectionStore.layer),
+    Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
+  ),
 ).pipe(
   Layer.provide(
     ResourceCleanupService.layer.pipe(

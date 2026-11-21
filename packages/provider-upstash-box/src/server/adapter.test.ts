@@ -43,7 +43,9 @@ const finish: Chunk = {
 const setup = Effect.fn("test.setupBox")(function* (
   stream: BoxStream | (() => Promise<BoxStream>),
   deleteBox?: () => Promise<void>,
+  command?: BoxHandle["exec"]["command"],
 ) {
+  const commands: string[] = [];
   const prompts: string[] = [];
   const lookup: { error?: unknown } = {};
   const box: BoxHandle = {
@@ -54,7 +56,12 @@ const setup = Effect.fn("test.setupBox")(function* (
         return typeof stream === "function" ? await stream() : stream;
       },
     },
-    exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
+    exec: {
+      command: async (text) => {
+        commands.push(text);
+        return command ? command(text) : { stdout: "", exitCode: 0 };
+      },
+    },
     files: { write: async () => undefined },
     delete: deleteBox ?? (async () => undefined),
   };
@@ -123,34 +130,50 @@ const setup = Effect.fn("test.setupBox")(function* (
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn, prompts, adapter, lookup };
+  return { runtime, turn, prompts, adapter, lookup, commands };
 });
 
-it.effect(
-  "deletes native Boxes, tolerates missing identities and Boxes, and sanitizes failures",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        let deleted = 0;
-        const { adapter, turn, lookup } = yield* setup(fakeStream([]), async () => {
+it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitizes failures", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      let deleted = 0;
+      let exitCode = 0;
+      const { adapter, turn, lookup, commands } = yield* setup(
+        fakeStream([]),
+        async () => {
           deleted++;
-        });
-        yield* adapter.deleteThread!(turn.providerThread);
-        assert.equal(deleted, 1);
-        lookup.error = new BoxError("private upstream body", 404);
-        yield* adapter.deleteThread!(turn.providerThread);
-        assert.equal(deleted, 1);
-        lookup.error = new Error("private upstream body");
-        const error = yield* adapter.deleteThread!(turn.providerThread).pipe(Effect.flip);
-        assert.equal(error._tag, "ProviderAdapterProtocolError");
-        assert.notInclude(JSON.stringify(error), "private upstream body");
-        yield* adapter.deleteThread!({
-          ...turn.providerThread,
-          nativeThreadRef: null,
-          appThreadId: null,
-        });
-      }),
-    ),
+        },
+        async (command) => ({ stdout: "", exitCode: command.includes("git stash") ? exitCode : 0 }),
+      );
+      yield* adapter.deleteThread!(turn.providerThread);
+      assert.equal(deleted, 1);
+      lookup.error = new BoxError("private upstream body", 404);
+      yield* adapter.deleteThread!(turn.providerThread);
+      assert.equal(deleted, 1);
+      lookup.error = new Error("private upstream body");
+      const error = yield* adapter.deleteThread!(turn.providerThread).pipe(Effect.flip);
+      assert.equal(error._tag, "ProviderAdapterProtocolError");
+      assert.notInclude(JSON.stringify(error), "private upstream body");
+      yield* adapter.deleteThread!({
+        ...turn.providerThread,
+        nativeThreadRef: null,
+        appThreadId: null,
+      });
+      lookup.error = undefined;
+      exitCode = 1;
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 1);
+      exitCode = 0;
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
+      lookup.error = new BoxError("private upstream body", 404);
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.lengthOf(
+        commands.filter((text) => text.includes("git stash")),
+        2,
+      );
+    }),
+  ),
 );
 
 function fakeStream(chunks: ReadonlyArray<Chunk>, error = false): BoxStream {
