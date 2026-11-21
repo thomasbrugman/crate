@@ -2458,7 +2458,7 @@ export default function ChatView(props: ChatViewProps) {
     threadPanelPresentation,
     isServerThread,
     embedded,
-    isGitRepo,
+    isGitRepo: isGitRepo && !cloudThread,
     browserAvailable,
     canOperatePreview,
     diffOpen,
@@ -4038,7 +4038,7 @@ export default function ChatView(props: ChatViewProps) {
                     ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                     : {})}
                   onComposerFocusRequest={scheduleComposerFocusStable}
-                  {...(isServerThread && isGitRepo
+                  {...(isServerThread && isGitRepo && !cloudThread
                     ? { onOpenChanges: openChangesFromThreadPanelStable }
                     : {})}
                   projectScriptsAvailable={projectScriptsAvailable}
@@ -4138,7 +4138,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
-          diffAvailable={isServerThread && isGitRepo}
+          diffAvailable={isServerThread && isGitRepo && !cloudThread}
           cloudThread={cloudThread}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
