@@ -14,6 +14,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 
 import * as ProjectionStore from "./ProjectionStore.ts";
+import * as BoxThreadCleanup from "./BoxThreadCleanup.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import { cleanupBoxThreads, cleanupSettledBoxes } from "./ResourceCleanupService.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
@@ -50,35 +51,44 @@ it.effect(
       for (const deleted of [false, true]) {
         for (const fails of [false, true]) {
           const removed: ProviderThreadId[] = [];
-          const adapter = Adapter.ProviderAdapterV2.of({
-            instanceId,
-            driver,
-            getCapabilities: () => Effect.die("unused"),
-            planSelectionTransition: () => Effect.die("unused"),
-            openSession: () => Effect.die("unused"),
-            deleteThread: Effect.fn("test.deleteBox")(function* (thread) {
+          const boxes = BoxThreadCleanup.BoxThreadCleanup.of({
+            remove: Effect.fn("test.deleteBox")(function* ({ providerThread: thread }) {
               removed.push(thread.id);
               if (fails && removed.length === 1) {
-                return yield* new Adapter.ProviderAdapterProtocolError({
-                  driver,
-                  detail: "Delete failed.",
+                return yield* new BoxThreadCleanup.BoxThreadCleanupError({
+                  threadId,
+                  reason: "delete_failed",
                 });
               }
             }),
           });
           const cleanup = (providerThreads: ReadonlyArray<OrchestrationV2ProviderThread>) =>
             cleanupBoxThreads({ threadId, deleted, providerThreads }).pipe(
-              Effect.provide(ProviderAdapterRegistry.layerFromAdapters([adapter])),
+              Effect.provideService(BoxThreadCleanup.BoxThreadCleanup, boxes),
+              Effect.result,
             );
           yield* cleanup([]);
           yield* cleanup([{ ...providerThread, driver: ProviderDriverKind.make("codex") }]);
           assert.isEmpty(removed);
-          yield* cleanup([
-            { ...providerThread, providerInstanceId: ProviderInstanceId.make("missing") },
+          const result = yield* cleanup([
+            {
+              ...providerThread,
+              id: ProviderThreadId.make("missing-instance-box"),
+              providerInstanceId: ProviderInstanceId.make("missing"),
+            },
             providerThread,
             { ...providerThread, id: ProviderThreadId.make("second-box") },
+            {
+              ...providerThread,
+              id: ProviderThreadId.make("legacy-box"),
+              driver: ProviderDriverKind.make("upstashBox"),
+            },
           ]);
-          assert.deepEqual(removed, deleted ? [providerThread.id, "second-box"] : []);
+          assert.deepEqual(
+            removed,
+            deleted ? ["missing-instance-box", providerThread.id, "second-box", "legacy-box"] : [],
+          );
+          assert.equal(result._tag, deleted && fails ? "Failure" : "Success");
         }
       }
     }),
