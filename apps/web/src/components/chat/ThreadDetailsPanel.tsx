@@ -68,6 +68,7 @@ interface ThreadDetailsPanelProps extends Pick<
   gitCwd: string | null;
   workspaceMutationId: string | null;
   isGitRepo: boolean;
+  cloudThread?: boolean;
   envLocked: boolean;
   availableEnvironments: readonly EnvironmentOption[];
   autoEnvironmentLabel?: string | undefined;
@@ -107,6 +108,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   // A No project thread's folder sits inside the shared scratch root, so it must never get git.
   // Until the config and project load, a No project thread looks like any other folder.
   const offersGit =
+    !props.cloudThread &&
     props.gitCwd !== null &&
     serverConfig !== undefined &&
     project !== null &&
@@ -240,7 +242,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 </ThreadDetailsSection>
               ) : null}
 
-              {show.branch || show.pullRequests || show.git ? (
+              {show.branch ||
+              show.pullRequests ||
+              show.git ||
+              (props.cloudThread && visible.changes) ? (
                 <ThreadDetailsSection
                   headingId="thread-details-version-control-heading"
                   title={gt("Version Control")}
@@ -248,6 +253,14 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                   separated={density === "full"}
                 >
                   <div className="flex flex-col">
+                    {props.cloudThread && visible.changes ? (
+                      <div className="flex flex-col gap-1 p-2 text-sm">
+                        <T>Changes</T>
+                        <span className="text-muted-foreground">
+                          <T>Not available in cloud threads. Ask the agent to use its Box tools.</T>
+                        </span>
+                      </div>
+                    ) : null}
                     {show.branch ? (
                       <BranchToolbar layout="panel" panelSection="branch" {...branchToolbarProps} />
                     ) : null}
