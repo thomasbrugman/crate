@@ -23,6 +23,7 @@ import type {
   SourceControlPublishRepositoryResult,
   SourceControlRepositoryVisibility,
   VcsStatusResult,
+  ThreadId,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Option from "effect/Option";
@@ -143,6 +144,7 @@ interface GitActionsControlProps {
   compact?: boolean;
   showActions?: boolean;
   showChanges?: boolean;
+  openInEditorAvailable?: boolean;
   onOpenChanges?: () => void;
   workspaceMutationId?: string | null;
 }
@@ -176,18 +178,19 @@ const inlineSuccessExpiresAt = () => Date.now() + GIT_ACTION_SUCCESS_VISIBLE_MS;
 
 type RefreshVcsStatus = (target: {
   readonly environmentId: ScopedThreadRef["environmentId"];
-  readonly input: { readonly cwd: string };
+  readonly input: { readonly cwd: string; readonly threadId?: ThreadId };
 }) => Promise<unknown>;
 
 function requestVcsStatusRefresh(
   refresh: RefreshVcsStatus,
   environmentId: ScopedThreadRef["environmentId"] | null,
   cwd: string | null,
+  threadId?: ThreadId,
 ): void {
   if (environmentId === null || cwd === null) {
     return;
   }
-  void refresh({ environmentId, input: { cwd } });
+  void refresh({ environmentId, input: { cwd, ...(threadId ? { threadId } : {}) } });
 }
 const RUNNING_SOURCE_CONTROL_ACTIONS = ["runStackedAction", "pull", "publishRepository"] as const;
 
@@ -973,6 +976,7 @@ function CheckoutGitActionsControl({
   compact = false,
   showActions = true,
   showChanges = true,
+  openInEditorAvailable = true,
   onOpenChanges,
   workspaceMutationId = null,
 }: GitActionsControlProps) {
@@ -1020,7 +1024,11 @@ function CheckoutGitActionsControl({
   const [inlineSuccess, setInlineSuccess] = useState<InlineGitActionSuccess | null>(null);
   const [pendingDefaultBranchAction, setPendingDefaultBranchAction] =
     useState<PendingDefaultBranchAction | null>(null);
-  const sourceControlScope = { environmentId: activeEnvironmentId, cwd: gitCwd };
+  const sourceControlScope = {
+    environmentId: activeEnvironmentId,
+    cwd: gitCwd,
+    ...(activeServerThread ? { threadId: activeServerThread.id } : {}),
+  };
   const vcsActionState = useAtomValue(vcsActionManager.stateAtom(sourceControlScope));
   const inlineSuccessExpired = useDeadlinePassed(inlineSuccess?.expiresAtMs ?? null);
   const visibleInlineSuccess = inlineSuccessExpired ? null : inlineSuccess;
@@ -1079,7 +1087,10 @@ function CheckoutGitActionsControl({
     activeEnvironmentId !== null && gitCwd !== null
       ? vcsEnvironment.status({
           environmentId: activeEnvironmentId,
-          input: { cwd: gitCwd },
+          input: {
+            cwd: gitCwd,
+            ...(sourceControlScope.threadId ? { threadId: sourceControlScope.threadId } : {}),
+          },
         })
       : null,
   );
@@ -1255,7 +1266,11 @@ function CheckoutGitActionsControl({
   useAtomMount(
     vcsStatusRevalidation(
       activeEnvironmentId !== null && gitCwd !== null
-        ? { environmentId: activeEnvironmentId, cwd: gitCwd }
+        ? {
+            environmentId: activeEnvironmentId,
+            cwd: gitCwd,
+            ...(activeServerThread ? { threadId: activeServerThread.id } : {}),
+          }
         : null,
     ),
   );
@@ -1488,6 +1503,7 @@ function CheckoutGitActionsControl({
   };
 
   const openChangedFileInEditor = (filePath: string) => {
+    if (!openInEditorAvailable) return;
     if (workingTreeRoot === null) {
       toastManager.add({
         type: "error",
@@ -1532,7 +1548,7 @@ function CheckoutGitActionsControl({
 
   // A disabled menu cannot refresh on open, and terminal edits or commits publish no status.
   const refreshStatusForEmptyMenu = () =>
-    requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
+    requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd, activeServerThread?.id);
 
   const initializeGit = () => {
     void (async () => {
@@ -1743,7 +1759,12 @@ function CheckoutGitActionsControl({
               <Menu
                 onOpenChange={(open) => {
                   if (open) {
-                    requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
+                    requestVcsStatusRefresh(
+                      refreshVcsStatus,
+                      activeEnvironmentId,
+                      gitCwd,
+                      activeServerThread?.id,
+                    );
                   }
                 }}
               >
@@ -1960,7 +1981,11 @@ function CheckoutGitActionsControl({
                                 <button
                                   type="button"
                                   className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left enabled:cursor-pointer"
-                                  disabled={!canOperateThread || workingTreeRoot === null}
+                                  disabled={
+                                    !openInEditorAvailable ||
+                                    !canOperateThread ||
+                                    workingTreeRoot === null
+                                  }
                                   aria-label={gt("Open {path} in editor", { path: file.path })}
                                   onClick={() => openChangedFileInEditor(file.path)}
                                 >

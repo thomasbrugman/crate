@@ -103,6 +103,7 @@ import { IntervalSecondsField } from "./IntervalSecondsField";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { useSecretSources } from "./SecretSourceInput";
 import { TextGeneratorsSettings } from "./TextGeneratorsSettings";
+import { UpstashBoxEnvironmentSettings } from "./UpstashBoxEnvironmentSettings";
 import { UsageProviderSettings } from "./UsageProviderSettings";
 import { ProviderSetupSection, readAntigravityAuthMethod } from "./ProviderSetupSection";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
@@ -1024,6 +1025,8 @@ export function EnvironmentProviderSettings({
 
   return (
     <>
+      <UpstashBoxEnvironmentSettings environmentId={environmentId} readOnly={readOnly} />
+
       <SettingsSection
         {...searchableSetting("providers")}
         variant="plain"

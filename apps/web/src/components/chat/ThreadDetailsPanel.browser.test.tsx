@@ -143,6 +143,7 @@ function Panel({ fixture }: { fixture: ReturnType<typeof setup> }) {
       }}
     >
       <ThreadDetailsPanel
+        projectScriptsAvailable
         anchor={fixture.anchor}
         handle={fixture.handle}
         environmentId={threadRef.environmentId}

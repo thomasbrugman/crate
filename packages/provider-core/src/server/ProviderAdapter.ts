@@ -1,5 +1,6 @@
 import type { OrchestrationV2HistoricalMessage } from "@t3tools/contracts";
 import {
+  UpstashBoxSize,
   ChatAttachment,
   CheckpointId,
   MessageId,
@@ -49,6 +50,8 @@ export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   cwd: Schema.NullOr(Schema.String),
+  repositoryUrl: Schema.optional(Schema.String),
+  boxSize: Schema.optionalKey(UpstashBoxSize),
   approvalPolicy: Schema.optional(Schema.Unknown),
   sandboxPolicy: Schema.optional(Schema.Unknown),
   /**
@@ -704,6 +707,8 @@ export interface ProviderAdapterV2SessionRuntime {
   readonly providerSession: OrchestrationV2ProviderSession;
   /** False keeps conversations alive when the provider cannot restore them after a restart. */
   readonly canResumeAfterRestart?: boolean;
+  /** Remote runtimes can lose a loaded thread independently of the server process. */
+  readonly revalidateLoadedThreads?: true;
   readonly events: Stream.Stream<ProviderAdapterV2Event, ProviderAdapterV2Error>;
   /** Manager runtimes broadcast independent subscriptions; adapters may expose only a single-consumer stream. */
   readonly subscribeEvents?: Effect.Effect<ProviderAdapterV2EventSubscription>;
@@ -832,5 +837,12 @@ export class ProviderAdapterV2 extends Context.Service<
     readonly openSession: (
       input: ProviderAdapterV2OpenSessionInput,
     ) => Effect.Effect<ProviderAdapterV2SessionRuntime, ProviderAdapterV2Error, Scope.Scope>;
+    readonly deleteThread?: (
+      thread: OrchestrationV2ProviderThread,
+    ) => Effect.Effect<void, ProviderAdapterV2Error>;
+    /** Deletes the thread's remote resources unless they hold unsaved work; true once none remain. */
+    readonly deleteIdleThread?: (
+      thread: OrchestrationV2ProviderThread,
+    ) => Effect.Effect<boolean, ProviderAdapterV2Error>;
   }
 >()("@t3tools/provider-core/server/ProviderAdapter/ProviderAdapterV2") {}

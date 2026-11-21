@@ -45,6 +45,9 @@ import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
 import { resolveProjectFileBackedSetting } from "@t3tools/shared/projectSettings";
 import { gitCommandDuration, gitCommandsTotal, withMetrics } from "../observability/Metrics.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
+import * as VcsThreadTarget from "./VcsThreadTarget.ts";
+import * as BoxGitHost from "./BoxGitHost.ts";
+import * as VcsProcess from "./VcsProcess.ts";
 import { removeEmptyDirectory, type RemoveEmptyDirectoryError } from "./removeEmptyDirectory.ts";
 import { VcsAutomaticFetchInterval } from "./VcsAutomaticFetchInterval.ts";
 import {
@@ -1016,8 +1019,8 @@ export const windowsLongPathConfigEnv = (
 ): NodeJS.ProcessEnv =>
   platform === "win32" ? gitConfigEnv(env, "core.longpaths", "true", platform) : {};
 
-export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
+const makeCore = Effect.fn("makeGitVcsDriverCore")(function* () {
+  const fileSystem = BoxGitHost.fileSystem(yield* FileSystem.FileSystem);
   const path = yield* Path.Path;
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const { worktreesDir, worktreeCheckoutCacheDir } = yield* ServerConfig.ServerConfig;
@@ -1043,6 +1046,43 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
 
   const executeRaw: GitVcsDriver.GitVcsDriver["Service"]["execute"] = Effect.fnUntraced(
     function* (input) {
+      if (yield* VcsThreadTarget.VcsThreadTarget) {
+        const result = yield* VcsProcess.runInBox({
+          ...input,
+          command: "git",
+          allowNonZeroExit: true,
+          timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        }).pipe(
+          Effect.mapError(
+            (cause) =>
+              new GitCommandError({
+                ...gitCommandContext(input),
+                detail: cause.message,
+                cause,
+              }),
+          ),
+        );
+        if (!input.allowNonZeroExit && result.exitCode !== 0) {
+          const reason = classifyGitFailure(result.stderr);
+          return yield* new GitCommandError({
+            ...gitCommandContext(input),
+            ...(reason === null ? {} : { reason }),
+            detail: gitFailureDetail(reason),
+            exitCode: result.exitCode,
+            stdoutLength: result.stdout.length,
+            stderrLength: result.stderr.length,
+          });
+        }
+        for (const [stream, text] of [
+          ["stdout", result.stdout],
+          ["stderr", result.stderr],
+        ] as const) {
+          const onLine =
+            stream === "stdout" ? input.progress?.onStdoutLine : input.progress?.onStderrLine;
+          if (onLine) for (const line of text.split(/\r?\n/).filter(Boolean)) yield* onLine(line);
+        }
+        return result;
+      }
       const commandInput = {
         ...input,
         args: [...input.args],
@@ -6594,3 +6634,5 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     listWorktreePaths,
   });
 });
+
+export const makeGitVcsDriverCore = () => VcsThreadTarget.partition(makeCore());

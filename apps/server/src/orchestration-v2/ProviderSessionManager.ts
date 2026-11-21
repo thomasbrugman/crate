@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { AgentScope } from "@t3tools/shared/AgentScope";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
@@ -2416,7 +2417,7 @@ export const layerWithOptions = (
                 isProviderThreadLoaded({ providerSessionId, threadId, providerThreadKey }),
               ),
               Effect.flatMap((loaded) =>
-                loaded
+                loaded && runtime.revalidateLoadedThreads !== true
                   ? Effect.succeed({
                       loaded: input.providerThread,
                       linkedEnvironments: undefined,
@@ -2997,8 +2998,18 @@ export const layerWithOptions = (
           sessionOpen.withLock(
             input.providerSessionId,
             Effect.gen(function* () {
+              const adapter = yield* registry.get(input.modelSelection.instanceId).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderSessionOpenError({
+                      instanceId: input.modelSelection.instanceId,
+                      providerSessionId: input.providerSessionId,
+                      cause,
+                    }),
+                ),
+              );
               const cwd = input.runtimePolicy.cwd;
-              if (cwd !== null) {
+              if (cwd !== null && !isUpstashBoxDriver(adapter.driver)) {
                 const workspaceIsDirectory = yield* fileSystem.stat(cwd).pipe(
                   Effect.map((stat) => stat.type === "Directory"),
                   Effect.catch((error) => Effect.succeed(error.reason._tag !== "NotFound")),
@@ -3033,16 +3044,6 @@ export const layerWithOptions = (
                 return existing.exposedRuntime;
               }
 
-              const adapter = yield* registry.get(input.modelSelection.instanceId).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new ProviderSessionOpenError({
-                      instanceId: input.modelSelection.instanceId,
-                      providerSessionId: input.providerSessionId,
-                      cause,
-                    }),
-                ),
-              );
               const openedWithLinkedEnvironments = yield* readLinkedEnvironments;
               const prepared = yield* prepareMcpSession(
                 input.threadId,

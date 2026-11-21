@@ -30,7 +30,6 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
 import * as NonBlockingSpawner from "./process/NonBlockingSpawner.ts";
-import * as KeepAwake from "./background/KeepAwake.ts";
 import * as ServerConfig from "./config.ts";
 import { withRootRequestSpans, withUntracedRequests } from "./http.ts";
 import * as ServerHttp from "./http.ts";
@@ -107,6 +106,8 @@ import * as DesktopBrowserChannel from "./preview/DesktopBrowserChannel.ts";
 import * as ServerBrowserStream from "./preview/ServerBrowserStream.ts";
 import * as PreviewBrowser from "./preview/PreviewBrowser.ts";
 import * as ProcessRunner from "./processRunner.ts";
+import { BoxExec } from "@t3tools/provider-upstash-box/server";
+import * as BoxThreadResolver from "./vcs/BoxThreadResolver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -435,7 +436,7 @@ const layerRepositoryIdentityResolver = Layer.effect(
       }),
     });
   }),
-).pipe(Layer.provide(layerSourceControlProviderRegistry), Layer.provide(ProcessRunner.layer));
+).pipe(Layer.provide(layerSourceControlProviderRegistry), Layer.provide(ProcessRunner.cloudLayer));
 
 const layerPullRequestService = PullRequestService.layer.pipe(
   Layer.provide(PullRequestProviderRegistry.layer),
@@ -488,10 +489,20 @@ const layerKnownWorkspaces = KnownWorkspaces.layer.pipe(
   Layer.provide(GitVcsDriver.layer),
 );
 
-const layerReview = ReviewService.layer.pipe(
+const layerReview = ReviewService.cloudLayer.pipe(
   Layer.provideMerge(layerKnownWorkspaces),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(layerVcsDriverRegistry),
+);
+
+const layerBoxGit = BoxExec.layer.pipe(
+  Layer.provideMerge(
+    BoxThreadResolver.layer.pipe(
+      Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
+      Layer.provide(SecretResolver.layer),
+      Layer.provide(layerServerSettings),
+    ),
+  ),
 );
 
 const layerVcs = Layer.empty.pipe(
@@ -521,7 +532,7 @@ const layerVcs = Layer.empty.pipe(
 const layerCheckpointStore = CheckpointStore.layer.pipe(Layer.provide(layerVcsDriverRegistry));
 
 const layerPortScanner = PortScanner.layer.pipe(
-  Layer.provide(ProcessRunner.layer),
+  Layer.provide(ProcessRunner.cloudLayer),
   Layer.provide(layerBackground),
 );
 
@@ -541,11 +552,11 @@ const layerPreview = Layer.empty.pipe(
 
 const layerDevice = DeviceService.layer.pipe(
   Layer.provide(layerServerSettings),
-  Layer.provide(ProcessRunner.layer),
+  Layer.provide(ProcessRunner.cloudLayer),
   Layer.provide(NetService.layer),
 );
 
-const layerWorkspaceEntries = WorkspaceEntries.layer.pipe(Layer.provide(WorkspacePaths.layer));
+const layerWorkspaceEntries = WorkspaceEntries.cloudLayer.pipe(Layer.provide(WorkspacePaths.layer));
 
 const layerWorkspaceFileSystem = WorkspaceFileSystem.layer.pipe(
   Layer.provide(WorkspacePaths.layer),
@@ -700,7 +711,6 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
     Layer.provide(layerServerRestart),
   ),
   layerThreadPullRequestWorker,
-  KeepAwake.layer,
   DelegatedTaskAnalytics.layer,
   Layer.effectDiscard(
     Effect.gen(function* () {
@@ -745,6 +755,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(layerSourceControlProviderRegistry),
   Layer.provideMerge(layerGit),
   Layer.provideMerge(layerVcs),
+  Layer.provideMerge(layerBoxGit),
   Layer.provideMerge(Layer.mergeAll(layerTerminal, layerPreview, layerDevice)),
   Layer.provideMerge(layerPersistence),
   Layer.provideMerge(Layer.mergeAll(Keybindings.layer, UsageLimitSources.layer)),
@@ -1377,13 +1388,13 @@ const layerMakeServer = Layer.unwrap(
       Layer.provideMerge(layerHttpServer),
       Layer.provide(layerApplicationObservability),
       Layer.provideMerge(FetchHttpClient.layer),
-      Layer.provide(VcsProcess.layer),
+      Layer.provide(VcsProcess.cloudLayer),
       Layer.provideMerge(AgentScopeLive.layer),
       Layer.provideMerge(layerPlatformServices),
       Layer.provide(Layer.succeed(HostProcess.InvokedAs, invokedAs)),
     );
   }),
-).pipe(Layer.provide(ProcessRunner.layer));
+).pipe(Layer.provide(ProcessRunner.cloudLayer));
 
 export const runServer = Layer.launch(
   // For the layers above whose spawner requirement is not met by one of them.

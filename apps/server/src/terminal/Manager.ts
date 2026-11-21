@@ -10,6 +10,7 @@ import {
   terminalSequenceEnd,
   terminalSequenceStateAfter,
   TerminalCwdError,
+  TerminalCloudUnavailableError,
   TerminalCwdNotDirectoryError,
   TerminalCwdNotFoundError,
   TerminalCwdStatError,
@@ -1663,6 +1664,7 @@ function normalizedRuntimeEnv(
 }
 
 interface TerminalManagerOptions {
+  cloudOnly?: boolean;
   logsDir: string;
   historyLineLimit?: number;
   historyByteLimit?: number;
@@ -1762,6 +1764,7 @@ export const make = Effect.fn("TerminalManager.make")(function* (
     }),
   );
   return yield* makeWithOptions({
+    cloudOnly: true,
     logsDir: terminalLogsDir,
     ptyAdapter,
     processTable: nativeTelemetry.processTable.pipe(
@@ -1801,8 +1804,11 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       input: Input,
     ): Effect.fn.Return<
       Input,
-      TerminalProviderInstanceNotFoundError | TerminalProviderEnvironmentError
+      | TerminalProviderInstanceNotFoundError
+      | TerminalProviderEnvironmentError
+      | TerminalCloudUnavailableError
     > {
+      if (options.cloudOnly) return yield* new TerminalCloudUnavailableError({});
       if (input.providerInstanceId === undefined) return input;
       const resolver = options.resolveProviderInstanceEnvironment;
       if (resolver === undefined) {

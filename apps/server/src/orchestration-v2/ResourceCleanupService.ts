@@ -1,8 +1,16 @@
-import { ThreadId } from "@t3tools/contracts";
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
+import {
+  ThreadId,
+  type OrchestrationV2ProviderThread,
+  type OrchestrationV2ThreadShell,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 
 import { resolveAttachmentRelativePath } from "../attachmentPaths.ts";
@@ -11,7 +19,152 @@ import * as ServerConfig from "../config.ts";
 import * as DeviceService from "../device/DeviceService.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import { forkParked } from "../serverActivation.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
+import * as ProjectionStore from "./ProjectionStore.ts";
+import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
+import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
+import { threadHasQueuedTurnStart } from "./ThreadSettlementService.ts";
+
+export const cleanupBoxThreads = Effect.fn("ResourceCleanupService.cleanupBoxThreads")(
+  function* (input: {
+    readonly threadId: ThreadId;
+    readonly deleted: boolean;
+    readonly providerThreads: ReadonlyArray<OrchestrationV2ProviderThread>;
+  }) {
+    if (!input.deleted) return;
+    const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    for (const thread of input.providerThreads) {
+      if (!isUpstashBoxDriver(thread.driver)) continue;
+      yield* Effect.gen(function* () {
+        const adapter = yield* adapters.get(thread.providerInstanceId);
+        yield* adapter.deleteThread?.(thread) ?? Effect.void;
+      }).pipe(
+        Effect.catchCause(() =>
+          Effect.logWarning("Could not delete a thread Box.", { threadId: input.threadId }),
+        ),
+      );
+    }
+  },
+);
+
+class BoxCleanup extends Context.Reference<(threadId: ThreadId) => Effect.Effect<void>>(
+  "t3/orchestration-v2/BoxCleanup",
+  { defaultValue: () => () => Effect.void },
+) {}
+
+export const layerBoxCleanup = Layer.effect(
+  BoxCleanup,
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const cleanup = Effect.fn("ResourceCleanupService.cleanupBoxes")(function* (
+      threadId: ThreadId,
+    ) {
+      const records = yield* projections.getThreadRecords(threadId, ["providerThreads"]);
+      yield* cleanupBoxThreads({
+        threadId,
+        deleted: records.thread.deletedAt !== null,
+        providerThreads: records.providerThreads,
+      }).pipe(Effect.provideService(ProviderAdapterRegistry.ProviderAdapterRegistryV2, adapters));
+    });
+    return (threadId: ThreadId) =>
+      cleanup(threadId).pipe(
+        Effect.catchCause(() =>
+          Effect.logWarning("Could not load thread Boxes for deletion.", { threadId }),
+        ),
+      );
+  }),
+);
+
+// A recreated Box starts from a fresh clone without agent memory, so a settled thread keeps its
+// Box while a follow-up is still likely.
+const SETTLED_BOX_RETENTION = Duration.days(3);
+
+/** When a settled, idle thread went quiet; null while it is unsettled or still has work running. */
+function settledBoxQuietSince(thread: OrchestrationV2ThreadShell, now: number): number | null {
+  if (
+    thread.settledAt === null ||
+    thread.activeRunId !== null ||
+    thread.pendingRuntimeRequest !== null ||
+    (thread.pendingBackgroundTasks?.length ?? 0) > 0 ||
+    threadHasQueuedTurnStart(thread, now)
+  )
+    return null;
+  return Math.max(
+    ...[
+      thread.settledAt,
+      thread.createdAt,
+      thread.latestUserMessageAt,
+      thread.latestRunRequestedAt,
+      thread.latestRunStartedAt,
+      thread.latestRunCompletedAt,
+    ].flatMap((value) => (value == null ? [] : [DateTime.toEpochMillis(value)])),
+  );
+}
+
+/**
+ * Deletes the Boxes of threads that stayed settled and quiet for the retention period, unless the
+ * Box holds uncommitted or unpushed work. `released` remembers handled Boxes per quiet period.
+ */
+export const cleanupSettledBoxes = Effect.fn("ResourceCleanupService.cleanupSettledBoxes")(
+  function* (released: Set<string>) {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const dispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+    const now = DateTime.toEpochMillis(yield* DateTime.now);
+    const snapshot = yield* projections.getShellSnapshot({ location: "active" });
+    for (const shell of snapshot.threads) {
+      const quietSince = settledBoxQuietSince(shell, now);
+      if (quietSince === null || now - quietSince < Duration.toMillis(SETTLED_BOX_RETENTION))
+        continue;
+      const records = yield* projections.getThreadRecords(shell.id, ["providerThreads"]);
+      for (const thread of records.providerThreads) {
+        const key = `${thread.id}@${quietSince}`;
+        if (!isUpstashBoxDriver(thread.driver) || released.has(key)) continue;
+        yield* dispatch
+          .withLock(
+            shell.id,
+            Effect.gen(function* () {
+              const adapter = yield* adapters.get(thread.providerInstanceId);
+              const current = yield* projections.getThreadShell(shell.id);
+              // Intake commits run requests under this same lock before their effects can start.
+              if (current === null || settledBoxQuietSince(current, now) !== quietSince) return;
+              if (!adapter.deleteIdleThread) return;
+              if (yield* adapter.deleteIdleThread(thread)) released.add(key);
+              else
+                yield* Effect.logInfo("Kept a settled thread Box with unsaved work.", {
+                  threadId: shell.id,
+                });
+            }),
+          )
+          .pipe(
+            Effect.catchCause(() =>
+              Effect.logWarning("Could not delete a settled thread Box.", { threadId: shell.id }),
+            ),
+          );
+      }
+    }
+  },
+);
+
+export const layerSettledBoxCleanup = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const dispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+    const released = new Set<string>();
+    yield* forkParked(
+      cleanupSettledBoxes(released).pipe(
+        Effect.provideService(ProjectionStore.ProjectionStoreV2, projections),
+        Effect.provideService(ProviderAdapterRegistry.ProviderAdapterRegistryV2, adapters),
+        Effect.provideService(ThreadCommandExecutor.ThreadCommandExecutor, dispatch),
+        Effect.catchCause(() => Effect.logWarning("Could not sweep settled thread Boxes.")),
+        Effect.repeat(Schedule.spaced(Duration.hours(1))),
+      ),
+    );
+  }),
+);
 
 export class ResourceCleanupError extends Schema.TaggedError<ResourceCleanupError>()(
   "ResourceCleanupError",
@@ -51,18 +204,17 @@ export const layer = Layer.effect(
     const fileSystem = yield* FileSystem.FileSystem;
     const config = yield* ServerConfig.ServerConfig;
     const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
+    const cleanupBoxes = yield* BoxCleanup;
     return {
       cleanupScheduledTasks: Effect.fn("ResourceCleanupService.cleanupScheduledTasks")(function (
         threadId: ThreadId,
       ) {
-        return scheduledTasks
-          .deleteForThread(threadId)
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new ResourceCleanupError({ operation: "scheduled-tasks", threadId, cause }),
-            ),
-          );
+        return scheduledTasks.deleteForThread(threadId).pipe(
+          Effect.ensuring(cleanupBoxes(threadId)),
+          Effect.mapError(
+            (cause) => new ResourceCleanupError({ operation: "scheduled-tasks", threadId, cause }),
+          ),
+        );
       }),
       cleanupTerminals: Effect.fn("ResourceCleanupService.cleanupTerminals")(function (
         threadId: string,

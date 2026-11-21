@@ -54,10 +54,13 @@ const adapter = {
 function makeHarness(
   options: {
     readonly generateTitle?: TextGeneration.TextGeneration["Service"]["generateThreadTitle"];
+    readonly cloud?: boolean;
   } = {},
 ) {
   const layerDatabase = SqlitePersistence.layerMemory;
-  const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([adapter]);
+  const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
+    options.cloud ? { ...adapter, driver: ProviderDriverKind.make("boxCommandCode") } : adapter,
+  ]);
   const layerOrchestrator = ProviderReplayHarness.layerWithRegistry(
     { name: "thread-title-regeneration" },
     layerRegistry,
@@ -334,6 +337,26 @@ describe("formatThreadTitleContext", () => {
 });
 
 describe("ThreadTitleRegenerationService", () => {
+  it.effect("silently keeps cloud titles without requesting text generation", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({ cloud: true });
+      yield* Effect.gen(function* () {
+        const threads = yield* ThreadManagement.ThreadManagementService;
+        const titles = yield* ThreadTitleRegeneration.ThreadTitleRegenerationService;
+        const threadId = yield* createThread({ command: "cloud:create", thread: "cloud:title" });
+        yield* dispatchUserMessage({ command: "cloud:message", threadId, text: "Read the README" });
+        const requestId = yield* armRegeneration({ command: "cloud:title-request", threadId });
+        yield* titles.execute({ threadId, requestId, kind: { type: "regenerate" } });
+        const projection = yield* threads.getThreadProjection(threadId);
+        assert.isTrue(
+          projection.providerThreads.some((thread) => thread.driver === "boxCommandCode"),
+        );
+        assert.equal(harness.generateThreadTitle.mock.calls.length, 0);
+        assert.equal(projection.thread.title, "Seed title");
+        assert.isNull(projection.thread.titleRegeneration);
+      }).pipe(Effect.provide(harness.layer));
+    }),
+  );
   it.effect("keeps a title set before the first message unless it is a placeholder", () =>
     Effect.gen(function* () {
       const seed = "work on this and pr to dev";

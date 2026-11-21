@@ -112,6 +112,11 @@ const PACKAGE_FIELD_TEXT: ReadonlyMap<string, string> = new Map([
   ["Compact idle threads", msg("Compact idle threads")],
   ["Sign-in method", msg("Sign-in method")],
   ["API key", msg("API key")],
+  ["Model API key", msg("Model API key")],
+  [
+    "Leave empty to use the key stored in the Upstash console.",
+    msg("Leave empty to use the key stored in the Upstash console."),
+  ],
   ["GCP project", msg("GCP project")],
   ["GCP location", msg("GCP location")],
   ["ACP source", msg("ACP source")],

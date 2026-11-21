@@ -3141,6 +3141,14 @@ function OpenCommandPaletteDialog(props: {
         />
       ) : null}
       {addProjectCloneFlow?.step === "confirm" ? (
+        <div className="px-4 py-2 text-xs text-muted-foreground">
+          <T>
+            This path is on the server machine. Cloud threads clone the project's pushed remote;
+            unpushed changes are not copied to the Box.
+          </T>
+        </div>
+      ) : null}
+      {addProjectCloneFlow?.step === "confirm" ? (
         <RemoteRepositorySummary
           source={addProjectCloneFlow.source}
           title={

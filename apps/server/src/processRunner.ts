@@ -407,3 +407,15 @@ export const make = Effect.fn("ProcessRunner.make")(function* () {
 });
 
 export const layer = Layer.effect(ProcessRunner, make());
+
+export const cloudLayer = Layer.succeed(ProcessRunner, {
+  run: Effect.fn("ProcessRunner.run")((input: ProcessRunInput) =>
+    Effect.fail(
+      new ProcessSpawnError({
+        command: input.command,
+        argumentCount: input.args.length,
+        cause: "Host commands are not available in cloud threads. Use the Box agent tools.",
+      }),
+    ),
+  ),
+});

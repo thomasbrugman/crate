@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useGT, useMessages } from "gt-react";
@@ -205,6 +206,7 @@ import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
 import { GuestPendingMessages } from "./chat/GuestShareControls";
 import { useDeviceState } from "~/state/device";
 import { BranchToolbar, type BranchToolbarHandle } from "./BranchToolbar";
+import { BoxSizePicker } from "./chat/BoxSizePicker";
 import { ComposerContextPermissions } from "./ComposerContextPermissions";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import { isEditableFocused } from "../lib/editableFocus";
@@ -386,6 +388,7 @@ import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { observeResize } from "~/lib/observeResize";
 import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
 import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
+import { CloudUnavailable } from "./chat/CloudUnavailable";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem, extensionStatusBannerItem } from "./chat/ThreadActivityBanners";
@@ -1318,8 +1321,6 @@ export default function ChatView(props: ChatViewProps) {
   const supportsPullRequests = serverConfig !== null;
   const attachmentEnvironmentConfig = environmentById.get(environmentId)?.serverConfig ?? null;
   const attachmentUploadsCapabilityKnown = attachmentEnvironmentConfig !== null;
-  const supportsQuestionAttachments = attachmentEnvironmentConfig !== null;
-  const supportsAttachmentUploads = attachmentEnvironmentConfig !== null;
   const advertisedFileAttachmentBytes =
     attachmentEnvironmentConfig?.environment.capabilities.fileAttachments?.maxUploadBytes ?? null;
   const maxFileAttachmentBytes =
@@ -1390,6 +1391,9 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
+  const cloudThread = isUpstashBoxDriver(selectedProvider);
+  const supportsQuestionAttachments = attachmentEnvironmentConfig !== null && !cloudThread;
+  const supportsAttachmentUploads = attachmentEnvironmentConfig !== null && !cloudThread;
   const conversationProviderStatus =
     providerStatuses.find((status) => status.instanceId === activeRuntime?.providerInstanceId) ??
     activeProviderStatus;
@@ -1685,13 +1689,14 @@ export default function ChatView(props: ChatViewProps) {
     turnDiffSummaries.at(-1)?.completedAt ?? null,
   );
 
+  const projectScriptsAvailable = false;
   const gitStatusCwd = activeThread?.worktreePath ?? gitCwd;
   const gitStatusAtom =
     gitStatusCwd === null
       ? null
       : vcsEnvironment.status({
           environmentId,
-          input: { cwd: gitStatusCwd },
+          input: { cwd: gitStatusCwd, ...(activeThread ? { threadId: activeThread.id } : {}) },
         });
   const gitStatusQuery = {
     data: useAtomValue(gitStatusAtom ? chatGitStatusAtom(gitStatusAtom) : NO_CHAT_GIT_STATUS_ATOM),
@@ -1788,7 +1793,9 @@ export default function ChatView(props: ChatViewProps) {
       rememberCheckoutIsRepo(environmentId, gitStatusCwd, liveIsGitRepo);
     }
   }, [environmentId, gitStatusCwd, liveIsGitRepo]);
-  const isGitRepo = liveIsGitRepo ?? recallCheckoutIsRepo(environmentId, gitStatusCwd) ?? true;
+  const isGitRepo = cloudThread
+    ? liveIsGitRepo === true
+    : (liveIsGitRepo ?? recallCheckoutIsRepo(environmentId, gitStatusCwd) ?? true);
   // Provider-native subagents cannot take messages; approvals and questions go to the top-level parent.
   const showProviderSubagentBar = isProviderSubagent;
   const composerMounted = !showProviderSubagentBar;
@@ -1815,6 +1822,7 @@ export default function ChatView(props: ChatViewProps) {
           providerSubagentModels,
           reportedModelSelection,
         );
+  const boxSizeDraftId = !embedded && isLocalDraftThread && cloudThread ? draftId : null;
   const showComposerContextStrip =
     !embedded &&
     shouldShowComposerContextStrip({
@@ -1959,6 +1967,7 @@ export default function ChatView(props: ChatViewProps) {
     toggleTerminalVisibilityStable,
     shortcuts: terminalShortcuts,
   } = useChatTerminalActions({
+    projectScriptsAvailable,
     environmentId,
     composerRef,
     terminalUiState,
@@ -2449,7 +2458,7 @@ export default function ChatView(props: ChatViewProps) {
     threadPanelPresentation,
     isServerThread,
     embedded,
-    isGitRepo,
+    isGitRepo: isGitRepo && !cloudThread,
     browserAvailable,
     canOperatePreview,
     diffOpen,
@@ -2840,7 +2849,8 @@ export default function ChatView(props: ChatViewProps) {
     },
     fallback: (command) => {
       const scriptId = projectScriptIdFromCommand(command);
-      if (!scriptId || !activeProject || !canOperateTerminal) return undefined;
+      if (!scriptId || !activeProject || !canOperateTerminal || !projectScriptsAvailable)
+        return undefined;
       const script = activeProjectScripts.find((entry) => entry.id === scriptId);
       return script ? () => void runProjectScriptStable(script) : undefined;
     },
@@ -3712,6 +3722,7 @@ export default function ChatView(props: ChatViewProps) {
                                 environmentId={environmentId}
                                 attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                                 supportsAttachmentUploads={supportsAttachmentUploads}
+                                cloudThread={cloudThread}
                                 supportsQuestionAttachments={supportsQuestionAttachments}
                                 maxFileAttachmentBytes={maxFileAttachmentBytes}
                                 routeKind={routeKind}
@@ -3860,7 +3871,8 @@ export default function ChatView(props: ChatViewProps) {
                             data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
                             className="relative z-0"
                           >
-                            {showComposerContextStrip && (
+                            {((showComposerContextStrip && !cloudThread) ||
+                              boxSizeDraftId !== null) && (
                               <div className="pointer-events-auto">
                                 <BranchToolbar
                                   forceNewWorktree={multipleModelSelections !== null}
@@ -3901,7 +3913,16 @@ export default function ChatView(props: ChatViewProps) {
                                       : undefined
                                   }
                                   availableEnvironments={logicalProjectEnvironments}
-                                  {...(isServerThread
+                                  environmentAccessory={
+                                    boxSizeDraftId === null ? null : (
+                                      <BoxSizePicker
+                                        draftId={boxSizeDraftId}
+                                        defaultSize={settings.upstashBox.size}
+                                        disabled={isSendBusy}
+                                      />
+                                    )
+                                  }
+                                  {...(isServerThread || cloudThread
                                     ? {}
                                     : {
                                         trailing: (
@@ -3960,6 +3981,7 @@ export default function ChatView(props: ChatViewProps) {
                 />
 
                 <ThreadDetailsPanel
+                  cloudThread={cloudThread}
                   anchor={threadPanelPopoverAnchorRef}
                   handle={threadPanelPopoverHandle}
                   forceNewWorktree={multipleModelSelections !== null}
@@ -4016,9 +4038,10 @@ export default function ChatView(props: ChatViewProps) {
                     ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                     : {})}
                   onComposerFocusRequest={scheduleComposerFocusStable}
-                  {...(isServerThread && isGitRepo
+                  {...(isServerThread && isGitRepo && !cloudThread
                     ? { onOpenChanges: openChangesFromThreadPanelStable }
                     : {})}
+                  projectScriptsAvailable={projectScriptsAvailable}
                   onRunProjectScript={runProjectScriptStable}
                   onAddProjectScript={saveProjectScriptStable}
                   onUpdateProjectScript={updateProjectScriptStable}
@@ -4043,7 +4066,11 @@ export default function ChatView(props: ChatViewProps) {
           </ThreadFindCanvas>
         </div>
 
-        {embedded ? null : (
+        {embedded ? null : cloudThread ? (
+          terminalUiState.terminalOpen ? (
+            <CloudUnavailable />
+          ) : null
+        ) : (
           <ChatTerminalDrawers
             activeThreadKey={activeThreadKey}
             activeTerminalOpen={Boolean(terminalUiState.terminalOpen)}
@@ -4111,7 +4138,8 @@ export default function ChatView(props: ChatViewProps) {
           onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
-          diffAvailable={isServerThread && isGitRepo}
+          diffAvailable={isServerThread && isGitRepo && !cloudThread}
+          cloudThread={cloudThread}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           pullRequestsAvailable={linkedItemsSurfaceAvailable}

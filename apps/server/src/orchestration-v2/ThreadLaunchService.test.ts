@@ -371,6 +371,46 @@ function launchInput(input: {
   };
 }
 
+it.effect("persists the Box size and launches Box threads without host workspace setup", () => {
+  const cloudAdapter = { ...adapter, driver: ProviderDriverKind.make("boxCommandCode") };
+  const harness = makeHarness({
+    adapters: [cloudAdapter],
+    providers: [
+      {
+        instanceId: modelSelection.instanceId,
+        driver: cloudAdapter.driver,
+        enabled: true,
+        installed: true,
+        version: null,
+        status: "ready",
+        auth: { status: "authenticated" },
+        checkedAt: "2026-06-20T00:00:00.000Z",
+        models: [],
+        slashCommands: [],
+        skills: [],
+      },
+    ],
+    git: { currentBranch: () => Effect.die("cloud launches must not read host branches") },
+    runSetup: () => Effect.die("cloud launches must not execute setup"),
+  });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const result = yield* launches.launch({
+      ...launchInput({
+        command: "command:cloud",
+        thread: "thread:cloud",
+        workspace: { type: "worktree", baseRef: "main" },
+      }),
+      boxSize: "large",
+    });
+    assert.equal(result.projection.thread.boxSize, "large");
+    assert.equal(result.projection.thread.worktreePath, null);
+    assert.equal(result.projection.thread.branch, null);
+    assert.equal(harness.createWorktree.mock.calls.length, 0);
+    assert.equal(harness.runSetup.mock.calls.length, 0);
+  }).pipe(Effect.provide(harness.layer));
+});
+
 it.effect.each(
   (["new", "existing"] as const).flatMap((target) =>
     (["user", "agent"] as const).map((createdBy) => ({ target, createdBy })),

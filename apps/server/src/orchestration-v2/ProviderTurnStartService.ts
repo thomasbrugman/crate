@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
@@ -519,13 +520,25 @@ export const layer: Layer.Layer<
     ) {
       const { runId } = input;
       const projection = yield* projectionStore.getTurnStartContext(input.threadId, runId);
-      const run = projection.runs.find((candidate) => candidate.id === runId);
-      if (run === undefined) {
+      const storedRun = projection.runs.find((candidate) => candidate.id === runId);
+      if (storedRun === undefined) {
         return yield* new ProviderTurnStartError({ runId, cause: `Run ${runId} was not found.` });
       }
-      if (run.status !== "starting") {
+      if (storedRun.status !== "starting") {
         return;
       }
+      const boxSetupStartedAt =
+        storedRun.workStartedAt === undefined &&
+        storedRun.startedAt === null &&
+        projection.providerThreads.some(
+          (thread) => thread.id === storedRun.providerThreadId && isUpstashBoxDriver(thread.driver),
+        )
+          ? yield* DateTime.now
+          : undefined;
+      const run =
+        boxSetupStartedAt === undefined
+          ? storedRun
+          : { ...storedRun, workStartedAt: boxSetupStartedAt };
       captureStartingRun(run);
       const rootNode = projection.nodes.find((candidate) => candidate.id === run.rootNodeId);
       const attempt = projection.attempts.find((candidate) => candidate.id === run.activeAttemptId);
@@ -803,7 +816,31 @@ export const layer: Layer.Layer<
           return;
         }
       }
-      const recreateResult = yield* Effect.result(restoreMissingWorktree(projection.thread));
+      const cloud = isUpstashBoxDriver(providerThread.driver);
+      if (boxSetupStartedAt !== undefined) {
+        const written = yield* eventSink.writeIfRunCurrent({
+          threadId: run.threadId,
+          runId,
+          activeAttemptId: attempt.id,
+          expectedStatus: "starting",
+          events: [
+            {
+              id: yield* idAllocator.allocate.event({ threadId: run.threadId }),
+              type: "run.updated",
+              threadId: run.threadId,
+              runId,
+              nodeId: rootNode.id,
+              providerInstanceId: run.providerInstanceId,
+              occurredAt: boxSetupStartedAt,
+              payload: run,
+            },
+          ],
+        });
+        if (!written.committed) return;
+      }
+      const recreateResult = yield* Effect.result(
+        cloud ? Effect.void : restoreMissingWorktree(projection.thread),
+      );
       if (recreateResult._tag === "Failure") {
         if (input.willRetry === true) return yield* recreateResult.failure;
         yield* settleStartFailure({
@@ -924,11 +961,13 @@ export const layer: Layer.Layer<
         if (!repaired.committed) return;
       }
       // Opening a session does not prompt the provider, so the workspace is still unchanged.
-      const baseline = yield* runExecution.forkBaseline({
-        appThread: projection.thread,
-        run,
-        checkpointScope,
-      });
+      const baseline = yield* cloud
+        ? Effect.succeed(Effect.void)
+        : runExecution.forkBaseline({
+            appThread: projection.thread,
+            run,
+            checkpointScope,
+          });
       const brokenNativeThread = providerThread.status === "error";
       // Opened without the broken native id, a session that was not live starts fresh.
       const opensFreshSession =
@@ -2156,12 +2195,21 @@ export const layer: Layer.Layer<
           return yield* Effect.gen(function* () {
             // Storage cleanup removes worktrees under the same lease. Only startup
             // holds it; the provider turn runs after it is released.
-            const { thread } = yield* projectionStore.getThreadRecords(input.threadId, []);
-            const cwd =
-              thread.worktreePath ??
-              (yield* projects
-                .getById(thread.projectId, { includeDeleted: true })
-                .pipe(Effect.map((project) => Option.getOrUndefined(project)?.workspaceRoot)));
+            const { thread, providerThreads } = yield* projectionStore.getThreadRecords(
+              input.threadId,
+              ["providerThreads"],
+            );
+            const cloud = providerThreads.some(
+              (provider) =>
+                provider.id === thread.activeProviderThreadId &&
+                isUpstashBoxDriver(provider.driver),
+            );
+            const cwd = cloud
+              ? undefined
+              : (thread.worktreePath ??
+                (yield* projects
+                  .getById(thread.projectId, { includeDeleted: true })
+                  .pipe(Effect.map((project) => Option.getOrUndefined(project)?.workspaceRoot))));
             const providerTurn = yield* cwd === undefined
               ? start(input, captureStartingRun)
               : withTurnStartReservation(

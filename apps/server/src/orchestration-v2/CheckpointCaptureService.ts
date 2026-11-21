@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import {
   CheckpointScopeId,
   CommandId,
@@ -111,7 +112,7 @@ export const layer: Layer.Layer<
           ordinalWithinScope,
           nodeId: rootNode.id,
           capturedAt: run.requestedAt,
-          forceMissing: sideChat,
+          forceMissing: sideChat || isUpstashBoxDriver(providerThread.driver),
         });
       const threadStartCheckpoint =
         baselineOrdinalWithinScope === 0 || isPreserved(0) ? null : yield* materializeBaseline(0);
@@ -125,7 +126,7 @@ export const layer: Layer.Layer<
         ordinalWithinScope: run.ordinal,
         appRunOrdinal: run.ordinal,
         capturedAt,
-        forceMissing: sideChat,
+        forceMissing: sideChat || isUpstashBoxDriver(providerThread.driver),
       });
       // Omit delegatedCompletion to preserve cohort writes made after capture loaded the run.
       const { delegatedCompletion: _delegatedCompletion, ...runWithoutDelegatedCompletion } = run;

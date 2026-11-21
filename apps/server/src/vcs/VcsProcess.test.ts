@@ -16,7 +16,9 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import { ChildProcessSpawner } from "effect/process";
 
-import { VcsProcessExitError, VcsProcessSpawnError } from "@t3tools/contracts";
+import { ThreadId, VcsProcessExitError, VcsProcessSpawnError } from "@t3tools/contracts";
+import { BoxExec } from "@t3tools/provider-upstash-box/server";
+import * as VcsThreadTarget from "./VcsThreadTarget.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 
@@ -53,6 +55,75 @@ const captureProcessResult = (
   );
 
 describe("VcsProcess.run", () => {
+  it.effect("routes Box commands with safe stdin, mapped cwd and bounded output", () =>
+    Effect.gen(function* () {
+      const calls: BoxExec.BoxExecInput[] = [];
+      const service = yield* VcsProcess.VcsProcess;
+      const fake = BoxExec.BoxExec.of({
+        run: (input) => {
+          calls.push(input);
+          return Effect.succeed({ exitCode: 0, stdout: "abcdef", stderr: "" });
+        },
+      });
+      const target = {
+        threadId: ThreadId.make("box-one"),
+        projectRoot: "/workspace",
+        checkoutRoot: "/workspace/home/repo",
+      };
+      const execute = (input: VcsProcess.VcsProcessInput) =>
+        service
+          .run(input)
+          .pipe(
+            Effect.provideService(VcsThreadTarget.VcsThreadTarget, target),
+            Effect.provideService(BoxExec.BoxExec, fake),
+          );
+      const args = ["commit", "-F", "-", "quotes' ; $(false)\n"];
+      const stdin = "message ' \n$(touch not-run)\nEOF\n";
+      const root = yield* execute({ ...baseInput, args, stdin, maxOutputBytes: 3 });
+      assert.equal(root.stdout, "abc");
+      assert.isTrue(root.stdoutTruncated);
+      assert.deepEqual(calls[0]?.args, args);
+      assert.isUndefined(calls[0]?.cwd);
+      assert.include(calls[0]!.command, Buffer.from(stdin).toString("base64"));
+      assert.notInclude(calls[0]!.command, stdin);
+      yield* execute({ ...baseInput, cwd: "/workspace/sub dir" });
+      assert.equal(calls[1]?.cwd, "/workspace/home/repo/sub dir");
+      const error = yield* execute({ ...baseInput, cwd: "/outside" }).pipe(Effect.flip);
+      assert.include(error.message, "outside");
+      assert.equal(calls.length, 2);
+      const overflow = yield* execute({
+        ...baseInput,
+        maxOutputBytes: 3,
+        outputMode: "error",
+      }).pipe(Effect.flip);
+      assert.equal(overflow._tag, "VcsProcessOutputLimitError");
+      const nonzero = yield* service.run(baseInput).pipe(
+        Effect.provideService(VcsThreadTarget.VcsThreadTarget, target),
+        Effect.provideService(
+          BoxExec.BoxExec,
+          BoxExec.BoxExec.of({
+            run: () => Effect.succeed({ exitCode: 1, stdout: "", stderr: "authentication failed" }),
+          }),
+        ),
+        Effect.flip,
+      );
+      assert.equal(nonzero._tag, "VcsProcessExitError");
+      if (nonzero._tag === "VcsProcessExitError")
+        assert.equal(nonzero.failureKind, "authentication");
+      const missing = yield* service
+        .run(baseInput)
+        .pipe(Effect.provideService(VcsThreadTarget.VcsThreadTarget, target), Effect.flip);
+      assert.include(missing.message, "Box unavailable");
+    }).pipe(Effect.provide(VcsProcess.cloudLayer)),
+  );
+  it.effect("rejects cloud host commands without requiring a process runner", () =>
+    Effect.gen(function* () {
+      const service = yield* VcsProcess.VcsProcess;
+      const error = yield* service.run(baseInput).pipe(Effect.flip);
+      expect(error._tag).toBe("VcsUnsupportedOperationError");
+      expect(error.message).toContain("not available in cloud threads");
+    }).pipe(Effect.provide(VcsProcess.cloudLayer)),
+  );
   it.effect("explains a locked Git index and allows restore after the lock is released", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

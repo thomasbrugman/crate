@@ -520,7 +520,17 @@ export class TerminalResizeError extends Schema.TaggedError<TerminalResizeError>
   }
 }
 
+export class TerminalCloudUnavailableError extends Schema.TaggedError<TerminalCloudUnavailableError>()(
+  "TerminalCloudUnavailableError",
+  {},
+) {
+  override get message() {
+    return "Terminal is not available in cloud threads. Ask the agent to run commands in its Box.";
+  }
+}
+
 export const TerminalError = Schema.Union([
+  TerminalCloudUnavailableError,
   TerminalCwdError,
   TerminalHistoryError,
   TerminalSessionLookupError,

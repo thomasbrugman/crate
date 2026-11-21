@@ -239,6 +239,7 @@ const historyLogPath = (logsDir: string, threadId = "thread-1") =>
   );
 
 interface CreateManagerOptions {
+  cloudOnly?: boolean;
   shellResolver?: () => string;
   env?: NodeJS.ProcessEnv;
   subprocessInspector?: (terminalPid: number) => Effect.Effect<{
@@ -290,6 +291,7 @@ const createManager = (
       const ptyAdapter = options.ptyAdapter ?? new FakePtyAdapter();
 
       const manager = yield* TerminalManager.makeWithOptions({
+        cloudOnly: options.cloudOnly ?? false,
         logsDir,
         historyLineLimit,
         ptyAdapter,
@@ -578,6 +580,15 @@ it.layer(
         assert.equal(ptyAdapter.spawnInputs.length, 1);
         assert.isTrue(yield* fs.exists(cwd));
       }),
+  );
+
+  it.effect("rejects cloud terminals before spawning a pty", () =>
+    Effect.gen(function* () {
+      const { manager, ptyAdapter } = yield* createManager(5, { cloudOnly: true });
+      const error = yield* manager.open(openInput()).pipe(Effect.flip);
+      assert.equal(error._tag, "TerminalCloudUnavailableError");
+      expect(ptyAdapter.spawnInputs).toHaveLength(0);
+    }),
   );
 
   it.effect("spawns lazily and reuses running terminal per thread", () =>

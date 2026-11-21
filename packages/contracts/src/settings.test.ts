@@ -494,6 +494,18 @@ describe("resolveProjectProviderInstanceEnabled", () => {
     };
     expect(resolveProjectProviderInstanceEnabled(settings, projectId, instanceId)).toBe(false);
   });
+
+  it("enables the Box harness providers before they have saved settings", () => {
+    for (const driver of ["boxCommandCode", "boxClaudeCode", "boxCodex"]) {
+      expect(
+        resolveProjectProviderInstanceEnabled(
+          DEFAULT_SERVER_SETTINGS,
+          projectId,
+          ProviderInstanceId.make(driver),
+        ),
+      ).toBe(true);
+    }
+  });
 });
 
 describe("requiredScopesForProjectMutation", () => {

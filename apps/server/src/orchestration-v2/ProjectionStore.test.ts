@@ -5594,6 +5594,41 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
         );
       }
 
+      const hiddenPromptShell = (yield* committed(projectionStore.getShellSnapshot())).threads.find(
+        (thread) => thread.id === threadId,
+      );
+      yield* sql`
+        UPDATE orchestration_v2_projection_runs
+        SET payload_json = json_set(payload_json, '$.startedAt', ${nowIso})
+        WHERE run_id = ${cancelledRunId}
+      `;
+      const startedCancelled = yield* committed(
+        projectionStore.getThreadSnapshotWindow(threadId, {
+          rowLimit: sqlPageLimit,
+        }),
+      );
+      assert.isTrue(
+        startedCancelled.projection.visibleTurnItems.some(
+          (row) => row.sourceItemId === laterCancelledId,
+        ),
+      );
+      const startedCancelledFull = yield* projectionStore.getThreadProjection(threadId);
+      assert.isTrue(
+        startedCancelledFull.visibleTurnItems.some((row) => row.sourceItemId === laterCancelledId),
+      );
+      const deliveredPromptShell = (yield* projectionStore.getShellSnapshot()).threads.find(
+        (thread) => thread.id === threadId,
+      );
+      assert.equal(
+        deliveredPromptShell?.visibleItemCount,
+        hiddenPromptShell!.visibleItemCount + 101,
+      );
+      yield* sql`
+        UPDATE orchestration_v2_projection_runs
+        SET payload_json = json_set(payload_json, '$.startedAt', NULL)
+        WHERE run_id = ${cancelledRunId}
+      `;
+
       // A steer moves the cancelled queued message outside the window.
       const steeredItemId = "turn-item:bounded-sql-history:steered-output";
       const steeredRunId = RunId.make("run:bounded-sql-history:1000");

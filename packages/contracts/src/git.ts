@@ -107,6 +107,7 @@ const GitResolvedPullRequest = Schema.Struct({
 export type GitResolvedPullRequest = typeof GitResolvedPullRequest.Type;
 
 export const VcsStatusInput = Schema.Struct({
+  threadId: Schema.optional(ThreadId),
   cwd: TrimmedNonEmptyStringSchema,
 });
 export type VcsStatusInput = typeof VcsStatusInput.Type;
@@ -126,6 +127,7 @@ export const VcsStatusSubscriptionInput = Schema.Struct({
 export type VcsStatusSubscriptionInput = typeof VcsStatusSubscriptionInput.Type;
 
 export const VcsPullInput = Schema.Struct({
+  threadId: Schema.optional(ThreadId),
   cwd: TrimmedNonEmptyStringSchema,
 });
 export type VcsPullInput = typeof VcsPullInput.Type;
@@ -143,6 +145,7 @@ export const GitRunStackedActionInput = Schema.Struct({
 export type GitRunStackedActionInput = typeof GitRunStackedActionInput.Type;
 
 export const VcsListRefsInput = Schema.Struct({
+  threadId: Schema.optional(ThreadId),
   cwd: TrimmedNonEmptyStringSchema,
   query: Schema.optional(TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(256))),
   cursor: Schema.optional(NonNegativeInt),
@@ -186,6 +189,7 @@ export const VcsRemoveWorktreeInput = Schema.Struct({
 export type VcsRemoveWorktreeInput = typeof VcsRemoveWorktreeInput.Type;
 
 export const VcsCreateRefInput = Schema.Struct({
+  threadId: Schema.optional(ThreadId),
   cwd: TrimmedNonEmptyStringSchema,
   refName: TrimmedNonEmptyStringSchema,
   switchRef: Schema.optional(Schema.Boolean),
@@ -198,6 +202,7 @@ export const VcsCreateRefResult = Schema.Struct({
 export type VcsCreateRefResult = typeof VcsCreateRefResult.Type;
 
 export const VcsSwitchRefInput = Schema.Struct({
+  threadId: Schema.optional(ThreadId),
   cwd: TrimmedNonEmptyStringSchema,
   refName: TrimmedNonEmptyStringSchema,
 });

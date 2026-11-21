@@ -1,20 +1,7 @@
-import {
-  AntigravitySettings,
-  ClaudeSettings,
-  CodexSettings,
-  isProviderDriverKind,
-  ProviderDriverKind,
-} from "@t3tools/contracts";
-import { acpRegistryClient } from "@t3tools/provider-acp-registry/client";
+import { isProviderDriverKind, type ProviderDriverKind } from "@t3tools/contracts";
 import { makeProviderClientRegistry, type ProviderIcon } from "@t3tools/provider-core/client";
 import { modelShortName } from "@t3tools/provider-core/modelShortName";
-import { cursorClient } from "@t3tools/provider-cursor/client";
-import { fxClient } from "@t3tools/provider-fx/client";
-import { grokClient } from "@t3tools/provider-grok/client";
-import { kiroClient } from "@t3tools/provider-kiro/client";
-import { museClient } from "@t3tools/provider-muse/client";
-import { openCodeClient } from "@t3tools/provider-opencode/client";
-import { piClient } from "@t3tools/provider-pi/client";
+import { boxProviderClients } from "@t3tools/provider-upstash-box/client";
 
 // OpenRouter's Ink and Cloud glyphs from https://openrouter.ai/brand.
 export const openRouterIcon: ProviderIcon = {
@@ -27,37 +14,9 @@ export const openRouterIcon: ProviderIcon = {
   ],
 };
 
-export const providerClients = makeProviderClientRegistry([
-  {
-    driverKind: ProviderDriverKind.make("codex"),
-    label: "Codex",
-    modelFamilies: ["GPT-", "GPT "],
-    acpRegistryAgentIds: ["codex-acp"],
-    settingsSchema: CodexSettings,
-  },
-  {
-    driverKind: ProviderDriverKind.make("claudeAgent"),
-    label: "Claude",
-    modelFamilies: ["Claude "],
-    acpRegistryAgentIds: ["claude-acp"],
-    settingsSchema: ClaudeSettings,
-  },
-  cursorClient,
-  grokClient,
-  fxClient,
-  openCodeClient,
-  {
-    driverKind: ProviderDriverKind.make("antigravity"),
-    label: "Antigravity",
-    modelFamilies: ["Gemini "],
-    acpRegistryAgentIds: ["antigravity-acp"],
-    settingsSchema: AntigravitySettings,
-  },
-  kiroClient,
-  museClient,
-  piClient,
-  acpRegistryClient,
-]);
+export const providerClients = makeProviderClientRegistry(boxProviderClients);
+
+export { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 
 export function getProviderClient(driver: string | null | undefined) {
   return isProviderDriverKind(driver) ? providerClients.get(driver) : undefined;

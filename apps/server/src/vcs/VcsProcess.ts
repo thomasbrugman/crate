@@ -18,12 +18,16 @@ import {
   VcsProcessSpawnError,
   VcsProcessStdinWriteError,
   VcsProcessTimeoutError,
+  VcsUnsupportedOperationError,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import type { SourceControlProcessInput } from "@t3tools/source-control-core/server/SourceControlHost";
+import { decodeUtf8 } from "@t3tools/provider-core/server/collectStreamText";
 
 import { gitCommandDuration, gitCommandsTotal, withMetrics } from "../observability/Metrics.ts";
 import * as ProcessRunner from "../processRunner.ts";
+import * as BoxGitHost from "./BoxGitHost.ts";
+import * as VcsThreadTarget from "./VcsThreadTarget.ts";
 
 export interface VcsProcessInput {
   readonly operation: string;
@@ -385,6 +389,7 @@ export const make = Effect.gen(function* () {
   });
 
   const run = Effect.fn("VcsProcess.run")(function* (input: VcsProcessInput) {
+    if (yield* VcsThreadTarget.VcsThreadTarget) return yield* runInBox(input);
     const bounded = vcsProcesses.withPermits(1)(runUnbounded(input));
     if (
       input.command === "git" &&
@@ -417,3 +422,90 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(VcsProcess, make).pipe(Layer.provide(ProcessRunner.layer));
+
+export const runInBox = Effect.fn("VcsProcess.runInBox")(function* (input: VcsProcessInput) {
+  if (!(yield* VcsThreadTarget.VcsThreadTarget))
+    return yield* new VcsUnsupportedOperationError({
+      operation: input.operation,
+      kind: "unknown",
+      detail:
+        "Host Git and diff commands are not available in cloud threads. Use the Box agent tools.",
+    });
+  const context = {
+    operation: input.operation,
+    command: input.command,
+    args: input.args,
+    cwd: input.cwd,
+  };
+  const result = yield* BoxGitHost.exec({
+    ...input,
+    env: { LANGUAGE: "C", ...input.env },
+    cwd: input.spawnCwd ?? input.cwd,
+  }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new VcsUnsupportedOperationError({
+          operation: input.operation,
+          kind: "git",
+          detail: cause.message,
+        }),
+    ),
+    Effect.timeoutOrElse({
+      duration: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      orElse: () =>
+        Effect.fail(
+          new VcsProcessTimeoutError({
+            ...context,
+            timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          }),
+        ),
+    }),
+  );
+  const maxBytes = input.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+  const bound = (value: string) => {
+    const bytes = Buffer.from(value);
+    const truncated = bytes.length > maxBytes;
+    const decoded = decodeUtf8(bytes.subarray(0, maxBytes));
+    return {
+      invalidUtf8: decoded.invalidUtf8,
+      text: truncated
+        ? decoded.text + (input.appendTruncationMarker ? OUTPUT_TRUNCATED_MARKER : "")
+        : value,
+      truncated,
+      bytes: bytes.length,
+    };
+  };
+  const stdout = bound(result.stdout);
+  const stderr = bound(result.stderr);
+  if (input.outputMode === "error" && (stdout.truncated || stderr.truncated))
+    return yield* new VcsProcessOutputLimitError({
+      ...context,
+      stream: stdout.truncated ? "stdout" : "stderr",
+      maxBytes,
+      observedBytes: stdout.truncated ? stdout.bytes : stderr.bytes,
+    });
+  if (!input.allowNonZeroExit && result.exitCode !== 0)
+    return yield* VcsProcessExitError.fromProcessExit(
+      context,
+      {
+        exitCode: result.exitCode,
+        stderr: stderr.text,
+        stderrTruncated: stderr.truncated,
+      },
+      classifyNonZeroExit(stderr.text, input.classifyFailure),
+      input.notFoundDetail === undefined ? {} : { notFoundDetail: input.notFoundDetail },
+    );
+  input.onSpawn?.();
+  input.onStdoutChunk?.(Buffer.from(stdout.text));
+  return {
+    exitCode: result.exitCode as ChildProcessSpawner.ExitCode,
+    stdout: stdout.text,
+    stderr: stderr.text,
+    stdoutTruncated: stdout.truncated,
+    stderrTruncated: stderr.truncated,
+    stdoutInvalidUtf8: stdout.invalidUtf8,
+    stderrInvalidUtf8: stderr.invalidUtf8,
+  };
+});
+
+export const cloudLayer = Layer.succeed(VcsProcess, { run: runInBox });
