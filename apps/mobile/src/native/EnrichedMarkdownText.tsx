@@ -9,6 +9,7 @@ import {
   markdownWithFileEmbeds,
   markdownForNativeParsing,
   markdownWithInlineFileLinks,
+  markdownWithPlainFilePaths,
   markdownWithTableBreaks,
   markdownWithTextDirection,
 } from "../lib/markdownDocument";
@@ -248,6 +249,21 @@ export function MobileEnrichedMarkdownText(props: SelectableMarkdownTextProps) {
     [gt],
   );
   const { markdown, fileHrefs } = useMemo(() => {
+    if (props.plainFilePaths) {
+      return {
+        markdown: markdownWithTextDirection(
+          markdownWithTableBreaks(
+            markdownWithPlainFilePaths(
+              markdownWithInlineFileLinks(
+                markdownForNativeParsing(props.markdown),
+                ENRICHED_INLINE_FILE_LINK_REGEX,
+              ),
+            ),
+          ),
+        ),
+        fileHrefs: new Set<string>(),
+      };
+    }
     if (!fileEmbedLabel) {
       return {
         markdown: markdownWithTextDirection(
@@ -265,7 +281,7 @@ export function MobileEnrichedMarkdownText(props: SelectableMarkdownTextProps) {
       ...files,
       markdown: markdownWithTextDirection(markdownWithTableBreaks(files.markdown)),
     };
-  }, [props.markdown, fileEmbedLabel]);
+  }, [props.markdown, props.plainFilePaths, fileEmbedLabel]);
   const [parsedLinkUrls, setParsedLinkUrls] = useState<ReadonlyArray<string>>([]);
   const onLinksChange = (links: MarkdownLinkOccurrence[]) => {
     const urls = [...new Set(links.map((link) => link.url))];

@@ -504,6 +504,7 @@ export default function ProjectScriptsControl({
 
       <ProjectScriptEditorDialog
         environmentId={environmentId}
+        runUnavailableReason={runUnavailableReason}
         request={editorRequest}
         scripts={scripts}
         onSubmit={submitScript}

@@ -1,9 +1,19 @@
 import type { BoxConfig } from "@upstash/box";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import type { BoxHarness } from "../harnesses.ts";
-import { BoxApi, BoxRuntimeError, boxConfig, isMissingBox, type BoxHandle } from "./BoxApi.ts";
+import {
+  BoxApi,
+  BoxRuntimeError,
+  boxConfig,
+  isMissingBox,
+  isMissingStoredKey,
+  type BoxHandle,
+} from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
+
+const isBoxRuntimeError = Schema.is(BoxRuntimeError);
 
 /** The thread's Box environment plus the agent that runs inside it. */
 export interface BoxRuntimeConfig {
@@ -35,9 +45,16 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
       } catch (error) {
         if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
         onProgress("create");
-        box = await api.create(
-          boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) }),
-        );
+        box = await api
+          .create(boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) }))
+          .catch((createError: unknown) => {
+            if (!isMissingStoredKey(createError)) throw createError;
+            throw new BoxRuntimeError({
+              operation: "create",
+              statusCode: 400,
+              missingStoredKey: true,
+            });
+          });
       }
       try {
         const installHarness = () =>
@@ -96,7 +113,10 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
         throw new Error("Could not bootstrap the Box from its template.");
       }
     },
-    catch: () => new BoxRuntimeError({ operation: "bootstrap" }),
+    catch: (error) =>
+      isBoxRuntimeError(error) && error.missingStoredKey
+        ? error
+        : new BoxRuntimeError({ operation: "bootstrap" }),
   });
 });
 

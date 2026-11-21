@@ -1576,6 +1576,7 @@
     },
     " y trae los archivos locales que git no rastrea."
   ],
+  "bd5def9c42115de5": "Esta ruta está en el servidor. Los hilos en la nube clonan el remoto del proyecto con los cambios enviados; los cambios sin enviar no se copian al Box.",
   "77494a56d6315a2e": "Clonar por",
   "1c7a3992dd8e38af": "Copiar archivos ignorados",
   "7d4bb884e519b298": "Los archivos se copian cuando termina la clonación. Las carpetas que git ignora por completo, como node_modules, se omiten.",
@@ -2676,6 +2677,7 @@
   "7f6d34983e89a91c": "Eliminar acción",
   "84435bd5cb8cfac0": "Editar acción",
   "2d1f6668f713dca9": "Añadir acción",
+  "73bedbce4c29257a": "Las acciones se guardan para este proyecto, pero no se ejecutan en los hilos en la nube.",
   "da1b3bc9635dcdc8": "Las acciones son comandos del proyecto que puedes ejecutar desde la barra superior o con atajos de teclado.",
   "4614a422f1430cd7": "Nombre",
   "d3502e7db0cdb998": "Atajo de teclado",
@@ -3252,6 +3254,7 @@
   "e8e73f3ce06abbce": "Comprueba que su entorno está conectado y actualizado, y vuelve a intentarlo.",
   "6b45252b76f5ca2e": "No se puede añadir el hilo",
   "da13069e7a3a8ffd": "Expandir el cuadro de mensaje",
+  "2242587c6b44cce0": "Inicia un hilo nuevo para continuar",
   "d3356b4524173b25": "Activa un proveedor en Ajustes",
   "3d3f30f1a1c4fc52": "Pregunta lo que quieras...",
   "305d6d72f1220d98": "Buscando la pull request...",
@@ -3265,6 +3268,7 @@
   "9a3db19d3e12dea6": "Escribe tu respuesta",
   "ea8fec0f7052e43e": "Escribe tu propia respuesta o déjalo en blanco para usar la opción seleccionada",
   "56d9080d3ab28e39": "Elige un proyecto arriba para iniciar un hilo",
+  "bbc21d1967578281": "El proveedor de este hilo ya no está disponible. Inicia un hilo nuevo para continuar.",
   "6d66186eedd8009b": "Activa un proveedor en Ajustes para enviar un mensaje",
   "977ead973131917d": "Transcripción en directo",
   "412187d16dc11adf": [
@@ -3276,6 +3280,7 @@
       "v": "v"
     }
   ],
+  "eb51025bee426871": "Los adjuntos y las vistas previas de archivos no están disponibles en los hilos en la nube. Las menciones de archivos usan la copia del servidor; solo los archivos enviados al remoto están disponibles en el Box.",
   "3dbc42464b2bfb20": "Fast y Ultrafast no están disponibles con esta conexión de ChatGPT. Usa un inicio de sesión existente de Codex CLI para las opciones de velocidad que admita tu cuenta.",
   "5c0eb4217bb673bd": "Usando el plan de ChatGPT",
   "3e545d70d0c3535c": "Ruta de navegación del hilo",
@@ -3391,6 +3396,7 @@
   "061c0c9f27104d23": "No se encontraron skills. Prueba con / para explorar los comandos del proveedor.",
   "0a6fbecab03f7ef3": "No hay archivos ni carpetas que coincidan.",
   "0e7b21ab11721ca7": "Ningún comando coincide.",
+  "754d11d1f210a398": "Iniciar un hilo nuevo",
   "2029db2cc30beb6d": "Abrir ajustes del proveedor",
   "517cfb8f24123f5b": "No hay ningún proveedor disponible",
   "7ff1a0ef1490668d": "La API del portapapeles no está disponible al copiar el ID del hilo de comentarios de Codex.",
@@ -4066,7 +4072,6 @@
   "4276743ee60a3c62": "{count, plural, one {{count} comentario} other {{count} comentarios}}",
   "42f634397f3960aa": "Mostrar en los detalles del hilo",
   "e3738ef0423ddfe7": "Restablecer al valor predeterminado",
-  "4b3d3f47606c22e2": "No disponible en los hilos en la nube. Pídele al agente que use sus herramientas de Box.",
   "ae10d34e11064fec": "Control de versiones",
   "8ab1235557b08956": "Elige qué mostrar",
   "e8f045adbbaf328e": "Añadido al cuadro de mensaje",
