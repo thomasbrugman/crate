@@ -1,4 +1,5 @@
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
+import { boxSetupChecklistsEqual } from "@t3tools/client-runtime/state/thread-execution";
 import type {
   ThreadPendingApproval,
   ThreadPendingUserInput,
@@ -1480,7 +1481,7 @@ function latestRunsEqual(left: ThreadFeedLatestRun | null, right: ThreadFeedLate
       left.turnEnded === right.turnEnded &&
       left.providerStartingLabel === right.providerStartingLabel &&
       left.providerStartingLabelMsg === right.providerStartingLabelMsg &&
-      left.boxSetupChecklist === right.boxSetupChecklist)
+      boxSetupChecklistsEqual(left.boxSetupChecklist, right.boxSetupChecklist))
   );
 }
 
@@ -2116,7 +2117,7 @@ function thinkingRow(
     cachedThinkingRow.runId !== runId ||
     (cachedThinkingRow.label ?? null) !== label ||
     cachedThinkingRow.providerStartingLabel !== providerStartingLabel ||
-    cachedThinkingRow.boxSetupChecklist !== boxSetupChecklist
+    !boxSetupChecklistsEqual(cachedThinkingRow.boxSetupChecklist, boxSetupChecklist)
   ) {
     cachedThinkingRow = {
       type: "thinking",

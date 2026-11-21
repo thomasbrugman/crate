@@ -1485,7 +1485,7 @@ export function ThreadThinkingRow(props: {
               style={step.state === "active" ? { borderStyle: "dashed" } : undefined}
             >
               {step.state === "done" && (
-                <Text className="text-[10px] leading-[12px] text-thread-canvas">✓</Text>
+                <SymbolView name="checkmark" size={10} tintColorClassName="accent-thread-canvas" />
               )}
               {step.state === "skipped" && (
                 <View

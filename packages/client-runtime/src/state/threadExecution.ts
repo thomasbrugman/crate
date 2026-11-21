@@ -113,6 +113,27 @@ function latestMatchingRun(
   );
 }
 
+export function boxSetupChecklistsEqual(
+  left: ThreadRunSummary["boxSetupChecklist"],
+  right: ThreadRunSummary["boxSetupChecklist"],
+) {
+  return (
+    left === right ||
+    (left !== undefined &&
+      right !== undefined &&
+      left.length === right.length &&
+      left.every((step, index) => {
+        const other = right[index];
+        return (
+          other !== undefined &&
+          step.key === other.key &&
+          step.state === other.state &&
+          step.labelMsg === other.labelMsg
+        );
+      }))
+  );
+}
+
 function boxSetupLabel(key: string | undefined) {
   switch (key) {
     case "upstash-box.setup.connect":
