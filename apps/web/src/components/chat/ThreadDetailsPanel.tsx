@@ -276,6 +276,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                         compact={density !== "full"}
                         showActions={visible.gitActions}
                         showChanges={visible.changes && !props.cloudThread}
+                        openInEditorAvailable={!props.cloudThread}
                         gitCwd={props.gitCwd}
                         workspaceMutationId={props.workspaceMutationId}
                         activeThreadRef={activeThreadRef}

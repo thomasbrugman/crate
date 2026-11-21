@@ -144,6 +144,7 @@ interface GitActionsControlProps {
   compact?: boolean;
   showActions?: boolean;
   showChanges?: boolean;
+  openInEditorAvailable?: boolean;
   onOpenChanges?: () => void;
   workspaceMutationId?: string | null;
 }
@@ -975,6 +976,7 @@ function CheckoutGitActionsControl({
   compact = false,
   showActions = true,
   showChanges = true,
+  openInEditorAvailable = true,
   onOpenChanges,
   workspaceMutationId = null,
 }: GitActionsControlProps) {
@@ -1501,6 +1503,7 @@ function CheckoutGitActionsControl({
   };
 
   const openChangedFileInEditor = (filePath: string) => {
+    if (!openInEditorAvailable) return;
     if (workingTreeRoot === null) {
       toastManager.add({
         type: "error",
@@ -1978,7 +1981,11 @@ function CheckoutGitActionsControl({
                                 <button
                                   type="button"
                                   className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left enabled:cursor-pointer"
-                                  disabled={!canOperateThread || workingTreeRoot === null}
+                                  disabled={
+                                    !openInEditorAvailable ||
+                                    !canOperateThread ||
+                                    workingTreeRoot === null
+                                  }
                                   aria-label={gt("Open {path} in editor", { path: file.path })}
                                   onClick={() => openChangedFileInEditor(file.path)}
                                 >
