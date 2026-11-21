@@ -3328,7 +3328,7 @@
     }
   ],
   "1b1131295f62c44c": "El proceso del proveedor ya no existe. Interrumpe o reinicia el hilo secundario para responder.",
-  "2cc98601912fed53": "Not available in cloud threads. Ask the agent to use its Box tools.",
+  "2cc98601912fed53": "No disponible en los hilos en la nube. Pídele al agente que use sus herramientas de Box.",
   "da66023072c473d1": [
     "No se pudo cargar la salida: ",
     {
@@ -9096,10 +9096,10 @@
   "9ebced15e0d0b234": "Ruta de CLAUDE_CONFIG_DIR",
   "178f36194b25e76d": "Compactar automáticamente tras",
   "df5cc2ff88833f21": "Compactar hilos inactivos",
-  "b5fa42d9412ab917": "Template Box",
-  "04c91643c3c24bb8": "Template default",
-  "13c467f9d514b497": "Box size",
-  "b2ac3183408cf717": "Medium",
+  "b5fa42d9412ab917": "Box de plantilla",
+  "04c91643c3c24bb8": "Valor predeterminado de la plantilla",
+  "13c467f9d514b497": "Tamaño de Box",
+  "b2ac3183408cf717": "Mediano",
   "bf26888594faef31": "Proyecto de GCP",
   "14153cce2115641e": "Ubicación de GCP",
   "895bcb7433b4b6d0": "Fuente ACP",
