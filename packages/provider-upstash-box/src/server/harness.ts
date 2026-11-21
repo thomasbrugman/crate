@@ -63,6 +63,10 @@ let finished = false;
 let stderrTail = '';
 const announcedTools = new Set();
 
+function exitAfterFlush(code) {
+	process.stdout.write('', () => process.exit(code));
+}
+
 function finish(event, data) {
 	if (finished) return;
 	finished = true;
@@ -147,7 +151,7 @@ child.stderr.on('data', (chunk) => {
 
 child.on('error', (err) => {
 	finish('error', { error: \`failed to start command-code: \${err.message}\` });
-	process.exit(1);
+	exitAfterFlush(1);
 });
 
 child.on('close', (code) => {
@@ -169,6 +173,6 @@ child.on('close', (code) => {
 			});
 		}
 	}
-	process.exit(code === 0 ? 0 : 1);
+	exitAfterFlush(code === 0 ? 0 : 1);
 });
 `;
