@@ -1,6 +1,6 @@
 import type { OrchestrationV2HistoricalMessage } from "@t3tools/contracts";
 import {
-  BoxSize,
+  UpstashBoxSize,
   ChatAttachment,
   CheckpointId,
   MessageId,
@@ -51,7 +51,7 @@ export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   cwd: Schema.NullOr(Schema.String),
   repositoryUrl: Schema.optional(Schema.String),
-  boxSize: Schema.optionalKey(BoxSize),
+  boxSize: Schema.optionalKey(UpstashBoxSize),
   approvalPolicy: Schema.optional(Schema.Unknown),
   sandboxPolicy: Schema.optional(Schema.Unknown),
   /**

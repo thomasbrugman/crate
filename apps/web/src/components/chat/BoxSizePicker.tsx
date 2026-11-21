@@ -1,15 +1,11 @@
-import { BoxSize } from "@t3tools/contracts";
-import { getProviderClient } from "@t3tools/client-runtime/provider-clients";
+import { UpstashBoxSize } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { useGT, useMessages } from "gt-react";
 import { BoxIcon, ChevronDownIcon } from "lucide-react";
 
 import { type DraftId, useComposerDraftStore } from "../../composerDraftStore";
 import { ComposerContextLabel } from "../ComposerContextLabel";
-import {
-  deriveProviderSettingsFields,
-  readProviderConfigString,
-} from "../settings/ProviderSettingsForm";
+import { UPSTASH_BOX_SIZE_LABELS } from "../settings/UpstashBoxEnvironmentSettings";
 import {
   Menu,
   MenuPopup,
@@ -21,28 +17,18 @@ import {
 import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { useComposerMenuProps } from "./composerEventScope";
 
-const isBoxSize = Schema.is(BoxSize);
-const upstashBoxClient = getProviderClient("upstashBox");
+const isBoxSize = Schema.is(UpstashBoxSize);
 
 export function BoxSizePicker(props: {
   draftId: DraftId;
-  providerConfig: unknown;
+  defaultSize: UpstashBoxSize;
   disabled: boolean;
 }) {
   const gt = useGT();
   const m = useMessages();
   const menuProps = useComposerMenuProps();
   const boxSize = useComposerDraftStore((store) => store.getComposerDraft(props.draftId)?.boxSize);
-  const sizeField =
-    upstashBoxClient &&
-    deriveProviderSettingsFields(upstashBoxClient, undefined, m).find(({ key }) => key === "size");
-  const options = sizeField?.options;
-  if (!options) return null;
-  const size = boxSize ?? readProviderConfigString(props.providerConfig, "size");
-  const sizeLabel =
-    options.find((option) => option.value === size)?.label ??
-    sizeField.placeholder ??
-    sizeField.label;
+  const sizeLabel = m(UPSTASH_BOX_SIZE_LABELS[boxSize ?? props.defaultSize]);
   return (
     <Menu>
       <MenuTrigger
@@ -70,14 +56,14 @@ export function BoxSizePicker(props: {
         >
           <MenuRadioItem value="default" closeOnClick>
             <span className="flex items-center justify-between gap-3">
-              {gt("Provider default")}
+              {gt("Use default")}
               <MenuRadioItemIndicator />
             </span>
           </MenuRadioItem>
-          {options.map(({ value, label }) => (
-            <MenuRadioItem key={value} value={value} closeOnClick>
+          {UpstashBoxSize.literals.map((size) => (
+            <MenuRadioItem key={size} value={size} closeOnClick>
               <span className="flex items-center justify-between gap-3">
-                {label}
+                {m(UPSTASH_BOX_SIZE_LABELS[size])}
                 <MenuRadioItemIndicator />
               </span>
             </MenuRadioItem>

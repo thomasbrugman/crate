@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useGT, useMessages } from "gt-react";
@@ -1687,7 +1688,7 @@ export default function ChatView(props: ChatViewProps) {
     turnDiffSummaries.at(-1)?.completedAt ?? null,
   );
 
-  const cloudThread = activeProviderStatus?.driver === "upstashBox";
+  const cloudThread = isUpstashBoxDriver(activeProviderStatus?.driver);
   const projectScriptsAvailable = false;
   const gitStatusCwd = cloudThread ? null : (activeThread?.worktreePath ?? gitCwd);
   const gitStatusAtom =
@@ -3914,12 +3915,7 @@ export default function ChatView(props: ChatViewProps) {
                                     boxSizeDraftId === null ? null : (
                                       <BoxSizePicker
                                         draftId={boxSizeDraftId}
-                                        providerConfig={
-                                          activeProviderInstanceId === null
-                                            ? undefined
-                                            : settings.providerInstances[activeProviderInstanceId]
-                                                ?.config
-                                        }
+                                        defaultSize={settings.upstashBox.size}
                                         disabled={isSendBusy}
                                       />
                                     )

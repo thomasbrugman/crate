@@ -1,5 +1,6 @@
 import { msg } from "gt-react";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { m } from "~/i18n/messages";
 import { isClearComposerCommand, parseSideChatCommand } from "@t3tools/shared/composerTrigger";
 import { armFreshSession, disarmFreshSession, readFreshSessionArm } from "./freshSessionArms";
@@ -769,7 +770,7 @@ export function useComposerSend(input: ComposerSendInput) {
       selectedModelSelection: ctxSelectedModelSelection,
     } = sendCtx;
     const boxSize =
-      isLocalDraftThread && ctxSelectedProvider === "upstashBox"
+      isLocalDraftThread && isUpstashBoxDriver(ctxSelectedProvider)
         ? useComposerDraftStore.getState().getComposerDraft(composerDraftTarget)?.boxSize
         : undefined;
     const { images: composerImages, previewAnnotations: composerPreviewAnnotations } =

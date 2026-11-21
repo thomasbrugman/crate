@@ -9,7 +9,7 @@ import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationV2CheckpointUnavailableError,
   WS_METHODS,
-  type BoxSize,
+  type UpstashBoxSize,
   type ChatAttachment,
   MessageId,
   type ModelSelection,
@@ -165,7 +165,7 @@ interface StartThreadBootstrap {
     readonly projectId: ProjectId;
     readonly title: string;
     readonly modelSelection: ModelSelection;
-    readonly boxSize?: BoxSize;
+    readonly boxSize?: UpstashBoxSize;
     readonly runtimeMode: RuntimeMode;
     readonly interactionMode: ProviderInteractionMode;
     readonly branch: string | null;

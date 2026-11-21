@@ -740,7 +740,7 @@ function layerTest(input: {
     }).pipe(
       Effect.map((adapter) =>
         ProviderAdapterRegistry.layerSingle(
-          input.cloud ? { ...adapter, driver: ProviderDriverKind.make("upstashBox") } : adapter,
+          input.cloud ? { ...adapter, driver: ProviderDriverKind.make("boxCommandCode") } : adapter,
         ),
       ),
     ),

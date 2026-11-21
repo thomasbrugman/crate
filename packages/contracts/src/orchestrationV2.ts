@@ -88,6 +88,7 @@ import {
   ToolActivitySource,
 } from "./providerRuntime.ts";
 import { ThreadTokenUsageSnapshot } from "./providerRuntime.ts";
+import { UpstashBoxSize } from "./settings.ts";
 
 export const OrchestrationV2Actor = Schema.Literals(["user", "agent", "system"]);
 export type OrchestrationV2Actor = typeof OrchestrationV2Actor.Type;
@@ -469,9 +470,6 @@ const OrchestrationV2LastTitleRegeneration = Schema.Struct({
   completedAt: Schema.DateTimeUtc,
 });
 
-export const BoxSize = Schema.Literals(["small", "medium", "large"]);
-export type BoxSize = typeof BoxSize.Type;
-
 export const OrchestrationV2AppThread = Schema.Struct({
   ...OrchestrationV2CreationFields,
   id: ThreadId,
@@ -479,7 +477,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   title: TrimmedNonEmptyString,
   providerInstanceId: ProviderInstanceId,
   modelSelection: ModelSelection,
-  boxSize: Schema.optionalKey(BoxSize),
+  boxSize: Schema.optionalKey(UpstashBoxSize),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(TrimmedNonEmptyString),
@@ -3146,7 +3144,7 @@ export const OrchestrationV2Command = Schema.Union([
     projectId: ProjectId,
     title: TrimmedNonEmptyString,
     modelSelection: ModelSelection,
-    boxSize: Schema.optionalKey(BoxSize),
+    boxSize: Schema.optionalKey(UpstashBoxSize),
     runtimeMode: RuntimeMode,
     interactionMode: ProviderInteractionMode,
     branch: Schema.NullOr(TrimmedNonEmptyString),
@@ -3972,7 +3970,7 @@ export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
   title: TrimmedNonEmptyString,
   generateTitle: Schema.optional(Schema.Boolean),
   modelSelection: ModelSelection,
-  boxSize: Schema.optionalKey(BoxSize),
+  boxSize: Schema.optionalKey(UpstashBoxSize),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy,

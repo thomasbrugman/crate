@@ -112,13 +112,11 @@ const PACKAGE_FIELD_TEXT: ReadonlyMap<string, string> = new Map([
   ["Compact idle threads", msg("Compact idle threads")],
   ["Sign-in method", msg("Sign-in method")],
   ["API key", msg("API key")],
-  ["Template Box", msg("Template Box")],
-  ["Model", msg("Model")],
-  ["Template default", msg("Template default")],
-  ["Box size", msg("Box size")],
-  ["Small", msg("Small")],
-  ["Medium", msg("Medium")],
-  ["Large", msg("Large")],
+  ["Model API key", msg("Model API key")],
+  [
+    "Leave empty to use the key stored in the Upstash console.",
+    msg("Leave empty to use the key stored in the Upstash console."),
+  ],
   ["GCP project", msg("GCP project")],
   ["GCP location", msg("GCP location")],
   ["ACP source", msg("ACP source")],
@@ -471,7 +469,7 @@ function ProviderCommandArguments({
   );
 }
 
-export function readProviderConfigString(config: unknown, key: string): string {
+function readProviderConfigString(config: unknown, key: string): string {
   if (config === null || typeof config !== "object") return "";
   const value = (config as Record<string, unknown>)[key];
   return typeof value === "string" ? value : "";

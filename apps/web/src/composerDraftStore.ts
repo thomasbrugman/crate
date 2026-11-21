@@ -5,7 +5,7 @@ import {
 } from "./components/chat/composerAttachmentFiles";
 import { elementContextToPreviewAnnotation } from "./lib/elementContext";
 import {
-  BoxSize,
+  UpstashBoxSize,
   ResponseContextRecord,
   ElementContextDetails,
   DEFAULT_MODEL,
@@ -352,10 +352,10 @@ const PersistedComposerThreadDraftState = Schema.Struct({
   modelSelectionExplicit: Schema.optionalKey(Schema.Boolean),
   runtimeMode: Schema.optionalKey(RuntimeMode),
   interactionMode: Schema.optionalKey(ProviderInteractionMode),
-  boxSize: Schema.optionalKey(BoxSize),
+  boxSize: Schema.optionalKey(UpstashBoxSize),
 });
 type PersistedComposerThreadDraftState = typeof PersistedComposerThreadDraftState.Type;
-const isBoxSize = Schema.is(BoxSize);
+const isBoxSize = Schema.is(UpstashBoxSize);
 
 type ProviderOptionSelectionsByProvider = Partial<
   Record<string, ReadonlyArray<ProviderOptionSelection>>
@@ -483,7 +483,7 @@ export interface ComposerThreadDraftState {
   modelSelectionExplicit?: boolean;
   runtimeMode: RuntimeMode | null;
   interactionMode: ProviderInteractionMode | null;
-  boxSize?: BoxSize;
+  boxSize?: UpstashBoxSize;
 }
 
 export function composerDraftHasUserContent(
@@ -671,7 +671,7 @@ interface ComposerDraftStoreState {
     threadRef: ComposerThreadTarget,
     interactionMode: ProviderInteractionMode | null | undefined,
   ) => void;
-  setBoxSize: (draftId: DraftId, boxSize: BoxSize | undefined) => void;
+  setBoxSize: (draftId: DraftId, boxSize: UpstashBoxSize | undefined) => void;
   addImage: (threadRef: ComposerThreadTarget, image: ComposerImageAttachment) => boolean;
   addImages: (
     threadRef: ComposerThreadTarget,
