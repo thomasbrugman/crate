@@ -71,6 +71,54 @@ const layerTest = GitVcsDriver.layer.pipe(
   Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
+it.effect(
+  "preserves explicit no-deadline Box Git commands while bounding default and numeric timeouts",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        for (const timeoutMs of [undefined, 1_000, null]) {
+          const entered = yield* Deferred.make<void>();
+          const release = yield* Deferred.make<void>();
+          const fake = BoxExec.BoxExec.of({
+            run: () =>
+              Effect.gen(function* () {
+                yield* Deferred.succeed(entered, undefined);
+                yield* Deferred.await(release);
+                return { exitCode: 0, stdout: "pushed", stderr: "" };
+              }),
+          });
+          yield* Effect.gen(function* () {
+            const driver = yield* makeGitVcsDriverCore();
+            const running = yield* driver
+              .execute({
+                operation: "GitVcsDriver.test.push",
+                cwd: "/workspace",
+                args: ["push"],
+                timeoutMs,
+              })
+              .pipe(Effect.forkChild);
+            yield* Deferred.await(entered);
+            yield* TestClock.adjust("31 seconds");
+            if (timeoutMs === null) {
+              assert.isUndefined(running.pollUnsafe());
+              yield* Deferred.succeed(release, undefined);
+              assert.equal((yield* Fiber.join(running)).stdout, "pushed");
+            } else {
+              assert.isTrue(Exit.isFailure(yield* Effect.exit(Fiber.join(running))));
+            }
+          }).pipe(
+            Effect.provideService(VcsThreadTarget.VcsThreadTarget, {
+              threadId: ThreadId.make("box-timeout"),
+              projectRoot: "/workspace",
+              checkoutRoot: "/workspace/home/repo",
+            }),
+            Effect.provideService(BoxExec.BoxExec, fake),
+          );
+        }
+      }),
+    ).pipe(Effect.provide(layerTest)),
+);
+
 it.effect("prepares and partially commits in Box without host filesystem or process access", () =>
   Effect.gen(function* () {
     const cwd = yield* makeTmpDir();

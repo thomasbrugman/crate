@@ -1051,7 +1051,7 @@ const makeCore = Effect.fn("makeGitVcsDriverCore")(function* () {
           ...input,
           command: "git",
           allowNonZeroExit: true,
-          timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          timeoutMs: input.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : input.timeoutMs,
         }).pipe(
           Effect.mapError(
             (cause) =>
