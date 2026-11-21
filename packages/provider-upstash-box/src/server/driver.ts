@@ -37,7 +37,10 @@ import { boxHarnessModels } from "./models.ts";
 
 const MODEL_VENDORS = { claudeCode: "Anthropic", codex: "OpenAI" } as const;
 
-/** Whether a Claude Code or Codex Box can start an agent run with the key it would be given. */
+/**
+ * Whether a Claude Code or Codex Box can start an agent run with the key it would be given.
+ * Only a rejected key blocks the provider; the Box key itself already authenticated.
+ */
 const probeModelKey = Effect.fn("UpstashBox.probeModelKey")(function* (
   harness: ManagedAgentHarness,
   agentApiKey: string,
@@ -46,7 +49,7 @@ const probeModelKey = Effect.fn("UpstashBox.probeModelKey")(function* (
   if (!agentApiKey)
     return {
       status: "warning",
-      auth: { status: "unknown" },
+      auth: { status: "authenticated" },
       message: `Runs with the ${vendor} key saved in your Upstash account, which can't be checked from here. Set a model API key in this provider's settings if turns fail.`,
     } as const;
   const api = yield* BoxApi;
@@ -66,13 +69,13 @@ const probeModelKey = Effect.fn("UpstashBox.probeModelKey")(function* (
               } as const)
             : ({
                 status: "warning",
-                auth: { status: "unknown" },
+                auth: { status: "authenticated" },
                 message: `Could not verify the model API key with ${vendor}.`,
               } as const),
       onFailure: () =>
         ({
           status: "warning",
-          auth: { status: "unknown" },
+          auth: { status: "authenticated" },
           message: `Could not verify the model API key with ${vendor}.`,
         }) as const,
     }),

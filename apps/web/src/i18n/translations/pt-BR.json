@@ -3252,6 +3252,7 @@
   "e8e73f3ce06abbce": "Verifique se o ambiente dela está conectado e atualizado e tente novamente.",
   "6b45252b76f5ca2e": "Não foi possível adicionar a thread",
   "da13069e7a3a8ffd": "Expandir o editor de mensagens",
+  "2242587c6b44cce0": "Inicie uma nova thread para continuar",
   "d3356b4524173b25": "Ative um provedor nas Configurações",
   "3d3f30f1a1c4fc52": "Pergunte qualquer coisa...",
   "305d6d72f1220d98": "Procurando o pull request...",
@@ -3265,6 +3266,7 @@
   "9a3db19d3e12dea6": "Digite sua resposta",
   "ea8fec0f7052e43e": "Digite sua própria resposta ou deixe em branco para usar a opção selecionada",
   "56d9080d3ab28e39": "Escolha um projeto acima para iniciar uma thread",
+  "bbc21d1967578281": "O provedor desta thread não está mais disponível. Inicie uma nova thread para continuar.",
   "6d66186eedd8009b": "Ative um provedor nas Configurações para enviar uma mensagem",
   "977ead973131917d": "Transcrição ao vivo",
   "412187d16dc11adf": [
@@ -3391,6 +3393,7 @@
   "061c0c9f27104d23": "Nenhuma skill encontrada. Use / para ver os comandos do provedor.",
   "0a6fbecab03f7ef3": "Nenhum arquivo ou pasta correspondente.",
   "0e7b21ab11721ca7": "Nenhum comando correspondente.",
+  "754d11d1f210a398": "Iniciar nova thread",
   "2029db2cc30beb6d": "Abrir configurações do provedor",
   "517cfb8f24123f5b": "Nenhum provedor disponível",
   "7ff1a0ef1490668d": "A API da área de transferência não está disponível ao copiar o ID da thread de feedback do Codex.",

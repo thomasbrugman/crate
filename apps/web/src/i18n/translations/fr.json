@@ -3252,6 +3252,7 @@
   "e8e73f3ce06abbce": "Vérifiez que son environnement est connecté et à jour, puis réessayez.",
   "6b45252b76f5ca2e": "Impossible d’ajouter le fil",
   "da13069e7a3a8ffd": "Agrandir la zone de saisie",
+  "2242587c6b44cce0": "Démarrez un nouveau fil pour continuer",
   "d3356b4524173b25": "Activez un fournisseur dans les Paramètres",
   "3d3f30f1a1c4fc52": "Demandez ce que vous voulez...",
   "305d6d72f1220d98": "Recherche de la pull request...",
@@ -3265,6 +3266,7 @@
   "9a3db19d3e12dea6": "Saisissez votre réponse",
   "ea8fec0f7052e43e": "Saisissez votre propre réponse, ou laissez vide pour utiliser l’option sélectionnée",
   "56d9080d3ab28e39": "Choisissez un projet ci-dessus pour démarrer un fil",
+  "bbc21d1967578281": "Le fournisseur de ce fil n'est plus disponible. Démarrez un nouveau fil pour continuer.",
   "6d66186eedd8009b": "Activez un fournisseur dans les Paramètres pour envoyer un message",
   "977ead973131917d": "Transcription en direct",
   "412187d16dc11adf": [
@@ -3391,6 +3393,7 @@
   "061c0c9f27104d23": "Aucun skill trouvé. Essayez / pour parcourir les commandes du fournisseur.",
   "0a6fbecab03f7ef3": "Aucun fichier ni dossier correspondant.",
   "0e7b21ab11721ca7": "Aucune commande correspondante.",
+  "754d11d1f210a398": "Démarrer un nouveau fil",
   "2029db2cc30beb6d": "Ouvrir les paramètres des fournisseurs",
   "517cfb8f24123f5b": "Aucun fournisseur disponible",
   "7ff1a0ef1490668d": "L’API Presse-papiers n’est pas disponible pour copier l’ID du fil de feedback Codex.",

@@ -3252,6 +3252,7 @@
   "e8e73f3ce06abbce": "Check that its environment is connected and up to date, then try again.",
   "6b45252b76f5ca2e": "Unable to add thread",
   "da13069e7a3a8ffd": "Expand composer",
+  "2242587c6b44cce0": "Start a new thread to continue",
   "d3356b4524173b25": "Enable a provider in Settings",
   "3d3f30f1a1c4fc52": "Ask anything...",
   "305d6d72f1220d98": "Finding pull request...",
@@ -3265,6 +3266,7 @@
   "9a3db19d3e12dea6": "Type your answer",
   "ea8fec0f7052e43e": "Type your own answer, or leave this blank to use the selected option",
   "56d9080d3ab28e39": "Choose a project above to start a thread",
+  "bbc21d1967578281": "This thread's provider is no longer available. Start a new thread to continue.",
   "6d66186eedd8009b": "Enable a provider in Settings to send a message",
   "977ead973131917d": "Live transcription",
   "412187d16dc11adf": [
@@ -3391,6 +3393,7 @@
   "061c0c9f27104d23": "No skills found. Try / to browse provider commands.",
   "0a6fbecab03f7ef3": "No matching files or folders.",
   "0e7b21ab11721ca7": "No matching command.",
+  "754d11d1f210a398": "Start a new thread",
   "2029db2cc30beb6d": "Open provider settings",
   "517cfb8f24123f5b": "No provider available",
   "7ff1a0ef1490668d": "Clipboard API is unavailable while copying Codex feedback thread ID.",

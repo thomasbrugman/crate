@@ -53,7 +53,11 @@ import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime
 import * as Schema from "effect/Schema";
 import { formatComposerModelMention } from "@t3tools/client-runtime/composer-model-mentions";
 import { isPasteAsTextShortcut } from "@t3tools/client-runtime/text-paste";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  scopedThreadKey,
+  scopeProjectRef,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { type FolderDropTarget, folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { splitTransferredFiles } from "./workspaceFileDrop";
@@ -268,6 +272,7 @@ import {
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
+import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { Kbd } from "../ui/kbd";
 import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
@@ -925,6 +930,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ? providerInstanceEntries.find((entry) => hasProviderSetup(entry.snapshot))?.instanceId
         : undefined))
     : undefined;
+  // A started thread whose provider this build can't run (a removed driver) only goes on in a new one.
+  const threadProviderRetired =
+    showProviderUnavailable &&
+    threadHasStarted(activeThread) &&
+    providerInstanceEntries.some(
+      (entry) => entry.instanceId === unavailableProviderInstanceId && !entry.isAvailable,
+    );
+  const handleNewThread = useNewThreadHandler();
+  const startNewThread = useStableCallback(() => {
+    if (activeProjectId) void handleNewThread(scopeProjectRef(environmentId, activeProjectId));
+  });
   // Called before the derivation below: a hook between it and its uses stops React Compiler
   // from caching the mode options, and the footer then re-renders on every keystroke.
   const managedPolicy = useManagedPolicy(environmentId);
@@ -2530,6 +2546,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       showProviderUnavailable={showProviderUnavailable}
       providerSetupInstanceId={providerSetupInstanceId}
       onOpenProviderSetup={onOpenProviderSetup}
+      onStartNewThread={threadProviderRetired && activeProjectId ? startNewThread : undefined}
       providerCatalogPending={providerCatalogPending}
       isSendBusy={isSendBusy}
       multipleModelsEnabled={routeKind === "draft" && supportsMultipleModels}
@@ -3549,6 +3566,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       contextRecords={composerContextRecords}
                       theme={resolvedTheme}
                     />
+                  ) : threadProviderRetired ? (
+                    gt("Start a new thread to continue")
                   ) : showProviderUnavailable ? (
                     gt("Enable a provider in Settings")
                   ) : (
@@ -3740,9 +3759,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 )
                           : projectSelectionRequired
                             ? gt("Choose a project above to start a thread")
-                            : showProviderUnavailable
-                              ? gt("Enable a provider in Settings to send a message")
-                              : (offeredPromptSuggestion ?? m(DEFAULT_COMPOSER_PLACEHOLDER))
+                            : threadProviderRetired
+                              ? gt(
+                                  "This thread's provider is no longer available. Start a new thread to continue.",
+                                )
+                              : showProviderUnavailable
+                                ? gt("Enable a provider in Settings to send a message")
+                                : (offeredPromptSuggestion ?? m(DEFAULT_COMPOSER_PLACEHOLDER))
                     }
                     placeholderSuffix={
                       offeredPromptSuggestion !== null ? (

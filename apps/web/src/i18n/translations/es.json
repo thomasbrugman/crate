@@ -3252,6 +3252,7 @@
   "e8e73f3ce06abbce": "Comprueba que su entorno está conectado y actualizado, y vuelve a intentarlo.",
   "6b45252b76f5ca2e": "No se puede añadir el hilo",
   "da13069e7a3a8ffd": "Expandir el cuadro de mensaje",
+  "2242587c6b44cce0": "Inicia un hilo nuevo para continuar",
   "d3356b4524173b25": "Activa un proveedor en Ajustes",
   "3d3f30f1a1c4fc52": "Pregunta lo que quieras...",
   "305d6d72f1220d98": "Buscando la pull request...",
@@ -3265,6 +3266,7 @@
   "9a3db19d3e12dea6": "Escribe tu respuesta",
   "ea8fec0f7052e43e": "Escribe tu propia respuesta o déjalo en blanco para usar la opción seleccionada",
   "56d9080d3ab28e39": "Elige un proyecto arriba para iniciar un hilo",
+  "bbc21d1967578281": "El proveedor de este hilo ya no está disponible. Inicia un hilo nuevo para continuar.",
   "6d66186eedd8009b": "Activa un proveedor en Ajustes para enviar un mensaje",
   "977ead973131917d": "Transcripción en directo",
   "412187d16dc11adf": [
@@ -3391,6 +3393,7 @@
   "061c0c9f27104d23": "No se encontraron skills. Prueba con / para explorar los comandos del proveedor.",
   "0a6fbecab03f7ef3": "No hay archivos ni carpetas que coincidan.",
   "0e7b21ab11721ca7": "Ningún comando coincide.",
+  "754d11d1f210a398": "Iniciar un hilo nuevo",
   "2029db2cc30beb6d": "Abrir ajustes del proveedor",
   "517cfb8f24123f5b": "No hay ningún proveedor disponible",
   "7ff1a0ef1490668d": "La API del portapapeles no está disponible al copiar el ID del hilo de comentarios de Codex.",

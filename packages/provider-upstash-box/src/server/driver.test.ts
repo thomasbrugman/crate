@@ -21,11 +21,11 @@ it.effect("reports whether the Box key and the harness's model key can start a r
         "unauthenticated",
       ],
       ["key", new Error("private network error"), "commandCode", "", null, "error", "unknown"],
-      ["key", null, "claudeCode", "", null, "warning", "unknown"],
+      ["key", null, "claudeCode", "", null, "warning", "authenticated"],
       ["key", null, "codex", "sk", 200, "ready", "authenticated"],
       ["key", null, "claudeCode", "sk", 401, "error", "unauthenticated"],
-      ["key", null, "codex", "sk", 500, "warning", "unknown"],
-      ["key", null, "codex", "sk", new Error("private network error"), "warning", "unknown"],
+      ["key", null, "codex", "sk", 500, "warning", "authenticated"],
+      ["key", null, "codex", "sk", new Error("private network error"), "warning", "authenticated"],
     ] as const) {
       let boxProbes = 0;
       let modelProbes = 0;

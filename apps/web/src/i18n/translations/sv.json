@@ -3252,6 +3252,7 @@
   "e8e73f3ce06abbce": "Kontrollera att dess miljö är ansluten och uppdaterad och försök sedan igen.",
   "6b45252b76f5ca2e": "Det gick inte att lägga till tråden",
   "da13069e7a3a8ffd": "Expandera inmatningsfältet",
+  "2242587c6b44cce0": "Starta en ny tråd för att fortsätta",
   "d3356b4524173b25": "Aktivera en leverantör i Inställningar",
   "3d3f30f1a1c4fc52": "Fråga vad som helst...",
   "305d6d72f1220d98": "Hittar pull request...",
@@ -3265,6 +3266,7 @@
   "9a3db19d3e12dea6": "Skriv ditt svar",
   "ea8fec0f7052e43e": "Skriv ditt eget svar eller lämna tomt för att använda det valda alternativet",
   "56d9080d3ab28e39": "Välj ett projekt ovan för att starta en tråd",
+  "bbc21d1967578281": "Den här trådens leverantör är inte längre tillgänglig. Starta en ny tråd för att fortsätta.",
   "6d66186eedd8009b": "Aktivera en leverantör i Inställningar för att skicka ett meddelande",
   "977ead973131917d": "Live-transkribering",
   "412187d16dc11adf": [
@@ -3391,6 +3393,7 @@
   "061c0c9f27104d23": "Inga färdigheter hittades. Prova / för att bläddra bland leverantörens kommandon.",
   "0a6fbecab03f7ef3": "Inga matchande filer eller mappar.",
   "0e7b21ab11721ca7": "Inget matchande kommando.",
+  "754d11d1f210a398": "Starta en ny tråd",
   "2029db2cc30beb6d": "Öppna leverantörsinställningar",
   "517cfb8f24123f5b": "Ingen leverantör tillgänglig",
   "7ff1a0ef1490668d": "Urklipps-API:t är inte tillgängligt vid kopiering av tråd-ID:t för Codex-feedback.",
