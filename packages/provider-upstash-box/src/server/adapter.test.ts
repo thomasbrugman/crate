@@ -15,7 +15,7 @@ import {
   ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
 } from "@t3tools/provider-core/server/ProviderAdapter";
-import type { Chunk } from "@upstash/box";
+import { BoxError, type Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -39,8 +39,12 @@ const finish: Chunk = {
   sessionId: "cc-session",
 };
 
-const setup = Effect.fn("test.setupBox")(function* (stream: BoxStream) {
+const setup = Effect.fn("test.setupBox")(function* (
+  stream: BoxStream,
+  deleteBox?: () => Promise<void>,
+) {
   const prompts: string[] = [];
+  const lookup: { error?: unknown } = {};
   const box: BoxHandle = {
     id: "box-123",
     agent: {
@@ -51,7 +55,7 @@ const setup = Effect.fn("test.setupBox")(function* (stream: BoxStream) {
     },
     exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
     files: { write: async () => undefined },
-    delete: async () => undefined,
+    delete: deleteBox ?? (async () => undefined),
   };
   const adapter = yield* makeUpstashBoxAdapter(instanceId, {
     apiKey: "test-key",
@@ -61,7 +65,10 @@ const setup = Effect.fn("test.setupBox")(function* (stream: BoxStream) {
   }).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
-      get: async () => box,
+      get: async () => {
+        if (lookup.error) throw lookup.error;
+        return box;
+      },
       create: async () => box,
       list: async () => [],
     }),
@@ -115,8 +122,35 @@ const setup = Effect.fn("test.setupBox")(function* (stream: BoxStream) {
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn, prompts };
+  return { runtime, turn, prompts, adapter, lookup };
 });
+
+it.effect(
+  "deletes native Boxes, tolerates missing identities and Boxes, and sanitizes failures",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        let deleted = 0;
+        const { adapter, turn, lookup } = yield* setup(fakeStream([]), async () => {
+          deleted++;
+        });
+        yield* adapter.deleteThread!(turn.providerThread);
+        assert.equal(deleted, 1);
+        lookup.error = new BoxError("private upstream body", 404);
+        yield* adapter.deleteThread!(turn.providerThread);
+        assert.equal(deleted, 1);
+        lookup.error = new Error("private upstream body");
+        const error = yield* adapter.deleteThread!(turn.providerThread).pipe(Effect.flip);
+        assert.equal(error._tag, "ProviderAdapterProtocolError");
+        assert.notInclude(JSON.stringify(error), "private upstream body");
+        yield* adapter.deleteThread!({
+          ...turn.providerThread,
+          nativeThreadRef: null,
+          appThreadId: null,
+        });
+      }),
+    ),
+);
 
 function fakeStream(chunks: ReadonlyArray<Chunk>, error = false): BoxStream {
   return {

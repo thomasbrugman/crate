@@ -1,4 +1,4 @@
-import { ThreadId } from "@t3tools/contracts";
+import { ThreadId, type OrchestrationV2ProviderThread } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -12,6 +12,59 @@ import * as DeviceService from "../device/DeviceService.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
+import * as ProjectionStore from "./ProjectionStore.ts";
+import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
+
+export const cleanupBoxThreads = Effect.fn("ResourceCleanupService.cleanupBoxThreads")(
+  function* (input: {
+    readonly threadId: ThreadId;
+    readonly deleted: boolean;
+    readonly providerThreads: ReadonlyArray<OrchestrationV2ProviderThread>;
+  }) {
+    if (!input.deleted) return;
+    const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    for (const thread of input.providerThreads) {
+      if (thread.driver !== "upstashBox") continue;
+      yield* Effect.gen(function* () {
+        const adapter = yield* adapters.get(thread.providerInstanceId);
+        yield* adapter.deleteThread?.(thread) ?? Effect.void;
+      }).pipe(
+        Effect.catchCause(() =>
+          Effect.logWarning("Could not delete a thread Box.", { threadId: input.threadId }),
+        ),
+      );
+    }
+  },
+);
+
+class BoxCleanup extends Context.Reference<(threadId: ThreadId) => Effect.Effect<void>>(
+  "t3/orchestration-v2/BoxCleanup",
+  { defaultValue: () => () => Effect.void },
+) {}
+
+export const layerBoxCleanup = Layer.effect(
+  BoxCleanup,
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const cleanup = Effect.fn("ResourceCleanupService.cleanupBoxes")(function* (
+      threadId: ThreadId,
+    ) {
+      const records = yield* projections.getThreadRecords(threadId, ["providerThreads"]);
+      yield* cleanupBoxThreads({
+        threadId,
+        deleted: records.thread.deletedAt !== null,
+        providerThreads: records.providerThreads,
+      }).pipe(Effect.provideService(ProviderAdapterRegistry.ProviderAdapterRegistryV2, adapters));
+    });
+    return (threadId: ThreadId) =>
+      cleanup(threadId).pipe(
+        Effect.catchCause(() =>
+          Effect.logWarning("Could not load thread Boxes for deletion.", { threadId }),
+        ),
+      );
+  }),
+);
 
 export class ResourceCleanupError extends Schema.TaggedError<ResourceCleanupError>()(
   "ResourceCleanupError",
@@ -51,18 +104,17 @@ export const layer = Layer.effect(
     const fileSystem = yield* FileSystem.FileSystem;
     const config = yield* ServerConfig.ServerConfig;
     const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
+    const cleanupBoxes = yield* BoxCleanup;
     return {
       cleanupScheduledTasks: Effect.fn("ResourceCleanupService.cleanupScheduledTasks")(function (
         threadId: ThreadId,
       ) {
-        return scheduledTasks
-          .deleteForThread(threadId)
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new ResourceCleanupError({ operation: "scheduled-tasks", threadId, cause }),
-            ),
-          );
+        return scheduledTasks.deleteForThread(threadId).pipe(
+          Effect.ensuring(cleanupBoxes(threadId)),
+          Effect.mapError(
+            (cause) => new ResourceCleanupError({ operation: "scheduled-tasks", threadId, cause }),
+          ),
+        );
       }),
       cleanupTerminals: Effect.fn("ResourceCleanupService.cleanupTerminals")(function (
         threadId: string,

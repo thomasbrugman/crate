@@ -37,6 +37,26 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   return Adapter.ProviderAdapterV2.of({
     instanceId,
     driver,
+    deleteThread: Effect.fn("UpstashBox.deleteThread")(function* (thread) {
+      const nativeId =
+        thread.nativeThreadRef?.nativeId ??
+        (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
+      if (!nativeId) return;
+      yield* Effect.tryPromise({
+        try: async () => {
+          try {
+            await (await api.get(nativeId, config.apiKey)).delete();
+          } catch (error) {
+            if (!isMissingBox(error)) throw error;
+          }
+        },
+        catch: () =>
+          new Adapter.ProviderAdapterProtocolError({
+            driver,
+            detail: "Could not delete the thread Box.",
+          }),
+      });
+    }),
     getCapabilities: Effect.fn("UpstashBox.getCapabilities")(() => Effect.succeed(capabilities)),
     planSelectionTransition: Effect.fn("UpstashBox.planSelectionTransition")((input) =>
       Effect.succeed(
@@ -87,7 +107,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             return yield* runtime.resumeThread({ providerThread: request.existingProviderThread });
           // Hex encoding is injective, shell-safe, and stable across server restarts.
           const name = `t3-${Buffer.from(request.threadId).toString("hex")}`;
-          const box = yield* ensureBox(config, name).pipe(
+          const box = yield* ensureBox(config, name, request.runtimePolicy.repositoryUrl).pipe(
             Effect.provideService(BoxApi, api),
             Effect.mapError(
               () =>

@@ -51,6 +51,7 @@ export function boxConfig(input: {
   name: string;
   size: BoxConfig["size"];
   model: string;
+  repositoryUrl?: string;
 }): BoxConfig {
   return {
     apiKey: input.apiKey,
@@ -61,6 +62,7 @@ export function boxConfig(input: {
     labels: ["t3stash"],
     env: {
       BOXJOB_CC_BIN: "/home/boxuser/.local/bin/command-code",
+      BOXJOB_CC_CWD: input.repositoryUrl ? "/workspace/home/repo" : "/workspace/home",
       ...(input.model ? { BOXJOB_CC_MODEL: input.model } : {}),
     },
     agent: {

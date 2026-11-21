@@ -28,12 +28,18 @@ secret settings, never in this repository.
   installs Command Code, and copies auth/config/harness from the configured template.
   Persisted Box IDs resume via `Box.get`; a missing Box is recreated. The Command Code
   session ID from `finish` preserves follow-up conversation continuity. Interruption
-  cancels the stream. Archiving/deleting a T3 thread does **not** delete its Box yet;
-  remove unwanted Boxes in Upstash to reclaim storage.
-- **Workspace:** every agent runs in `/workspace/home`. The existing project directory
-  is retained as a local organizational label, not mounted or uploaded. Add an existing
-  folder in the project picker; ask the agent to clone a repository inside its Box.
-  Project Git URL import is not a cloud clone workflow in this version.
+  cancels the stream. Deleting a thread deletes its Box best-effort after committing
+  the thread deletion; failures log a warning and may require manual cleanup in Upstash.
+  Archiving keeps the Box.
+- **Workspace:** the server reads the project label's Git metadata (including worktree
+  pointers) to find its origin, or first remote. A repository URL label also works.
+  Bootstrap copies `.git-credentials` and `.gitconfig` from the template when present
+  and clones the remote into `/workspace/home/repo`; Command Code starts there using
+  `BOXJOB_CC_CWD`. GitHub SSH-style URLs become HTTPS so template credentials work.
+  Embedded URL credentials are discarded. No host files or uncommitted changes are
+  uploaded. Without a remote, the agent starts in `/workspace/home`. Existing Boxes
+  are not recloned. The project picker still uses existing folders; URL import retains
+  upstream's project creation flow rather than adding a new cloud project UI.
 - **Worktrees and setup:** cloud launches force the root workspace strategy with no host
   branch checkout, worktree creation, or project setup scripts. Worktree restoration and
   checkpoint capture are skipped; checkpoint records are explicitly missing rather
@@ -50,6 +56,8 @@ secret settings, never in this repository.
   the web UI; mobile uses the shared provider registry but has not been visually tested.
   The control-plane server must stay running for orchestration; laptop-off operation
   needs a separately hosted server.
+  Cloud thread titles retain their prompt-derived names without calling a separate
+  text-generation provider; automatic AI title generation is disabled for Box threads.
 
 ## License
 

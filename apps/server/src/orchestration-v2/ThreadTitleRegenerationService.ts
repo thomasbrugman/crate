@@ -155,13 +155,16 @@ const make = Effect.gen(function* () {
     const outcome: Outcome | { readonly status: "stale" } = yield* Effect.gen(function* () {
       const projection = yield* threads.getThreadRecords(
         input.threadId,
-        ["messages"],
+        ["messages", "providerThreads"],
         input.kind.type === "initial"
           ? { messageIds: [input.kind.messageId] }
           : { messageRoles: ["user", "assistant"] },
       );
       if (projection.thread.titleRegeneration?.requestId !== input.requestId) {
         return { status: "stale" as const };
+      }
+      if (projection.providerThreads.some((thread) => thread.driver === "upstashBox")) {
+        return { status: "unchanged" as const };
       }
 
       const project = yield* projects.get(projection.thread.projectId);
