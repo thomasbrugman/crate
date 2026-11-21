@@ -59,7 +59,7 @@ function makeHarness(
 ) {
   const layerDatabase = SqlitePersistence.layerMemory;
   const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
-    options.cloud ? { ...adapter, driver: ProviderDriverKind.make("upstashBox") } : adapter,
+    options.cloud ? { ...adapter, driver: ProviderDriverKind.make("boxCommandCode") } : adapter,
   ]);
   const layerOrchestrator = ProviderReplayHarness.layerWithRegistry(
     { name: "thread-title-regeneration" },
@@ -348,7 +348,9 @@ describe("ThreadTitleRegenerationService", () => {
         const requestId = yield* armRegeneration({ command: "cloud:title-request", threadId });
         yield* titles.execute({ threadId, requestId, kind: { type: "regenerate" } });
         const projection = yield* threads.getThreadProjection(threadId);
-        assert.isTrue(projection.providerThreads.some((thread) => thread.driver === "upstashBox"));
+        assert.isTrue(
+          projection.providerThreads.some((thread) => thread.driver === "boxCommandCode"),
+        );
         assert.equal(harness.generateThreadTitle.mock.calls.length, 0);
         assert.equal(projection.thread.title, "Seed title");
         assert.isNull(projection.thread.titleRegeneration);

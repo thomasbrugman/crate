@@ -125,7 +125,7 @@ it.layer(layerTest)("RuntimePolicyV2", (it) => {
       const now = yield* DateTime.now;
       const resolved = yield* policy.resolve({
         thread: makeThread({ now, worktreePath: "/host/worktree" }),
-        modelSelection: { instanceId: ProviderInstanceId.make("upstashBox"), model: "default" },
+        modelSelection: { instanceId: ProviderInstanceId.make("boxCommandCode"), model: "default" },
       });
       assert.equal(resolved.cwd, "/workspace/home");
     }),

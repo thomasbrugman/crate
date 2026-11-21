@@ -1,52 +1,35 @@
 import {
+  CustomModelSetting,
   makeProviderSettingsSchema,
   secretSetting,
   SettingsSecretValue,
-  TrimmedString,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-export const UpstashBoxSettings = makeProviderSettingsSchema(
+const customModels = Schema.Array(CustomModelSetting).pipe(
+  Schema.withDecodingDefault(Effect.succeed([])),
+  Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+);
+
+/** Command Code runs from the template Box's own login, so it has nothing to configure. */
+export const BoxCommandCodeSettings = makeProviderSettingsSchema({ customModels });
+export type BoxCommandCodeSettings = typeof BoxCommandCodeSettings.Type;
+
+/** Claude Code and Codex run as Box-managed agents that need a model provider key. */
+export const BoxManagedAgentSettings = makeProviderSettingsSchema(
   {
     apiKey: SettingsSecretValue.pipe(
       secretSetting,
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
-        title: "API key",
+        title: "Model API key",
+        description: "Leave empty to use the key stored in the Upstash console.",
         providerSettingsForm: { control: "password", clearWhenEmpty: "omit" },
       }),
     ),
-    templateBoxName: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("cc-harness")),
-      Schema.annotateKey({
-        title: "Template Box",
-        providerSettingsForm: { placeholder: "cc-harness" },
-      }),
-    ),
-    model: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Model",
-        providerSettingsForm: { placeholder: "Template default" },
-      }),
-    ),
-    size: Schema.Literals(["small", "medium", "large"]).pipe(
-      Schema.withDecodingDefault(Effect.succeed("small" as const)),
-      Schema.annotateKey({
-        title: "Box size",
-        providerSettingsForm: {
-          control: "select",
-          placeholder: "Small",
-          options: [
-            { value: "small", label: "Small" },
-            { value: "medium", label: "Medium" },
-            { value: "large", label: "Large" },
-          ],
-        },
-      }),
-    ),
+    customModels,
   },
-  { order: ["apiKey", "templateBoxName", "model", "size"] },
+  { order: ["apiKey"] },
 );
-export type UpstashBoxSettings = typeof UpstashBoxSettings.Type;
+export type BoxManagedAgentSettings = typeof BoxManagedAgentSettings.Type;
