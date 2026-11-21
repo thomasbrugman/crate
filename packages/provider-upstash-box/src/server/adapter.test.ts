@@ -25,8 +25,10 @@ import {
 import { BoxError, type BoxConfig, type Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
@@ -60,6 +62,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   const harnesses: string[] = [];
   const lookup: {
     error?: unknown;
+    exec?: BoxHandle["exec"]["command"];
     statusError?: unknown;
     streamError?: unknown;
     resumeError?: unknown;
@@ -80,7 +83,11 @@ const setup = Effect.fn("test.setupBox")(function* (
     exec: {
       command: async (text) => {
         commands.push(text);
-        return command ? command(text) : { stdout: "", exitCode: 0 };
+        return lookup.exec
+          ? lookup.exec(text)
+          : command
+            ? command(text)
+            : { stdout: "", exitCode: 0 };
       },
     },
     files: {
@@ -323,12 +330,18 @@ it.effect("cancels a run that finishes starting while its session shuts down", (
     const starting = Promise.withResolvers<void>();
     const ready = Promise.withResolvers<BoxStream>();
     let cancelled = 0;
+    let cleaned = 0;
     yield* Effect.scoped(
       Effect.gen(function* () {
-        const { runtime, turn } = yield* setup(async () => {
+        const { runtime, turn, lookup } = yield* setup(async () => {
           starting.resolve();
           return ready.promise;
         });
+        lookup.exec = async () => {
+          assert.isAbove(cancelled, 0);
+          cleaned++;
+          return { stdout: "", exitCode: 0 };
+        };
         yield* runtime.events.pipe(
           Stream.takeUntil((event) => event.type === "provider_thread.updated"),
           Stream.runDrain,
@@ -364,6 +377,7 @@ it.effect("cancels a run that finishes starting while its session shuts down", (
       }),
     );
     assert.equal(cancelled, 1);
+    assert.isAbove(cleaned, 0);
   }),
 );
 
@@ -842,44 +856,67 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
     ),
 );
 
-it.effect("cancels the active stream and emits one interrupted terminal", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const cancelled = Promise.withResolvers<void>();
-      let cancelCount = 0;
-      const { runtime, turn } = yield* setup({
-        id: "native-run",
-        cancel: async () => {
-          cancelCount++;
-          cancelled.resolve();
-        },
-        async *[Symbol.asyncIterator]() {
-          yield { type: "start", runId: "native-run" };
-          await cancelled.promise;
-        },
-      });
-      yield* runtime.startTurn(turn);
-      const started = yield* runtime.events.pipe(
-        Stream.filter(
-          (event) =>
-            event.type === "provider_turn.updated" && event.providerTurn.nativeTurnRef !== null,
-        ),
-        Stream.take(1),
-        Stream.runCollect,
-      );
-      const event = started[0];
-      assert.isDefined(event);
-      if (event?.type !== "provider_turn.updated") return yield* Effect.die("Missing start event");
-      yield* runtime.interruptTurn({
-        providerThread: turn.providerThread,
-        providerTurnId: event.providerTurn.id,
-      });
-      const events = yield* collect(runtime.events);
-      assert.equal(cancelCount, 1);
-      assert.equal(
-        events.filter((entry) => entry.type === "turn.terminal")[0]?.status,
-        "interrupted",
-      );
-    }),
-  ),
+it.effect.each(["ok", "throw", "exit", "hang"] as const)(
+  "cancels the active stream and interrupts despite %s cleanup",
+  (cleanup) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const cancelled = Promise.withResolvers<void>();
+        const releaseCleanup = Promise.withResolvers<{ stdout: string; exitCode: number }>();
+        let cancelCount = 0;
+        const order: string[] = [];
+        const { runtime, turn, lookup } = yield* setup({
+          id: "native-run",
+          cancel: async () => {
+            cancelCount++;
+            order.push("cancel");
+            cancelled.resolve();
+          },
+          async *[Symbol.asyncIterator]() {
+            yield { type: "start", runId: "native-run" };
+            await cancelled.promise;
+          },
+        });
+        lookup.exec = async (command) => {
+          assert.include(command, "t3stash-harness.mjs");
+          order.push("kill");
+          if (cleanup === "throw") throw new Error("private cleanup failure");
+          if (cleanup === "hang") return releaseCleanup.promise;
+          return { stdout: "", exitCode: cleanup === "exit" ? 1 : 0 };
+        };
+        yield* runtime.startTurn(turn);
+        const started = yield* runtime.events.pipe(
+          Stream.filter(
+            (event) =>
+              event.type === "provider_turn.updated" && event.providerTurn.nativeTurnRef !== null,
+          ),
+          Stream.take(1),
+          Stream.runCollect,
+        );
+        const event = started[0];
+        assert.isDefined(event);
+        if (event?.type !== "provider_turn.updated")
+          return yield* Effect.die("Missing start event");
+        const interrupt = yield* runtime
+          .interruptTurn({
+            providerThread: turn.providerThread,
+            providerTurnId: event.providerTurn.id,
+          })
+          .pipe(Effect.forkChild);
+        if (cleanup === "hang") {
+          yield* TestClock.adjust("8 seconds");
+          const finished = interrupt.pollUnsafe();
+          releaseCleanup.resolve({ stdout: "", exitCode: 0 });
+          assert.isDefined(finished);
+        }
+        yield* Fiber.join(interrupt);
+        const events = yield* collect(runtime.events);
+        assert.equal(cancelCount, 1);
+        assert.deepEqual(order, ["cancel", "kill"]);
+        assert.equal(
+          events.filter((entry) => entry.type === "turn.terminal")[0]?.status,
+          "interrupted",
+        );
+      }),
+    ),
 );
