@@ -2,6 +2,7 @@ import { assert, it } from "@effect/vitest";
 import { ProviderDriverKind, ThreadId } from "@t3tools/contracts";
 import { BoxError } from "@upstash/box";
 import * as Effect from "effect/Effect";
+import * as NodeChildProcess from "node:child_process";
 
 import { BoxApi, type BoxHandle } from "./BoxApi.ts";
 import { BoxExecError, BoxExecThreadResolver, make, type BoxExecThread } from "./BoxExec.ts";
@@ -66,7 +67,7 @@ it.effect("uses persisted Box identity, checkout defaults, and literal cwd/argum
       const exec = yield* service({
         resolve: () => Effect.succeed({ ...thread, repositoryUrl }),
         command: async (command) => {
-          assert.equal(command, `cd -- '${expected}' && printf '%s' 'a'\\''b; $(no)'`);
+          assert.equal(command, `cd -- '${expected}' || exit 1\nprintf '%s' 'a'\\''b; $(no)'`);
           return { exitCode: 3, stdout: "output", stderr: "error" };
         },
       });
@@ -90,6 +91,23 @@ it.effect("uses persisted Box identity, checkout defaults, and literal cwd/argum
       stdout: "",
       stderr: "",
     });
+  }),
+);
+
+it.effect("does not run any shell statements when the checkout directory is unavailable", () =>
+  Effect.gen(function* () {
+    const exec = yield* service({
+      command: async (command) => {
+        const result = NodeChildProcess.spawnSync("sh", ["-c", command], { encoding: "utf8" });
+        if (result.error) throw result.error;
+        return { exitCode: result.status, stdout: result.stdout, stderr: result.stderr };
+      },
+    });
+    for (const command of ["printf first; printf escaped", "printf first\nprintf escaped"]) {
+      const result = yield* exec.run({ threadId, cwd: "/dev/null/not-a-directory", command });
+      assert.equal(result.exitCode, 1);
+      assert.equal(result.stdout, "");
+    }
   }),
 );
 

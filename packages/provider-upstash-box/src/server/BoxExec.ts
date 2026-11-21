@@ -93,7 +93,7 @@ export const make = Effect.gen(function* () {
       const cwd = input.cwd ?? (thread.repositoryUrl ? "/workspace/home/repo" : "/workspace/home");
       const command = [input.command, ...(input.args ?? []).map(quote)].join(" ");
       const result = yield* Effect.tryPromise({
-        try: () => box.exec.command(`cd -- ${quote(cwd)} && ${command}`),
+        try: () => box.exec.command(`cd -- ${quote(cwd)} || exit 1\n${command}`),
         catch: (error) => fail(isMissingBox(error) ? "box_unavailable" : "exec_failed"),
       });
       if (result.exitCode === null) return yield* fail("missing_exit_code");
