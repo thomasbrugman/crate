@@ -6,6 +6,7 @@ import { commandCodeHarness } from "./harness.ts";
 
 function setup(
   options: {
+    prompt?: string;
     session?: string;
     files?: Record<string, { mtimeMs: number; header: unknown }>;
     unavailable?: boolean;
@@ -48,7 +49,7 @@ function setup(
         "node",
         "harness",
         "-p",
-        "test",
+        options.prompt ?? "test",
         ...(options.session ? ["--session", options.session] : []),
       ],
       env: { BOXJOB_CC_BIN: "command-code" },
@@ -91,6 +92,18 @@ it("resumes the newest matching Command Code transcript only when no session was
   assert.include(setup({ files, session: "explicit" }).args.join(" "), "--resume explicit");
   assert.notInclude(setup().args, "--resume");
   assert.notInclude(setup({ unavailable: true }).args, "--resume");
+});
+
+it("strips only the outer run marker before invoking Command Code", () => {
+  for (const prompt of ["hello", "t3stash-run:abcd\nliteral user text"]) {
+    const { args } = setup({ prompt: `t3stash-run:6162\n${prompt}` });
+    assert.equal(args[1], prompt);
+  }
+  const malformed = "t3stash-run:not-hex\nhello";
+  assert.equal(setup({ prompt: malformed }).args[1], malformed);
+  assert.deepEqual(setup({ prompt: "t3stash-run:6162\n" }).events(), [
+    { event: "error", data: { error: "no prompt received from the box" } },
+  ]);
 });
 
 it("preserves Command Code call IDs through box-sse-v1 for concurrent calls completing in reverse order", () => {
