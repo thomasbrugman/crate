@@ -18,6 +18,8 @@ type ToolItem = Extract<OrchestrationV2TurnItem, { type: "dynamic_tool" }>;
 
 export class BoxTurnTranslation {
   private text = "";
+  private messageIndex = 0;
+  private hasText = false;
   private finished: Extract<Chunk, { type: "finish" }> | undefined;
   private startedAt: DateTime.Utc;
   private tools: ToolItem[] = [];
@@ -116,7 +118,7 @@ export class BoxTurnTranslation {
         turnItem: {
           id: this.ids.turnItemFromProviderItem({
             driver: this.thread.driver,
-            nativeItemId: `${this.input.attemptId}:assistant`,
+            nativeItemId: `${this.input.attemptId}:assistant:${this.messageIndex}`,
           }),
           threadId: this.input.threadId,
           runId: this.input.runId,
@@ -161,9 +163,27 @@ export class BoxTurnTranslation {
           },
         ];
       case "text-delta":
+        this.hasText ||= chunk.text.length > 0;
         this.text += chunk.text;
         return this.messageEvents(now, true);
       case "tool-call": {
+        const events = this.text ? this.messageEvents(now, false) : [];
+        if (this.messageOrdinal !== undefined) {
+          this.text = "";
+          this.messageOrdinal = undefined;
+          this.messageIndex++;
+          this.message = {
+            ...this.message,
+            id: this.ids.messageFromProviderItem({
+              driver: this.thread.driver,
+              nativeItemId: `${this.input.attemptId}:assistant:${this.messageIndex}`,
+            }),
+            text: "",
+            streaming: true,
+            createdAt: now,
+            updatedAt: now,
+          };
+        }
         const ordinal = ++this.itemOrdinal;
         const item: ToolItem = {
           id: this.ids.turnItemFromProviderItem({
@@ -190,7 +210,10 @@ export class BoxTurnTranslation {
           input: chunk.input,
         };
         this.tools.push(item);
-        return [{ type: "turn_item.updated", driver: this.thread.driver, turnItem: item }];
+        return [
+          ...events,
+          { type: "turn_item.updated", driver: this.thread.driver, turnItem: item },
+        ];
       }
       case "tool-result": {
         const index = this.tools.findLastIndex(
@@ -212,7 +235,7 @@ export class BoxTurnTranslation {
       }
       case "finish":
         this.finished = chunk;
-        if (!this.text) this.text = chunk.output;
+        if (!this.hasText) this.text = chunk.output;
         return [];
       default:
         return [];
