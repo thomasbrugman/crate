@@ -17,6 +17,7 @@ const thread = (instanceId: string, environmentId = "environment") => ({
   environmentId: EnvironmentId.make(environmentId),
   runtime: null,
   modelSelection: { instanceId: ProviderInstanceId.make(instanceId), model: "default" },
+  providerInstanceHistory: [] as ReadonlyArray<ProviderInstanceId>,
 });
 
 it("warns for Box threads in single and mixed deletions", () => {
@@ -35,10 +36,22 @@ it("warns for Box threads in single and mixed deletions", () => {
     },
   };
   expect(boxThreadDeletionWarning([activeBoxThread])).toBe(warning);
+  expect(
+    boxThreadDeletionWarning([
+      { ...thread("local"), providerInstanceHistory: [ProviderInstanceId.make("box")] },
+    ]),
+  ).toBe(warning);
 });
 
 it("does not add a warning for empty, local or unknown-provider selections", () => {
-  for (const threads of [[], [thread("local")], [thread("unknown")], [thread("box", "missing")]]) {
+  for (const threads of [
+    [],
+    [thread("local")],
+    [thread("unknown")],
+    [thread("box", "missing")],
+    [{ ...thread("local"), providerInstanceHistory: [ProviderInstanceId.make("unknown")] }],
+    [{ ...thread("local", "missing"), providerInstanceHistory: [ProviderInstanceId.make("box")] }],
+  ]) {
     expect(boxThreadDeletionWarning(threads)).toBeNull();
   }
 });

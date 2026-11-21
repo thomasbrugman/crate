@@ -4,15 +4,19 @@ import { msg } from "gt-react";
 import { m } from "../i18n/messages";
 import { readEnvironmentProviders } from "../state/environments";
 
-type DeletionThread = Pick<EnvironmentThreadShell, "environmentId" | "runtime" | "modelSelection">;
+type DeletionThread = Pick<
+  EnvironmentThreadShell,
+  "environmentId" | "runtime" | "modelSelection" | "providerInstanceHistory"
+>;
 
 export function boxThreadDeletionWarning(threads: ReadonlyArray<DeletionThread>): string | null {
   const hasBoxThread = threads.some((thread) =>
     readEnvironmentProviders(thread.environmentId)?.some(
       (provider) =>
         provider.driver === "upstashBox" &&
-        provider.instanceId ===
-          (thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId),
+        (provider.instanceId ===
+          (thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId) ||
+          thread.providerInstanceHistory.includes(provider.instanceId)),
     ),
   );
   return hasBoxThread

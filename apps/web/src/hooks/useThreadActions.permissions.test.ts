@@ -362,6 +362,7 @@ describe("thread action permissions", () => {
       title: "Archived release notes",
       runtime: null,
       modelSelection: { instanceId: ProviderInstanceId.make("box"), model: "default" },
+      providerInstanceHistory: [],
     });
     expect(state.confirm).toHaveBeenCalledWith(
       expect.stringContaining('Delete thread "Archived release notes"?'),

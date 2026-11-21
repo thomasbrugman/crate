@@ -1023,7 +1023,7 @@ export function useThreadActions() {
     target: ScopedThreadRef,
     knownThread?: Pick<
       EnvironmentThreadShell,
-      "environmentId" | "title" | "runtime" | "modelSelection"
+      "environmentId" | "title" | "runtime" | "modelSelection" | "providerInstanceHistory"
     >,
   ) => {
     const permissionFailure = threadOperationFailure(target);
