@@ -84,6 +84,9 @@ import type {
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
 import * as ProviderInstanceRegistryMutator from "./ProviderInstanceRegistryMutator.ts";
 import * as ProviderRegistry from "./ProviderRegistry.ts";
+import { CodexDriver } from "./Drivers/CodexDriver.ts";
+import * as ProviderOrchestrationAdapterInfrastructure from "./ProviderOrchestrationAdapterInfrastructure.ts";
+import * as SecretResolver from "../secrets/SecretResolver.ts";
 import { ProviderDriverError } from "@t3tools/provider-core/server/errors";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
@@ -4078,7 +4081,24 @@ it.layer(
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const layerProviderRegistry = ProviderRegistry.layer.pipe(
           Layer.provideMerge(
-            ProviderInstanceRegistryHydration.layer.pipe(
+            Layer.unwrap(
+              Effect.gen(function* () {
+                const changes = yield* serverSettings.subscribeChanges;
+                const initial = yield* serverSettings.getSettings;
+                const registry = ProviderInstanceRegistry.layer({
+                  drivers: [CodexDriver],
+                  configMap: initial.providerInstances,
+                }).pipe(
+                  Layer.provide(ProviderOrchestrationAdapterInfrastructure.layer),
+                  Layer.provide(ProviderInstanceRegistryHydration.providerHostLayer),
+                  Layer.provide(SecretResolver.layer),
+                );
+                return ProviderInstanceRegistryHydration.layerSettingsWatcher(
+                  changes,
+                  initial,
+                ).pipe(Layer.provideMerge(registry));
+              }),
+            ).pipe(
               Layer.provide(
                 Layer.mergeAll(
                   PortScanner.layerTest,
