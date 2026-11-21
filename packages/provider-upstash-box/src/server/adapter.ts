@@ -5,6 +5,7 @@ import {
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
@@ -148,7 +149,10 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const box = yield* Effect.tryPromise({
             try: async () => {
               try {
-                return await api.get(nativeId, config.apiKey);
+                const existing = await api.get(nativeId, config.apiKey);
+                // Lookup by ID also returns deleted Box tombstones; status does not.
+                await existing.getStatus();
+                return existing;
               } catch (error) {
                 if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
                 return null;
@@ -165,11 +169,31 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             const threadId = request.threadId ?? previous.appThreadId;
             if (!threadId)
               return yield* unsupported("Recreating a Box without an app thread identity");
-            return yield* runtime.ensureThread({
-              threadId,
-              runtimePolicy: input.runtimePolicy,
-              modelSelection: input.modelSelection,
-            });
+            const replacement = yield* ensureBox(
+              config,
+              `t3-${Buffer.from(threadId).toString("hex")}`,
+              input.runtimePolicy.repositoryUrl,
+            ).pipe(
+              Effect.provideService(BoxApi, api),
+              Effect.mapError(
+                () => new Adapter.ProviderAdapterEnsureThreadError({ driver, threadId }),
+              ),
+            );
+            boxes.delete(nativeId);
+            return yield* saveThread(
+              {
+                ...previous,
+                providerSessionId: input.providerSessionId,
+                nativeThreadRef: { driver, nativeId: replacement.id, strength: "strong" },
+                nativeConversationHeadRef: null,
+                pendingBackgroundTasks: [],
+                contextUsage: null,
+                nativeMetadata: null,
+                status: "idle",
+                updatedAt: yield* DateTime.now,
+              },
+              replacement,
+            );
           }
           return yield* saveThread(
             {
@@ -192,16 +216,33 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             return yield* unsupported("Attachments, native resume, and application context");
           if (request.runtimePolicy.runtimeMode !== "full-access")
             return yield* unsupported("Restricted runtime policies");
-          const box = boxes.get(request.providerThread.nativeThreadRef?.nativeId ?? "");
+          const providerThread = yield* runtime.resumeThread({
+            providerThread: threads.get(request.providerThread.id) ?? request.providerThread,
+            threadId: request.threadId,
+          });
+          const box = boxes.get(providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
-          const translation = new BoxTurnTranslation(request, ids.derive, yield* DateTime.now);
+          const translation = new BoxTurnTranslation(
+            { ...request, providerThread },
+            ids.derive,
+            yield* DateTime.now,
+          );
           const turn: ActiveTurn = { translation, interrupted: false };
           active = turn;
           yield* publish(translation.start(yield* DateTime.now));
           const process = Effect.gen(function* () {
             // Box supplies the prior finish.sessionId to its custom harness as --session.
             const stream = yield* Effect.tryPromise({
-              try: () => box.agent.stream({ prompt: request.message.text }),
+              try: async () => {
+                try {
+                  return await box.agent.stream({ prompt: request.message.text });
+                } catch (error) {
+                  if (!(error instanceof BoxError) || error.statusCode !== 409) throw error;
+                  // A cancelled run can leave the Box rejecting work until explicitly resumed.
+                  await box.resume();
+                  return await box.agent.stream({ prompt: request.message.text });
+                }
+              },
               catch: () => new BoxRuntimeError({ operation: "stream" }),
             });
             turn.stream = stream;
@@ -226,7 +267,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             Effect.flatMap(
               Effect.fn("UpstashBox.finishTurn")(function* (failed) {
                 if (translation.sessionId) {
-                  const thread = threads.get(request.providerThread.id) ?? request.providerThread;
+                  const thread = threads.get(providerThread.id) ?? providerThread;
                   yield* saveThread(
                     {
                       ...thread,

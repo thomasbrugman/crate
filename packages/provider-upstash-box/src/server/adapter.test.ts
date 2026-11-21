@@ -44,18 +44,36 @@ const setup = Effect.fn("test.setupBox")(function* (
   deleteBox?: () => Promise<void>,
 ) {
   const prompts: string[] = [];
-  const lookup: { error?: unknown } = {};
+  const lookup: {
+    error?: unknown;
+    statusError?: unknown;
+    streamError?: unknown;
+    resumeError?: unknown;
+    replacement?: BoxHandle;
+    resumes: number;
+  } = { resumes: 0 };
   const box: BoxHandle = {
     id: "box-123",
     agent: {
       stream: async ({ prompt }) => {
         prompts.push(prompt);
+        if (lookup.error) throw lookup.error;
+        if (lookup.streamError) throw lookup.streamError;
         return stream;
       },
     },
     exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
     files: { write: async () => undefined },
     delete: deleteBox ?? (async () => undefined),
+    resume: async () => {
+      lookup.resumes++;
+      if (lookup.resumeError) throw lookup.resumeError;
+      lookup.streamError = undefined;
+    },
+    getStatus: async () => {
+      if (lookup.statusError) throw lookup.statusError;
+      return { status: "idle" };
+    },
   };
   const adapter = yield* makeUpstashBoxAdapter(instanceId, {
     apiKey: "test-key",
@@ -65,11 +83,16 @@ const setup = Effect.fn("test.setupBox")(function* (
   }).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
-      get: async () => {
+      get: async (id) => {
         if (lookup.error) throw lookup.error;
-        return box;
+        if (id.startsWith("t3-") && lookup.statusError) throw lookup.statusError;
+        return lookup.replacement ?? box;
       },
-      create: async () => box,
+      create: async () => {
+        lookup.error = undefined;
+        lookup.statusError = undefined;
+        return lookup.replacement ?? box;
+      },
       list: async () => [],
     }),
   );
@@ -122,7 +145,7 @@ const setup = Effect.fn("test.setupBox")(function* (
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn, prompts, adapter, lookup };
+  return { runtime, turn, prompts, adapter, lookup, box };
 });
 
 it.effect(
@@ -169,6 +192,72 @@ const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>
     Stream.takeUntil((event) => event.type === "turn.terminal"),
     Stream.runCollect,
   );
+
+it.effect("recreates a deleted Box before a follow-up even when the thread stays loaded", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn, lookup, box } = yield* setup(fakeStream([finish]));
+      lookup.streamError = new BoxError("deleted", 404);
+      yield* runtime.startTurn(turn);
+      const failed = yield* collect(runtime.events);
+      assert.equal(failed.at(-1)?.type, "turn.terminal");
+      assert.equal(failed.find((e) => e.type === "turn.terminal")?.status, "failed");
+      lookup.streamError = undefined;
+      lookup.statusError = new BoxError("deleted", 404);
+      lookup.replacement = {
+        ...box,
+        id: "replacement-box",
+        agent: { stream: async () => fakeStream([finish]) },
+      };
+      yield* runtime.startTurn(turn);
+      const recovered = yield* collect(runtime.events);
+      assert.equal(recovered.find((e) => e.type === "turn.terminal")?.status, "completed");
+      const thread = recovered.find(
+        (e) =>
+          e.type === "provider_thread.updated" &&
+          e.providerThread.nativeThreadRef?.nativeId === "replacement-box",
+      );
+      assert.isDefined(thread);
+      if (thread?.type !== "provider_thread.updated") return;
+      assert.equal(thread.providerThread.id, turn.providerThread.id);
+      assert.isNull(thread.providerThread.nativeConversationHeadRef);
+      assert.equal(lookup.resumes, 0);
+    }),
+  ),
+);
+
+it.effect(
+  "resumes a Box rejecting new runs after shutdown without replaying a started stream",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        for (const [status, resumeFails] of [
+          [409, false],
+          [401, false],
+          [409, true],
+        ] as const) {
+          const { adapter, turn, lookup } = yield* setup(fakeStream([finish]));
+          const runtime = yield* adapter.openSession({
+            threadId,
+            providerSessionId: ProviderSessionId.make("restarted-session"),
+            modelSelection,
+            runtimePolicy,
+          });
+          yield* runtime.resumeThread({ providerThread: turn.providerThread });
+          lookup.streamError = new BoxError("private upstream error", status);
+          if (resumeFails) lookup.resumeError = new Error("private upstream error");
+          yield* runtime.startTurn(turn);
+          const events = yield* collect(runtime.events);
+          assert.equal(
+            events.find((e) => e.type === "turn.terminal")?.status,
+            status === 409 && !resumeFails ? "completed" : "failed",
+          );
+          assert.equal(lookup.resumes, status === 409 ? 1 : 0);
+          assert.notInclude(JSON.stringify(events), "private upstream error");
+        }
+      }),
+    ),
+);
 
 it.effect(
   "translates a fake stream into accumulated text, paired tools, continuation identity and usage",
@@ -266,7 +355,7 @@ it.effect(
           [fakeStream([]), "failed"],
           [fakeStream([{ type: "text-delta", text: "partial" }], true), "failed"],
         ] as const) {
-          const { runtime, turn } = yield* setup(stream);
+          const { runtime, turn, lookup } = yield* setup(stream);
           yield* runtime.startTurn(turn);
           const events = yield* collect(runtime.events);
           for (const event of events) yield* decodeEvent(event);
@@ -274,6 +363,7 @@ it.effect(
           assert.lengthOf(terminals, 1);
           assert.equal(terminals[0]?.status, status);
           assert.notInclude(JSON.stringify(events), "private upstream");
+          assert.equal(lookup.resumes, 0);
           if (status === "failed")
             assert.isFalse(
               events.filter((event) => event.type === "message.updated").at(-1)?.message

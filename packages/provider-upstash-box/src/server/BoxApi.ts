@@ -25,6 +25,8 @@ export interface BoxHandle {
     readonly write: (options: { path: string; content: string }) => Promise<unknown>;
   };
   readonly delete: () => Promise<unknown>;
+  readonly resume: () => Promise<void>;
+  readonly getStatus: () => Promise<{ readonly status: string }>;
 }
 
 export class BoxApi extends Context.Service<

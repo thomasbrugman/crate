@@ -44,6 +44,8 @@ it.effect(
             },
           },
           delete: async () => undefined,
+          resume: async () => undefined,
+          getStatus: async () => ({ status: "idle" }),
         };
         const api = {
           get: async (id: string) => {
