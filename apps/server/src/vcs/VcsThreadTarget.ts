@@ -22,6 +22,7 @@ export class VcsThreadTarget extends Context.Reference<Target | undefined>(
 /** Each Box owns its caches, locks and background subscribers, even when host cwd is shared. */
 export const partition = Effect.fn("VcsThreadTarget.partition")(function* <T extends object, E, R>(
   make: Effect.Effect<T, E, R>,
+  callerScopedEffects: ReadonlyArray<keyof T> = [],
 ) {
   const local = yield* make;
   const instances = yield* RcMap.make({
@@ -71,12 +72,11 @@ export const partition = Effect.fn("VcsThreadTarget.partition")(function* <T ext
         );
       }
       if (Effect.isEffect(member)) {
-        return Effect.scoped(
-          Effect.flatMap(
-            instance,
-            (service) => Reflect.get(service, key) as Effect.Effect<unknown>,
-          ),
+        const effect = Effect.flatMap(
+          instance,
+          (service) => Reflect.get(service, key) as Effect.Effect<unknown>,
         );
+        return callerScopedEffects.includes(key as keyof T) ? effect : Effect.scoped(effect);
       }
       return member;
     },

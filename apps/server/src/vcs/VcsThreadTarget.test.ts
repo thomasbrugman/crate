@@ -3,10 +3,67 @@ import { ThreadId } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import { partition, VcsThreadTarget } from "./VcsThreadTarget.ts";
+
+it.effect("keeps subscriptions in their caller's scope", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const closed: number[] = [];
+      let created = 0;
+      let subscriptionsClosed = 0;
+      const service = yield* partition(
+        Effect.gen(function* () {
+          const id = ++created;
+          const events = yield* PubSub.unbounded<number>();
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              closed.push(id);
+            }),
+          );
+          return {
+            subscribe: PubSub.subscribe(events).pipe(
+              Effect.tap(() =>
+                Effect.addFinalizer(() =>
+                  Effect.sync(() => {
+                    subscriptionsClosed++;
+                  }),
+                ),
+              ),
+              Effect.map((subscription) => Stream.fromSubscription(subscription)),
+            ),
+            publish: (value: number) => PubSub.publish(events, value),
+          };
+        }),
+        ["subscribe"],
+      );
+      for (const target of [
+        undefined,
+        {
+          threadId: ThreadId.make("subscribed-thread"),
+          projectRoot: "/host",
+          checkoutRoot: "/box",
+        },
+      ]) {
+        const before = subscriptionsClosed;
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const changes = yield* service.subscribe;
+            yield* service.publish(1);
+            assert.deepEqual(yield* Stream.runCollect(changes.pipe(Stream.take(1))), [1]);
+            assert.equal(subscriptionsClosed, before);
+          }),
+        ).pipe(Effect.provideService(VcsThreadTarget, target));
+        assert.equal(subscriptionsClosed, before + 1);
+      }
+      yield* TestClock.adjust("6 minutes");
+      assert.deepEqual(closed, [2]);
+    }),
+  ),
+);
 
 it.effect("releases idle thread services but retains active calls and streams", () =>
   Effect.scoped(
