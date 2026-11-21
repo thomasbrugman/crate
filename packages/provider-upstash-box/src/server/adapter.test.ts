@@ -40,7 +40,7 @@ const finish: Chunk = {
 };
 
 const setup = Effect.fn("test.setupBox")(function* (
-  stream: BoxStream,
+  stream: BoxStream | (() => Promise<BoxStream>),
   deleteBox?: () => Promise<void>,
 ) {
   const prompts: string[] = [];
@@ -50,7 +50,7 @@ const setup = Effect.fn("test.setupBox")(function* (
     agent: {
       stream: async ({ prompt }) => {
         prompts.push(prompt);
-        return stream;
+        return typeof stream === "function" ? await stream() : stream;
       },
     },
     exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
@@ -162,6 +162,35 @@ function fakeStream(chunks: ReadonlyArray<Chunk>, error = false): BoxStream {
     },
   };
 }
+
+it.effect("cancels a run that finishes starting while its session shuts down", () =>
+  Effect.gen(function* () {
+    const starting = Promise.withResolvers<void>();
+    const ready = Promise.withResolvers<BoxStream>();
+    let cancelled = 0;
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const { runtime, turn } = yield* setup(async () => {
+          starting.resolve();
+          return ready.promise;
+        });
+        yield* runtime.startTurn(turn);
+        yield* Effect.promise(() => starting.promise);
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() =>
+            ready.resolve({
+              ...fakeStream([]),
+              cancel: async () => {
+                cancelled++;
+              },
+            }),
+          ),
+        );
+      }),
+    );
+    assert.equal(cancelled, 1);
+  }),
+);
 
 const decodeEvent = Schema.decodeEffect(ProviderAdapterV2Event);
 const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>

@@ -201,10 +201,13 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const process = Effect.gen(function* () {
             // Box supplies the prior finish.sessionId to its custom harness as --session.
             const stream = yield* Effect.tryPromise({
-              try: () => box.agent.stream({ prompt: request.message.text }),
+              try: async () => {
+                const stream = await box.agent.stream({ prompt: request.message.text });
+                turn.stream = stream;
+                return stream;
+              },
               catch: () => new BoxRuntimeError({ operation: "stream" }),
-            });
-            turn.stream = stream;
+            }).pipe(Effect.uninterruptible);
             if (turn.interrupted)
               yield* Effect.tryPromise({
                 try: () => stream.cancel(),
@@ -222,6 +225,11 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             );
           });
           yield* process.pipe(
+            Effect.onInterrupt(() =>
+              Effect.promise(async () => {
+                await turn.stream?.cancel();
+              }).pipe(Effect.ignore),
+            ),
             Effect.isFailure,
             Effect.flatMap(
               Effect.fn("UpstashBox.finishTurn")(function* (failed) {
