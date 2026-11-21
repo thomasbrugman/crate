@@ -40,6 +40,11 @@ const state = vi.hoisted(() => ({
   confirm: vi.fn<() => Promise<boolean>>(),
 }));
 
+vi.mock(import("@t3tools/client-runtime/provider-clients"), async (original) => ({
+  ...(await original()),
+  ...(await import("../../../test/fixtures/legacyProviderClients")),
+}));
+
 vi.mock(import("../../state/server"), async (original) => {
   const actual = await original();
   const { Atom } = await import("effect/reactivity");
