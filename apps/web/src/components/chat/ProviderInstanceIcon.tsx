@@ -11,6 +11,7 @@ import {
   AnthropicIcon,
   AntigravityIcon,
   ClaudeAI,
+  CommandCodeIcon,
   Icon,
   OllamaIcon,
   OpenAI,
@@ -31,6 +32,7 @@ const PROVIDER_ICON_BY_PROVIDER: Partial<Record<ProviderDriverKind, Icon>> = {
   [ProviderDriverKind.make("boxCodex")]: OpenAI,
   [ProviderDriverKind.make("claudeAgent")]: ClaudeAI,
   [ProviderDriverKind.make("boxClaudeCode")]: ClaudeAI,
+  [ProviderDriverKind.make("boxCommandCode")]: CommandCodeIcon,
   [ProviderDriverKind.make("antigravity")]: AntigravityIcon,
   // Text generators, by the service they reach (see textGeneratorBrand).
   [ProviderDriverKind.make("openai")]: OpenAI,
