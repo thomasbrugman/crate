@@ -21,7 +21,7 @@ it.effect(
     Effect.gen(function* () {
       const now = yield* DateTime.now;
       const instanceId = ProviderInstanceId.make("box-cleanup");
-      const driver = ProviderDriverKind.make("upstashBox");
+      const driver = ProviderDriverKind.make("boxCommandCode");
       const threadId = ThreadId.make("box-cleanup-thread");
       const providerThread: OrchestrationV2ProviderThread = {
         id: ProviderThreadId.make("box-cleanup-provider-thread"),
@@ -86,7 +86,7 @@ it.effect("deletes Boxes of threads settled and quiet for three days unless they
     const DAY_MS = 86_400_000;
     const at = (days: number) => DateTime.makeUnsafe(days * DAY_MS);
     const instanceId = ProviderInstanceId.make("box-cleanup");
-    const driver = ProviderDriverKind.make("upstashBox");
+    const driver = ProviderDriverKind.make("boxCommandCode");
     const shell = (id: string, overrides: Partial<OrchestrationV2ThreadShell>) =>
       ({
         id: ThreadId.make(id),

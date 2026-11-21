@@ -11,6 +11,7 @@ import {
   AnthropicIcon,
   AntigravityIcon,
   ClaudeAI,
+  CommandCodeIcon,
   Icon,
   OllamaIcon,
   OpenAI,
@@ -28,7 +29,10 @@ import {
 
 const PROVIDER_ICON_BY_PROVIDER: Partial<Record<ProviderDriverKind, Icon>> = {
   [ProviderDriverKind.make("codex")]: OpenAI,
+  [ProviderDriverKind.make("boxCodex")]: OpenAI,
   [ProviderDriverKind.make("claudeAgent")]: ClaudeAI,
+  [ProviderDriverKind.make("boxClaudeCode")]: ClaudeAI,
+  [ProviderDriverKind.make("boxCommandCode")]: CommandCodeIcon,
   [ProviderDriverKind.make("antigravity")]: AntigravityIcon,
   // Text generators, by the service they reach (see textGeneratorBrand).
   [ProviderDriverKind.make("openai")]: OpenAI,
@@ -39,7 +43,9 @@ const PROVIDER_ICON_BY_PROVIDER: Partial<Record<ProviderDriverKind, Icon>> = {
 
 const PROVIDER_TEXT_COLOR_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
   [ProviderDriverKind.make("codex")]: "text-black dark:text-white",
+  [ProviderDriverKind.make("boxCodex")]: "text-black dark:text-white",
   [ProviderDriverKind.make("claudeAgent")]: "text-[#d97757]",
+  [ProviderDriverKind.make("boxClaudeCode")]: "text-[#d97757]",
   [ProviderDriverKind.make("antigravity")]: "text-[#5b87bf]",
   [ProviderDriverKind.make("openai")]: "text-black dark:text-white",
   [ProviderDriverKind.make("anthropic")]: "text-black dark:text-white",
@@ -49,6 +55,7 @@ const PROVIDER_TEXT_COLOR_BY_PROVIDER: Partial<Record<ProviderDriverKind, string
 
 const BUNDLED_LOGO_COLOR_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
   [ProviderDriverKind.make("claudeAgent")]: "#d97757",
+  [ProviderDriverKind.make("boxClaudeCode")]: "#d97757",
   [ProviderDriverKind.make("antigravity")]: "#5b87bf",
 };
 

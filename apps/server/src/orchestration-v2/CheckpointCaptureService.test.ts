@@ -939,7 +939,7 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
     "completes a %s run with a missing checkpoint and never touches git",
     (mode) =>
       Effect.gen(function* () {
-        const driver = ProviderDriverKind.make(mode === "cloud" ? "upstashBox" : "codex");
+        const driver = ProviderDriverKind.make(mode === "cloud" ? "boxCommandCode" : "codex");
         const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
         const now = yield* DateTime.now;
         const sideChatThreadId = ThreadId.make("thread:checkpoint-capture-side-chat");

@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import {
   ThreadId,
   type OrchestrationV2ProviderThread,
@@ -33,7 +34,7 @@ export const cleanupBoxThreads = Effect.fn("ResourceCleanupService.cleanupBoxThr
     if (!input.deleted) return;
     const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
     for (const thread of input.providerThreads) {
-      if (thread.driver !== "upstashBox") continue;
+      if (!isUpstashBoxDriver(thread.driver)) continue;
       yield* Effect.gen(function* () {
         const adapter = yield* adapters.get(thread.providerInstanceId);
         yield* adapter.deleteThread?.(thread) ?? Effect.void;
@@ -118,7 +119,7 @@ export const cleanupSettledBoxes = Effect.fn("ResourceCleanupService.cleanupSett
       const records = yield* projections.getThreadRecords(shell.id, ["providerThreads"]);
       for (const thread of records.providerThreads) {
         const key = `${thread.id}@${quietSince}`;
-        if (thread.driver !== "upstashBox" || released.has(key)) continue;
+        if (!isUpstashBoxDriver(thread.driver) || released.has(key)) continue;
         yield* Effect.gen(function* () {
           const adapter = yield* adapters.get(thread.providerInstanceId);
           const current = yield* projections.getThreadShell(shell.id);

@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
@@ -530,7 +531,7 @@ export const layer: Layer.Layer<
         storedRun.workStartedAt === undefined &&
         storedRun.startedAt === null &&
         projection.providerThreads.some(
-          (thread) => thread.id === storedRun.providerThreadId && thread.driver === "upstashBox",
+          (thread) => thread.id === storedRun.providerThreadId && isUpstashBoxDriver(thread.driver),
         )
           ? yield* DateTime.now
           : undefined;
@@ -815,7 +816,7 @@ export const layer: Layer.Layer<
           return;
         }
       }
-      const cloud = providerThread.driver === "upstashBox";
+      const cloud = isUpstashBoxDriver(providerThread.driver);
       if (boxSetupStartedAt !== undefined) {
         const written = yield* eventSink.writeIfRunCurrent({
           threadId: run.threadId,
@@ -2200,7 +2201,8 @@ export const layer: Layer.Layer<
             );
             const cloud = providerThreads.some(
               (provider) =>
-                provider.id === thread.activeProviderThreadId && provider.driver === "upstashBox",
+                provider.id === thread.activeProviderThreadId &&
+                isUpstashBoxDriver(provider.driver),
             );
             const cwd = cloud
               ? undefined

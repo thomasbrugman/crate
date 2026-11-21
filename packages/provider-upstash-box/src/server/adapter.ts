@@ -2,6 +2,7 @@ import {
   ProviderThreadId,
   type OrchestrationV2ProviderSession,
   type OrchestrationV2ProviderThread,
+  type ProviderDriverKind,
   type ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -11,11 +12,30 @@ import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
-import { BoxApi, BoxRuntimeError, isMissingBox, type BoxHandle, type BoxStream } from "./BoxApi.ts";
+import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
+import {
+  BOX_REPOSITORY_PATH,
+  BOX_WORKSPACE_PATH,
+  BoxApi,
+  BoxRuntimeError,
+  isMissingBox,
+  type BoxHandle,
+  type BoxStream,
+} from "./BoxApi.ts";
 import { ensureBox, type BoxRuntimeConfig, type BoxSetupStep } from "./bootstrap.ts";
 import { capabilities } from "./capabilities.ts";
 import { commandCodeHarness } from "./harness.ts";
-import { BoxTurnTranslation, UPSTASH_BOX_PROVIDER as driver } from "./translation.ts";
+import { BoxTurnTranslation } from "./translation.ts";
+
+/** Where a thread runs, read from the environment's settings each time a Box is reached. */
+export type BoxEnvironmentConfig = Pick<BoxRuntimeConfig, "apiKey" | "templateBoxName" | "size">;
+
+/** Which agent runs inside the thread's Box. */
+export interface BoxAgentConfig {
+  readonly driver: ProviderDriverKind;
+  readonly harness: BoxHarness;
+  readonly agentApiKey: string;
+}
 
 interface ActiveTurn {
   stream?: BoxStream;
@@ -45,40 +65,44 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
 
 export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(function* (
   instanceId: ProviderInstanceId,
-  config: BoxRuntimeConfig,
+  agent: BoxAgentConfig,
+  environment: Effect.Effect<BoxEnvironmentConfig>,
 ) {
+  const { driver, harness } = agent;
   const ids = yield* IdAllocator.IdAllocatorV2;
   const api = yield* BoxApi;
   const unsupported = (operation: string) =>
     Effect.fail(
       new Adapter.ProviderAdapterProtocolError({
         driver,
-        detail: `${operation} is not supported by Upstash Box`,
+        detail: `${operation} is not supported by ${BOX_HARNESS_LABELS[harness]} in Upstash Box`,
       }),
     );
   const removeBox = (thread: OrchestrationV2ProviderThread, keepUnsavedWork: boolean) => {
     const nativeId =
       thread.nativeThreadRef?.nativeId ??
       (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
-    return Effect.tryPromise({
-      try: async () => {
-        if (!nativeId) return true;
-        try {
-          const box = await api.get(nativeId, config.apiKey);
-          if (keepUnsavedWork && (await box.exec.command(SAVED_WORK_CHECK)).exitCode !== 0)
-            return false;
-          await box.delete();
-        } catch (error) {
-          if (!isMissingBox(error)) throw error;
-        }
-        return true;
-      },
-      catch: () =>
-        new Adapter.ProviderAdapterProtocolError({
-          driver,
-          detail: "Could not delete the thread Box.",
-        }),
-    });
+    return Effect.flatMap(environment, ({ apiKey }) =>
+      Effect.tryPromise({
+        try: async () => {
+          if (!nativeId) return true;
+          try {
+            const box = await api.get(nativeId, apiKey);
+            if (keepUnsavedWork && (await box.exec.command(SAVED_WORK_CHECK)).exitCode !== 0)
+              return false;
+            await box.delete();
+          } catch (error) {
+            if (!isMissingBox(error)) throw error;
+          }
+          return true;
+        },
+        catch: () =>
+          new Adapter.ProviderAdapterProtocolError({
+            driver,
+            detail: "Could not delete the thread Box.",
+          }),
+      }),
+    );
   };
   return Adapter.ProviderAdapterV2.of({
     instanceId,
@@ -92,7 +116,10 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       Effect.succeed(
         input.current.model === input.target.model
           ? { type: "apply_on_next_turn" }
-          : { type: "reject", reason: "The Command Code model is fixed when the Box is created." },
+          : {
+              type: "reject",
+              reason: `The ${BOX_HARNESS_LABELS[harness]} model is fixed when the Box is created.`,
+            },
       ),
     ),
     openSession: Effect.fn("UpstashBox.openSession")(function* (input) {
@@ -106,8 +133,8 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         driver,
         providerInstanceId: instanceId,
         status: "ready" as const,
-        cwd: "/workspace/home",
-        model: config.model || null,
+        cwd: BOX_WORKSPACE_PATH,
+        model: input.modelSelection?.model ?? null,
         capabilities,
         extensionStatuses: [],
         createdAt: now,
@@ -158,6 +185,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             return yield* runtime.resumeThread({ providerThread: request.existingProviderThread });
           // Hex encoding is injective, shell-safe, and stable across server restarts.
           const name = `t3-${Buffer.from(request.threadId).toString("hex")}`;
+          const config: BoxRuntimeConfig = {
+            ...(yield* environment),
+            harness,
+            model: request.modelSelection.model,
+            agentApiKey: agent.agentApiKey,
+          };
           yield* setSessionStatus("starting");
           const box = yield* ensureBox(
             config,
@@ -204,14 +237,17 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const previous = request.providerThread;
           const nativeId = previous.nativeThreadRef?.nativeId;
           if (!nativeId) return yield* unsupported("Resuming a thread without a Box identity");
+          const { apiKey } = yield* environment;
           const box = yield* Effect.tryPromise({
             try: async () => {
               try {
-                const box = await api.get(nativeId, config.apiKey);
-                await box.files.write({
-                  path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
-                  content: commandCodeHarness,
-                });
+                const box = await api.get(nativeId, apiKey);
+                if (harness === "commandCode") {
+                  await box.files.write({
+                    path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
+                    content: commandCodeHarness,
+                  });
+                }
                 return box;
               } catch (error) {
                 if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
@@ -258,15 +294,20 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             return yield* unsupported("Restricted runtime policies");
           const box = boxes.get(request.providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
+          // Managed agents start in the Box workspace, so they are told where the clone is.
+          const prompt =
+            harness !== "commandCode" && request.runtimePolicy.repositoryUrl
+              ? `The repository is checked out at ${BOX_REPOSITORY_PATH}.\n\n${request.message.text}`
+              : request.message.text;
           const translation = new BoxTurnTranslation(request, ids.derive, yield* DateTime.now);
           const turn: ActiveTurn = { translation, interrupted: false };
           active = turn;
           yield* publish(translation.start(yield* DateTime.now));
           const process = Effect.gen(function* () {
-            // Box supplies the prior finish.sessionId to its custom harness as --session.
+            // Box resumes the agent from the prior finish.sessionId.
             const stream = yield* Effect.tryPromise({
               try: async () => {
-                const stream = await box.agent.stream({ prompt: request.message.text });
+                const stream = await box.agent.stream({ prompt });
                 turn.stream = stream;
                 return stream;
               },

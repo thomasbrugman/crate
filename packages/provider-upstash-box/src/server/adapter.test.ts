@@ -22,6 +22,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import { BOX_HARNESS_DRIVER_KINDS } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import { BoxApi, type BoxHandle, type BoxStream } from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
@@ -71,12 +72,11 @@ const setup = Effect.fn("test.setupBox")(function* (
     },
     delete: deleteBox ?? (async () => undefined),
   };
-  const adapter = yield* makeUpstashBoxAdapter(instanceId, {
-    apiKey: "test-key",
-    templateBoxName: "cc-harness",
-    size: "small",
-    model: "",
-  }).pipe(
+  const adapter = yield* makeUpstashBoxAdapter(
+    instanceId,
+    { driver: BOX_HARNESS_DRIVER_KINDS.commandCode, harness: "commandCode", agentApiKey: "" },
+    Effect.succeed({ apiKey: "test-key", templateBoxName: "cc-harness", size: "small" }),
+  ).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
       get: async () => {

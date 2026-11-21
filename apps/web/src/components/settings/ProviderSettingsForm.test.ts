@@ -35,38 +35,15 @@ describe("ProviderSettingsForm helpers", () => {
   });
 
   it("preserves unknown config keys while omitting empty configurable fields", () => {
-    const box = providerClients.get(ProviderDriverKind.make("upstashBox"));
-    expect(box).toBeDefined();
+    const claude = providerClients.get(ProviderDriverKind.make("boxClaudeCode"));
+    expect(claude).toBeDefined();
 
-    const template = deriveProviderSettingsFields(box!).find(
-      (field) => field.key === "templateBoxName",
-    );
-    expect(template).toBeDefined();
+    const apiKey = deriveProviderSettingsFields(claude!).find((field) => field.key === "apiKey");
+    expect(apiKey).toBeDefined();
 
-    const next = nextProviderConfigWithFieldValue(
-      { forkOwned: 1, templateBoxName: "custom-template" },
-      template!,
-      "",
-    );
+    const next = nextProviderConfigWithFieldValue({ forkOwned: 1, apiKey: "key" }, apiKey!, "");
 
     expect(next).toEqual({ forkOwned: 1 });
-  });
-
-  it("does not store a text value its field's schema rejects", () => {
-    const box = providerClients.get(ProviderDriverKind.make("upstashBox"));
-    expect(box).toBeDefined();
-    const size = deriveProviderSettingsFields(box!).find((field) => field.key === "size");
-    expect(size?.control).toBe("select");
-
-    for (const invalid of ["tiny", "xlarge"]) {
-      expect(nextProviderConfigWithFieldValue({ launchArgs: "--x" }, size!, invalid)).toEqual({
-        launchArgs: "--x",
-      });
-    }
-    expect(nextProviderConfigWithFieldValue({ launchArgs: "--x" }, size!, "medium")).toEqual({
-      launchArgs: "--x",
-      size: "medium",
-    });
   });
 
   it("stores false boolean fields when true is the default", () => {
