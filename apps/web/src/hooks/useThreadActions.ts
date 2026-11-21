@@ -7,7 +7,10 @@ import {
 } from "@t3tools/client-runtime/environment";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
-import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
+import {
+  threadRuntimeCanArchive,
+  type EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/models";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
@@ -1016,14 +1019,21 @@ export function useThreadActions() {
       (result) => result._tag === "Success",
     );
 
-  const confirmAndDeleteThread = async (target: ScopedThreadRef, knownTitle?: string) => {
+  const confirmAndDeleteThread = async (
+    target: ScopedThreadRef,
+    knownThread?: Pick<
+      EnvironmentThreadShell,
+      "environmentId" | "title" | "runtime" | "modelSelection"
+    >,
+  ) => {
     const permissionFailure = threadOperationFailure(target);
     if (permissionFailure) return permissionFailure;
     const localApi = readLocalApi();
     const resolved = resolveThreadTarget(target);
 
     if (confirmThreadDelete && localApi) {
-      const title = resolved?.thread.title ?? knownTitle ?? null;
+      const thread = resolved?.thread ?? knownThread;
+      const title = thread?.title ?? null;
       const confirmationResult = await settlePromise(() =>
         localApi.dialogs.confirm(
           [
@@ -1031,7 +1041,7 @@ export function useThreadActions() {
               ? m(msg('Delete thread "this thread"?'))
               : m(msg('Delete thread "{title}"?', { title })),
             m(msg("This permanently clears conversation history for this thread.")),
-            boxThreadDeletionWarning(resolved ? [resolved.thread] : []),
+            boxThreadDeletionWarning(thread ? [thread] : []),
           ]
             .filter(Boolean)
             .join("\n"),
