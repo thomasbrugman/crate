@@ -1688,6 +1688,7 @@ export default function ChatView(props: ChatViewProps) {
   );
 
   const cloudThread = isUpstashBoxDriver(activeProviderStatus?.driver);
+  const projectScriptsAvailable = false;
   const gitStatusCwd = cloudThread ? null : (activeThread?.worktreePath ?? gitCwd);
   const gitStatusAtom =
     gitStatusCwd === null
@@ -1963,6 +1964,7 @@ export default function ChatView(props: ChatViewProps) {
     toggleTerminalVisibilityStable,
     shortcuts: terminalShortcuts,
   } = useChatTerminalActions({
+    projectScriptsAvailable,
     environmentId,
     composerRef,
     terminalUiState,
@@ -2844,7 +2846,8 @@ export default function ChatView(props: ChatViewProps) {
     },
     fallback: (command) => {
       const scriptId = projectScriptIdFromCommand(command);
-      if (!scriptId || !activeProject || !canOperateTerminal) return undefined;
+      if (!scriptId || !activeProject || !canOperateTerminal || !projectScriptsAvailable)
+        return undefined;
       const script = activeProjectScripts.find((entry) => entry.id === scriptId);
       return script ? () => void runProjectScriptStable(script) : undefined;
     },
@@ -3964,6 +3967,7 @@ export default function ChatView(props: ChatViewProps) {
                 />
 
                 <ThreadDetailsPanel
+                  cloudThread={cloudThread}
                   anchor={threadPanelPopoverAnchorRef}
                   handle={threadPanelPopoverHandle}
                   forceNewWorktree={multipleModelSelections !== null}
@@ -4023,6 +4027,7 @@ export default function ChatView(props: ChatViewProps) {
                   {...(isServerThread && isGitRepo
                     ? { onOpenChanges: openChangesFromThreadPanelStable }
                     : {})}
+                  projectScriptsAvailable={projectScriptsAvailable}
                   onRunProjectScript={runProjectScriptStable}
                   onAddProjectScript={saveProjectScriptStable}
                   onUpdateProjectScript={updateProjectScriptStable}
@@ -4120,6 +4125,7 @@ export default function ChatView(props: ChatViewProps) {
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
           diffAvailable={isServerThread && isGitRepo}
+          cloudThread={cloudThread}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           pullRequestsAvailable={linkedItemsSurfaceAvailable}

@@ -3392,9 +3392,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                     AND NOT (
                       item.type = 'user_message'
                       AND (
-                        COALESCE(run.status IN ('queued', 'cancelled'), 0)
+                        COALESCE(run.status = 'queued' OR (
+                          run.status = 'cancelled'
+                          AND json_extract(run.payload_json, '$.startedAt') IS NULL
+                        ), 0)
                         OR (
                           run.status = 'rolled_back'
+                          AND json_extract(run.payload_json, '$.startedAt') IS NULL
                           AND EXISTS (
                             SELECT 1
                             FROM orchestration_v2_projection_run_attempts AS attempt
@@ -7263,7 +7267,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       const [hidingRuns, superseded] = yield* Effect.all([
         sql<{ id: RunId; status: OrchestrationV2Run["status"] }>`
           SELECT run_id AS id, status FROM orchestration_v2_projection_runs
-          WHERE thread_id = ${threadId} AND status IN ('rolled_back', 'queued', 'cancelled')`,
+          WHERE thread_id = ${threadId} AND (
+            status IN ('rolled_back', 'queued') OR (
+              status = 'cancelled' AND json_extract(payload_json, '$.startedAt') IS NULL
+            )
+          )`,
         sql<{ runId: RunId; rootNodeId: NodeId; status: "superseded" }>`
           SELECT run_id AS runId, root_node_id AS rootNodeId, status
           FROM orchestration_v2_projection_run_attempts
@@ -8556,6 +8564,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 AND held.type = 'user_message'
                 AND json_valid(held.payload_json)
                 AND json_extract(held.payload_json, '$.inputIntent') = 'queued_turn'
+                AND EXISTS (
+                  SELECT 1 FROM orchestration_v2_projection_runs AS delivery
+                  WHERE delivery.run_id = held.run_id
+                    AND (delivery.status = 'queued'
+                      OR json_extract(delivery.payload_json, '$.startedAt') IS NULL)
+                )
             )
             ELSE 0
           END AS item_count
@@ -8576,6 +8590,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 AND held.type = 'user_message'
                 AND json_valid(held.payload_json)
                 AND json_extract(held.payload_json, '$.inputIntent') = 'queued_turn'
+                AND EXISTS (
+                  SELECT 1 FROM orchestration_v2_projection_runs AS delivery
+                  WHERE delivery.run_id = held.run_id
+                    AND (delivery.status = 'queued'
+                      OR json_extract(delivery.payload_json, '$.startedAt') IS NULL)
+                )
             ) END)
             FROM orchestration_v2_projection_runs r
               INDEXED BY orchestration_v2_projection_runs_hidden_items_idx

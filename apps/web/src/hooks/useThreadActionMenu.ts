@@ -28,6 +28,7 @@ import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { copyThreadReference } from "../lib/copyThreadReference";
 import { m } from "../i18n/messages";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
+import { boxThreadDeletionWarning } from "../lib/boxThreadDeletionWarning";
 import { threadEnvironment } from "../state/threads";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope } from "../state/session";
@@ -347,7 +348,10 @@ export function useThreadActionMenu(input: {
                 [
                   m(msg('Delete thread "{title}"?', { title: thread.title })),
                   m(msg("This permanently clears conversation history for this thread.")),
-                ].join("\n"),
+                  boxThreadDeletionWarning([thread]),
+                ]
+                  .filter(Boolean)
+                  .join("\n"),
                 { variant: "destructive" },
               ),
             );
