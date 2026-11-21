@@ -111,7 +111,12 @@ it.effect("deletes Boxes of threads settled and quiet for three days unless they
       shell("unsettled", { settledAt: null }),
       shell("running", { activeRunId: "run-1" as OrchestrationV2ThreadShell["activeRunId"] }),
       shell("codex", {}),
+      shell("followed-up", {}),
     ];
+    const current = (threadId: ThreadId) =>
+      threadId === "followed-up"
+        ? { ...threads.at(-1)!, latestUserMessageAt: at(0) }
+        : threads.find((thread) => thread.id === threadId)!;
     const providerThread = (threadId: ThreadId) =>
       ({
         id: ProviderThreadId.make(`${threadId}-box`),
@@ -137,6 +142,7 @@ it.effect("deletes Boxes of threads settled and quiet for three days unless they
         Effect.provide(ProviderAdapterRegistry.layerFromAdapters([adapter])),
         Effect.provideService(ProjectionStore.ProjectionStoreV2, {
           getShellSnapshot: () => Effect.succeed({ threads }),
+          getThreadShell: (threadId: ThreadId) => Effect.succeed(current(threadId)),
           getThreadRecords: (threadId: ThreadId) =>
             Effect.succeed({ providerThreads: [providerThread(threadId)] }),
         } as unknown as ProjectionStore.ProjectionStoreV2Shape),

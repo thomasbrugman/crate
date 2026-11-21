@@ -121,6 +121,9 @@ export const cleanupSettledBoxes = Effect.fn("ResourceCleanupService.cleanupSett
         if (thread.driver !== "upstashBox" || released.has(key)) continue;
         yield* Effect.gen(function* () {
           const adapter = yield* adapters.get(thread.providerInstanceId);
+          const current = yield* projections.getThreadShell(shell.id);
+          // A follow-up may have started since the snapshot was read.
+          if (current === null || settledBoxQuietSince(current, now) !== quietSince) return;
           if (!adapter.deleteIdleThread) return;
           if (yield* adapter.deleteIdleThread(thread)) released.add(key);
           else
