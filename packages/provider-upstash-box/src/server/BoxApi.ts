@@ -45,9 +45,11 @@ export interface BoxHandle {
   readonly id: string;
   readonly agent: { readonly stream: (options: StreamOptions) => Promise<BoxStream> };
   readonly exec: {
-    readonly command: (
-      command: string,
-    ) => Promise<{ readonly stdout: string; readonly exitCode: number | null }>;
+    readonly command: (command: string) => Promise<{
+      readonly stdout: string;
+      readonly stderr?: string;
+      readonly exitCode: number | null;
+    }>;
   };
   readonly files: {
     readonly write: (options: { path: string; content: string }) => Promise<unknown>;
