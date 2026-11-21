@@ -43,6 +43,17 @@ interface ActiveTurn {
   interrupted: boolean;
 }
 
+// Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
+// untracked files, stashes, commits missing from the remote, or files beside the repository.
+const SAVED_WORK_CHECK = [
+  "if [ -d /workspace/home/repo/.git ]; then",
+  'cd /workspace/home && files=$(ls -A) && test "$files" = repo && cd repo &&',
+  'status=$(git -c status.showUntrackedFiles=all status --porcelain) && test -z "$status" &&',
+  'stash=$(git stash list) && test -z "$stash" &&',
+  'unpushed=$(git rev-list --count HEAD --branches --not --remotes) && test "$unpushed" = 0;',
+  'else files=$(ls -A /workspace/home) && test -z "$files"; fi',
+].join(" ");
+
 const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
   connect: "Connecting to the Box",
   create: "Creating the Box",
@@ -67,30 +78,39 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         detail: `${operation} is not supported by ${BOX_HARNESS_LABELS[harness]} in Upstash Box`,
       }),
     );
-  return Adapter.ProviderAdapterV2.of({
-    instanceId,
-    driver,
-    deleteThread: Effect.fn("UpstashBox.deleteThread")(function* (thread) {
-      const nativeId =
-        thread.nativeThreadRef?.nativeId ??
-        (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
-      if (!nativeId) return;
-      const { apiKey } = yield* environment;
-      yield* Effect.tryPromise({
+  const removeBox = (thread: OrchestrationV2ProviderThread, keepUnsavedWork: boolean) => {
+    const nativeId =
+      thread.nativeThreadRef?.nativeId ??
+      (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
+    return Effect.flatMap(environment, ({ apiKey }) =>
+      Effect.tryPromise({
         try: async () => {
+          if (!nativeId) return true;
           try {
-            await (await api.get(nativeId, apiKey)).delete();
+            const box = await api.get(nativeId, apiKey);
+            if (keepUnsavedWork && (await box.exec.command(SAVED_WORK_CHECK)).exitCode !== 0)
+              return false;
+            await box.delete();
           } catch (error) {
             if (!isMissingBox(error)) throw error;
           }
+          return true;
         },
         catch: () =>
           new Adapter.ProviderAdapterProtocolError({
             driver,
             detail: "Could not delete the thread Box.",
           }),
-      });
+      }),
+    );
+  };
+  return Adapter.ProviderAdapterV2.of({
+    instanceId,
+    driver,
+    deleteThread: Effect.fn("UpstashBox.deleteThread")(function* (thread) {
+      yield* removeBox(thread, false);
     }),
+    deleteIdleThread: Effect.fn("UpstashBox.deleteIdleThread")((thread) => removeBox(thread, true)),
     getCapabilities: Effect.fn("UpstashBox.getCapabilities")(() => Effect.succeed(capabilities)),
     planSelectionTransition: Effect.fn("UpstashBox.planSelectionTransition")((input) =>
       Effect.succeed(
