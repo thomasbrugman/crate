@@ -298,7 +298,7 @@ import {
 } from "../../state/entities";
 import { environmentPresentations, useEnvironmentPresentation } from "../../state/presentation";
 import { useThreadSelection } from "../../state/use-thread-selection";
-import { isBoxThreadDriver } from "@t3tools/client-runtime/provider-clients";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useModelMentions } from "../../state/model-mentions";
@@ -3135,7 +3135,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const thread = useQuietThreadShell(props.detailRef);
   const providers = useAtomValue(environmentPresentations.providersByEnvironmentAtom);
   const instanceId = thread?.runtime?.providerInstanceId ?? thread?.modelSelection.instanceId;
-  const cloudThread = isBoxThreadDriver(
+  const cloudThread = isUpstashBoxDriver(
     providers.get(props.environmentId)?.find((provider) => provider.instanceId === instanceId)
       ?.driver,
   );

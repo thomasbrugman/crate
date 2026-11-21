@@ -1,4 +1,4 @@
-import { isBoxThreadDriver } from "@t3tools/client-runtime/provider-clients";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
@@ -354,7 +354,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       ) ?? null
     );
   })();
-  const cloudThread = isBoxThreadDriver(selectedProviderStatus?.driver);
+  const cloudThread = isUpstashBoxDriver(selectedProviderStatus?.driver);
   const openDraftDocument = (attachment: ComposerDocumentAttachment) => {
     Keyboard.dismiss();
     navigation.navigate("ThreadAttachment", {

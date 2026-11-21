@@ -3493,12 +3493,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           {props.cloudThread ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">
-              <T>
-                Attachments and file previews are not available in cloud threads. File mentions use
-                the server checkout; only pushed files are available in the Box.
-              </T>
-            </div>
+            <ComposerBanner.Attachment>
+              <ComposerBanner.Root variant="info" density="spacious">
+                <T>
+                  Attachments and file previews are not available in cloud threads. File mentions
+                  use the server checkout; only pushed files are available in the Box.
+                </T>
+              </ComposerBanner.Root>
+            </ComposerBanner.Attachment>
           ) : null}
           <ComposerBannerStack items={shelfItems} />
           {showComposerTopDrawer ? (

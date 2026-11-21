@@ -1,4 +1,4 @@
-import { isBoxThreadDriver } from "@t3tools/client-runtime/provider-clients";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useGT, useMessages } from "gt-react";
@@ -1390,7 +1390,7 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
-  const cloudThread = isBoxThreadDriver(selectedProvider);
+  const cloudThread = isUpstashBoxDriver(selectedProvider);
   const supportsQuestionAttachments = attachmentEnvironmentConfig !== null && !cloudThread;
   const supportsAttachmentUploads = attachmentEnvironmentConfig !== null && !cloudThread;
   const conversationProviderStatus =

@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { ThreadId, type OrchestrationV2ProviderThread } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -24,7 +25,7 @@ export const cleanupBoxThreads = Effect.fn("ResourceCleanupService.cleanupBoxThr
     if (!input.deleted) return;
     const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
     for (const thread of input.providerThreads) {
-      if (thread.driver !== "upstashBox") continue;
+      if (!isUpstashBoxDriver(thread.driver)) continue;
       yield* Effect.gen(function* () {
         const adapter = yield* adapters.get(thread.providerInstanceId);
         yield* adapter.deleteThread?.(thread) ?? Effect.void;

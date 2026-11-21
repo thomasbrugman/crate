@@ -1,4 +1,4 @@
-import { isBoxThreadDriver } from "@t3tools/client-runtime/provider-clients";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { msg, T, useGT, useMessages } from "gt-react";
@@ -603,7 +603,7 @@ function useChatMarkdownState({
   const thread = useQuietThreadShell(threadRef ?? null);
   const providers = useEnvironmentProviders();
   const instanceId = thread?.runtime?.providerInstanceId ?? thread?.modelSelection.instanceId;
-  const cloudThread = isBoxThreadDriver(
+  const cloudThread = isUpstashBoxDriver(
     environmentId === null
       ? undefined
       : providers.get(environmentId)?.find((provider) => provider.instanceId === instanceId)

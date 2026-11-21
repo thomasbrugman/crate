@@ -1,7 +1,7 @@
 import { isProviderDriverKind, type ProviderDriverKind } from "@t3tools/contracts";
 import { makeProviderClientRegistry, type ProviderIcon } from "@t3tools/provider-core/client";
 import { modelShortName } from "@t3tools/provider-core/modelShortName";
-import { upstashBoxClient } from "@t3tools/provider-upstash-box/client";
+import { boxProviderClients } from "@t3tools/provider-upstash-box/client";
 
 // OpenRouter's Ink and Cloud glyphs from https://openrouter.ai/brand.
 export const openRouterIcon: ProviderIcon = {
@@ -14,11 +14,9 @@ export const openRouterIcon: ProviderIcon = {
   ],
 };
 
-export const providerClients = makeProviderClientRegistry([upstashBoxClient]);
+export const providerClients = makeProviderClientRegistry(boxProviderClients);
 
-export function isBoxThreadDriver(driver: string | null | undefined): boolean {
-  return driver === "upstashBox";
-}
+export { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 
 export function getProviderClient(driver: string | null | undefined) {
   return isProviderDriverKind(driver) ? providerClients.get(driver) : undefined;
