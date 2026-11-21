@@ -45,13 +45,14 @@ interface ActiveTurn {
 
 // Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
 // untracked files, stashes, commits missing from the remote, or files beside the repository.
+// Every Box starts with the agent configuration directories below in its workspace.
 const SAVED_WORK_CHECK = [
-  "if [ -d /workspace/home/repo/.git ]; then",
-  'cd /workspace/home && files=$(ls -A) && test "$files" = repo && cd repo &&',
+  "cd /workspace/home && entries=$(ls -A) &&",
+  'extra=$(printf "%s\\n" "$entries" | grep -vxF -e repo -e .claude -e .codex -e .cursor -e .local || true) &&',
+  'test -z "$extra" && { test ! -e repo || { cd repo && test -d .git &&',
   'status=$(git -c status.showUntrackedFiles=all status --porcelain) && test -z "$status" &&',
   'stash=$(git stash list) && test -z "$stash" &&',
-  'unpushed=$(git rev-list --count HEAD --branches --not --remotes) && test "$unpushed" = 0;',
-  'else files=$(ls -A /workspace/home) && test -z "$files"; fi',
+  'unpushed=$(git rev-list --count HEAD --branches --not --remotes) && test "$unpushed" = 0; }; }',
 ].join(" ");
 
 const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
