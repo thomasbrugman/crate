@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import {
   isRuntimeModeAbove,
   managedRuntimeModeCeilingMessage,
@@ -161,7 +162,9 @@ export const layerFromProjectStore: Layer.Layer<
             ? undefined
             : (yield* instance.snapshot.getSnapshot).supportedRuntimeModes;
         const cwd =
-          (instance?.driverKind === "upstashBox" ? "/workspace/home" : input.thread.worktreePath) ??
+          (isUpstashBoxDriver(instance?.driverKind)
+            ? "/workspace/home"
+            : input.thread.worktreePath) ??
           (yield* projects.get(input.thread.projectId).pipe(
             Effect.mapError(
               (cause) =>
@@ -185,17 +188,16 @@ export const layerFromProjectStore: Layer.Layer<
               }),
             ),
           ));
-        const repositoryUrl =
-          instance?.driverKind === "upstashBox"
-            ? yield* projects.get(input.thread.projectId).pipe(
-                Effect.flatMap((project) =>
-                  Option.isSome(project)
-                    ? resolveBoxRepository(project.value.workspaceRoot)
-                    : Effect.undefined,
-                ),
-                Effect.orElseSucceed(() => undefined),
-              )
-            : undefined;
+        const repositoryUrl = isUpstashBoxDriver(instance?.driverKind)
+          ? yield* projects.get(input.thread.projectId).pipe(
+              Effect.flatMap((project) =>
+                Option.isSome(project)
+                  ? resolveBoxRepository(project.value.workspaceRoot)
+                  : Effect.undefined,
+              ),
+              Effect.orElseSucceed(() => undefined),
+            )
+          : undefined;
         return ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
           runtimeMode: providerRuntimeMode(input.thread.runtimeMode, supportedRuntimeModes),
           interactionMode: input.thread.interactionMode,

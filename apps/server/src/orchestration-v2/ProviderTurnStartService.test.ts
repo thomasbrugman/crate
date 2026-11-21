@@ -544,7 +544,7 @@ function makeLocalCommandHarness(input: {
     id: providerThreadId,
     driver: ProviderDriverKind.make(
       input.box
-        ? "upstashBox"
+        ? "boxCommandCode"
         : input.nativeGoals === undefined
           ? "codex"
           : (input.goalDriver ?? "opencode"),

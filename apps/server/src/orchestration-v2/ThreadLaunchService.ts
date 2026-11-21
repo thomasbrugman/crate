@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
@@ -286,7 +287,7 @@ const make = Effect.gen(function* () {
     providerRegistry.getProviders.pipe(
       Effect.map((providers) =>
         providers.some(
-          (provider) => provider.instanceId === instanceId && provider.driver === "upstashBox",
+          (provider) => provider.instanceId === instanceId && isUpstashBoxDriver(provider.driver),
         ),
       ),
     );

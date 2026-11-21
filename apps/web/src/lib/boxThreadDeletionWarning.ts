@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { msg } from "gt-react";
 
@@ -13,7 +14,7 @@ export function boxThreadDeletionWarning(threads: ReadonlyArray<DeletionThread>)
   const hasBoxThread = threads.some((thread) =>
     readEnvironmentProviders(thread.environmentId)?.some(
       (provider) =>
-        provider.driver === "upstashBox" &&
+        isUpstashBoxDriver(provider.driver) &&
         (provider.instanceId ===
           (thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId) ||
           thread.providerInstanceHistory.includes(provider.instanceId)),

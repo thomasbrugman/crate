@@ -9,6 +9,7 @@ import {
   type SettingsSecretValue,
   SimlockDeviceHostConfig,
   TextGeneratorConfig,
+  UpstashBoxEnvironmentSettings,
   UsageLimitSourceConfig,
   isSecretReference,
   secretSettingsFields,
@@ -20,6 +21,7 @@ import { kiroClient } from "@t3tools/provider-kiro/client";
 import { museClient } from "@t3tools/provider-muse/client";
 import { openCodeClient } from "@t3tools/provider-opencode/client";
 import { piClient } from "@t3tools/provider-pi/client";
+import { boxProviderClients } from "@t3tools/provider-upstash-box/client";
 import {
   readSecretFieldValues,
   SOURCE_CONTROL_HOST_SECRET_FIELDS,
@@ -41,6 +43,7 @@ const providerSecretFields = new Map([
     openCodeClient,
     piClient,
     acpRegistryClient,
+    ...boxProviderClients,
   ].map(
     (definition) =>
       [definition.driverKind, secretSettingsFields(definition.settingsSchema)] as const,
@@ -48,6 +51,7 @@ const providerSecretFields = new Map([
 ]);
 const usageLimitSecretFields = secretSettingsFields(UsageLimitSourceConfig);
 const textGeneratorSecretFields = secretSettingsFields(TextGeneratorConfig);
+const upstashBoxSecretFields = secretSettingsFields(UpstashBoxEnvironmentSettings);
 const voiceSecretFields = secretSettingsFields(CloudSpeechCredentials);
 const easDeviceHostSecretFields = secretSettingsFields(EasDeviceHostConfig);
 const simlockDeviceHostSecretFields = secretSettingsFields(SimlockDeviceHostConfig);
@@ -258,6 +262,12 @@ function mapSecretFieldGroups(
     sourceControlHosts,
     usageLimitSources,
     textGenerators,
+    upstashBox: mapFields(
+      settings.upstashBox,
+      upstashBoxSecretFields,
+      (field, serverHost) =>
+        `upstash-box-${encode(field)}` + (serverHost === null ? "" : `-${encode(serverHost)}`),
+    ) as ServerSettings["upstashBox"],
     easDeviceHosts,
     simlockDeviceHosts,
   };

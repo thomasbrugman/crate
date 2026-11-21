@@ -19,7 +19,7 @@ it.effect(
     Effect.gen(function* () {
       const now = yield* DateTime.now;
       const instanceId = ProviderInstanceId.make("box-cleanup");
-      const driver = ProviderDriverKind.make("upstashBox");
+      const driver = ProviderDriverKind.make("boxCommandCode");
       const threadId = ThreadId.make("box-cleanup-thread");
       const providerThread: OrchestrationV2ProviderThread = {
         id: ProviderThreadId.make("box-cleanup-provider-thread"),
