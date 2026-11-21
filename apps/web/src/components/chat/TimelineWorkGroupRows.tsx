@@ -443,9 +443,78 @@ export function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind:
   const ctx = use(TimelineRowCtx);
   const gt = useGT();
   const m = useMessages();
-  const { isCompacting, isPreparingWorktree, liveAnswerPreview, providerStartingLabel } =
-    use(TimelineRowActivityCtx);
+  const {
+    isCompacting,
+    isPreparingWorktree,
+    liveAnswerPreview,
+    providerStartingLabel,
+    boxSetupChecklist,
+  } = use(TimelineRowActivityCtx);
   if (isPreparingWorktree || isCompacting) return <WorkLogRow label="" />;
+  if (boxSetupChecklist) {
+    return (
+      <div className="w-full max-w-sm rounded-lg border border-border px-3 py-2 text-xs text-foreground">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span>{gt("Setting up Box")}</span>
+          <span className="text-muted-foreground">
+            {
+              boxSetupChecklist.filter((step) => step.state === "done" || step.state === "skipped")
+                .length
+            }
+            /{boxSetupChecklist.length}
+          </span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {boxSetupChecklist.map((step) => (
+            <div
+              key={step.key}
+              className="flex items-center gap-2"
+              aria-current={step.state === "active" ? "step" : undefined}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 14 14"
+                className={
+                  step.state === "done" || step.state === "active"
+                    ? "size-3.5 shrink-0 text-foreground"
+                    : "size-3.5 shrink-0 text-muted-foreground"
+                }
+              >
+                <circle
+                  cx="7"
+                  cy="7"
+                  r="6"
+                  fill={step.state === "done" ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  strokeDasharray={step.state === "active" ? "2 2" : undefined}
+                />
+                {step.state === "done" && (
+                  <path
+                    d="m4 7 2 2 4-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    className="text-background"
+                  />
+                )}
+                {step.state === "skipped" && <path d="m3 11 8-8" stroke="currentColor" />}
+              </svg>
+              <span
+                className={
+                  step.state === "done" || step.state === "skipped"
+                    ? "text-muted-foreground line-through"
+                    : "text-foreground"
+                }
+              >
+                {m(step.labelMsg)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   // A failed group keeps this disclosure while an approval waits, but nothing is thinking then.
   const live = ctx.pendingApprovals.size === 0;
   const activity = (

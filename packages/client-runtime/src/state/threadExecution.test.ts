@@ -22,6 +22,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
 import {
+  boxSetupChecklistsEqual,
   canResumeThread,
   deriveReportedModelSelection,
   deriveLatestThreadRun,
@@ -448,8 +449,56 @@ describe("thread execution presentation", () => {
     ).toBe("Setting up Box");
     const cloning = {
       ...boxSession,
-      extensionStatuses: [{ key: "upstash-box.setup.clone", text: "Cloning the repository" }],
+      extensionStatuses: [
+        { key: "upstash-box.setup.clone", text: "Cloning the repository" },
+        { key: "upstash-box.setup.check", text: "Checking the Box setup" },
+        { key: "upstash-box.setup.connect", text: "Connecting to the Box" },
+      ],
     };
+    expect(
+      deriveThreadActivityRun({
+        ...starting,
+        providerSessions: [boxSession],
+      })?.boxSetupChecklist?.map((step) => step.state),
+    ).toEqual(["active", "pending", "pending", "pending", "pending", "pending"]);
+    expect(
+      deriveThreadActivityRun({ ...starting, providerSessions: [cloning] })?.boxSetupChecklist?.map(
+        (step) => step.state,
+      ),
+    ).toEqual(["done", "skipped", "done", "skipped", "skipped", "active"]);
+    for (const status of ["ready", "error"] as const) {
+      expect(
+        deriveThreadActivityRun({ ...starting, providerSessions: [{ ...cloning, status }] })
+          ?.boxSetupChecklist,
+      ).toBeUndefined();
+    }
+    expect(deriveThreadActivityRun(starting)?.boxSetupChecklist).toBeUndefined();
+    const checklist = deriveThreadActivityRun({
+      ...starting,
+      providerSessions: [cloning],
+    })?.boxSetupChecklist;
+    expect(
+      boxSetupChecklistsEqual(
+        checklist,
+        checklist?.map((step) => ({ ...step })),
+      ),
+    ).toBe(true);
+    expect(boxSetupChecklistsEqual(undefined, undefined)).toBe(true);
+    expect(boxSetupChecklistsEqual(checklist, undefined)).toBe(false);
+    expect(boxSetupChecklistsEqual(undefined, checklist)).toBe(false);
+    expect(boxSetupChecklistsEqual(checklist, checklist?.slice(1))).toBe(false);
+    expect(
+      boxSetupChecklistsEqual(
+        checklist,
+        checklist?.map((step) => ({ ...step, state: "pending" })),
+      ),
+    ).toBe(false);
+    expect(
+      boxSetupChecklistsEqual(
+        checklist,
+        checklist?.map((step) => ({ ...step, key: "different" })),
+      ),
+    ).toBe(false);
     expect(
       deriveThreadActivityRun({ ...starting, providerSessions: [cloning] })?.providerStartingLabel,
     ).toBe("Cloning the repository");

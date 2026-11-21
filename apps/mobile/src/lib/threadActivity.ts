@@ -1,3 +1,5 @@
+import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
+import { boxSetupChecklistsEqual } from "@t3tools/client-runtime/state/thread-execution";
 import type {
   ThreadPendingApproval,
   ThreadPendingUserInput,
@@ -268,6 +270,7 @@ type ThreadFeedEntryContent =
       readonly label?: string;
       /** Shown instead of "Thinking" while the provider has not started a turn. */
       readonly providerStartingLabel?: string;
+      readonly boxSetupChecklist?: ThreadRunSummary["boxSetupChecklist"];
     };
 
 export interface ThreadFeedLatestRun {
@@ -278,6 +281,7 @@ export interface ThreadFeedLatestRun {
   readonly turnEnded?: boolean;
   readonly providerStartingLabel?: string;
   readonly providerStartingLabelMsg?: string;
+  readonly boxSetupChecklist?: ThreadRunSummary["boxSetupChecklist"];
 }
 
 /** Long Android headers can ANR despite one-line display; cap labels only, preserving expanded and copied text. */
@@ -1476,7 +1480,8 @@ function latestRunsEqual(left: ThreadFeedLatestRun | null, right: ThreadFeedLate
       left.completedAt === right.completedAt &&
       left.turnEnded === right.turnEnded &&
       left.providerStartingLabel === right.providerStartingLabel &&
-      left.providerStartingLabelMsg === right.providerStartingLabelMsg)
+      left.providerStartingLabelMsg === right.providerStartingLabelMsg &&
+      boxSetupChecklistsEqual(left.boxSetupChecklist, right.boxSetupChecklist))
   );
 }
 
@@ -1958,6 +1963,7 @@ export function deriveThreadFeedPresentation(
         latestRun?.providerStartingLabelMsg === undefined
           ? latestRun?.providerStartingLabel
           : resolve(latestRun.providerStartingLabelMsg),
+        latestRun?.boxSetupChecklist,
       ),
     );
   }
@@ -2104,12 +2110,14 @@ function thinkingRow(
   runId: RunId | null,
   label: string | null,
   providerStartingLabel: string | undefined,
+  boxSetupChecklist: ThreadRunSummary["boxSetupChecklist"],
 ) {
   if (
     cachedThinkingRow?.createdAt !== createdAt ||
     cachedThinkingRow.runId !== runId ||
     (cachedThinkingRow.label ?? null) !== label ||
-    cachedThinkingRow.providerStartingLabel !== providerStartingLabel
+    cachedThinkingRow.providerStartingLabel !== providerStartingLabel ||
+    !boxSetupChecklistsEqual(cachedThinkingRow.boxSetupChecklist, boxSetupChecklist)
   ) {
     cachedThinkingRow = {
       type: "thinking",
@@ -2118,6 +2126,7 @@ function thinkingRow(
       runId,
       ...(label === null ? {} : { label }),
       ...(providerStartingLabel === undefined ? {} : { providerStartingLabel }),
+      ...(boxSetupChecklist === undefined ? {} : { boxSetupChecklist }),
     };
   }
   return cachedThinkingRow;

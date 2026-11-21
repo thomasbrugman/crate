@@ -99,6 +99,11 @@ export interface ThreadRunSummary {
   readonly providerStartingLabel?: string;
   /** `providerStartingLabel` as a `msg()` string; display sites resolve this one. */
   readonly providerStartingLabelMsg?: string;
+  readonly boxSetupChecklist?: ReadonlyArray<{
+    readonly key: string;
+    readonly labelMsg: string;
+    readonly state: "done" | "active" | "skipped" | "pending";
+  }>;
   readonly sourcePlanRef?: {
     readonly threadId: ThreadId;
     readonly planId: PlanId;

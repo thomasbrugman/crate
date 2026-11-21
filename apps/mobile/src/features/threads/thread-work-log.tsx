@@ -1,3 +1,4 @@
+import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
 import { Button } from "../../components/ui/Button";
 import { ThreadSubagentGroup } from "./thread-subagent-group";
 import { ProposedPlanCard } from "./ProposedPlanCard";
@@ -1451,9 +1452,70 @@ export function ThreadThinkingRow(props: {
   readonly label?: string;
   /** Replaces "Thinking" while the provider has not started a turn. */
   readonly providerStartingLabel?: string | undefined;
+  readonly boxSetupChecklist?: ThreadRunSummary["boxSetupChecklist"];
 }) {
   const gt = useGT();
+  const messages = useMessages();
   const label = props.providerStartingLabel ?? props.label ?? gt("Thinking");
+  if (props.boxSetupChecklist) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={messages(
+          props.boxSetupChecklist.find((step) => step.state === "active")?.labelMsg ??
+            props.providerStartingLabel ??
+            label,
+        )}
+        className="gap-2 rounded-lg border border-border px-3 py-2"
+      >
+        <View className="flex-row items-center justify-between gap-3">
+          <Text className="text-xs text-foreground">{gt("Setting up Box")}</Text>
+          <Text className="text-xs text-foreground-muted">
+            {
+              props.boxSetupChecklist.filter(
+                (step) => step.state === "done" || step.state === "skipped",
+              ).length
+            }
+            /{props.boxSetupChecklist.length}
+          </Text>
+        </View>
+        {props.boxSetupChecklist.map((step) => (
+          <View key={step.key} className="flex-row items-center gap-2">
+            <View
+              className={cn(
+                "size-3.5 items-center justify-center rounded-full border",
+                step.state === "done"
+                  ? "border-foreground bg-foreground"
+                  : step.state === "active"
+                    ? "border-foreground"
+                    : "border-foreground-muted",
+              )}
+              style={step.state === "active" ? { borderStyle: "dashed" } : undefined}
+            >
+              {step.state === "done" && (
+                <SymbolView name="checkmark" size={10} tintColorClassName="accent-thread-canvas" />
+              )}
+              {step.state === "skipped" && (
+                <View
+                  className="absolute h-px w-3 bg-foreground-muted"
+                  style={{ transform: [{ rotate: "-45deg" }] }}
+                />
+              )}
+            </View>
+            <Text
+              className={
+                step.state === "done" || step.state === "skipped"
+                  ? "text-xs text-foreground-muted line-through"
+                  : "text-xs text-foreground"
+              }
+            >
+              {messages(step.labelMsg)}
+            </Text>
+          </View>
+        ))}
+      </View>
+    );
+  }
   return (
     <View
       accessible

@@ -87,6 +87,7 @@ import {
   RuntimeMode,
 } from "@t3tools/contracts";
 import {
+  boxSetupChecklistsEqual,
   canResumeThread,
   deriveProviderSubagentStatus,
   deriveProviderExtensionStatuses,
@@ -866,6 +867,10 @@ export default function ChatView(props: ChatViewProps) {
   const supportsProviderSwitchingViaHandoff = threadSupportsProviderHandoff(serverProjection);
   const activeLatestRun = isServerThread ? serverLatestRun : (activeThread?.latestRun ?? null);
   const activeActivityRun = isServerThread ? serverActivityRun : (activeThread?.latestRun ?? null);
+  const [boxSetupChecklist, setBoxSetupChecklist] = useState(activeActivityRun?.boxSetupChecklist);
+  if (!boxSetupChecklistsEqual(boxSetupChecklist, activeActivityRun?.boxSetupChecklist)) {
+    setBoxSetupChecklist(activeActivityRun?.boxSetupChecklist);
+  }
   const activeRuntime = isServerThread ? serverRuntime : (activeThread?.runtime ?? null);
   const hasHeldQueuedRuns =
     isServerThread &&
@@ -3545,6 +3550,7 @@ export default function ChatView(props: ChatViewProps) {
                     activePendingApproval?.requestId ?? activePendingUserInput?.requestId ?? null
                   }
                   activeTurnStartedAt={activeWorkStartedAt}
+                  boxSetupChecklist={boxSetupChecklist}
                   providerStartingLabel={
                     activeActivityRun?.providerStartingLabelMsg
                       ? messages(activeActivityRun.providerStartingLabelMsg)
