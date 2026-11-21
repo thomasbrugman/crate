@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - The saved-work test runs the real check script in temporary Git workspaces.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
