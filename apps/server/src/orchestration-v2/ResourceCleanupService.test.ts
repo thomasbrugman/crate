@@ -9,11 +9,14 @@ import {
 } from "@t3tools/contracts";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import { cleanupBoxThreads, cleanupSettledBoxes } from "./ResourceCleanupService.ts";
+import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 
 it.effect(
   "retains archived Boxes and cleans deleted Boxes independently of individual failures",
@@ -152,5 +155,90 @@ it.effect("deletes Boxes of threads settled and quiet for three days unless they
     assert.deepEqual(checked, ["due", "holds-work"]);
     yield* sweep(released);
     assert.deepEqual(checked, ["due", "holds-work", "holds-work"]);
-  }),
+  }).pipe(Effect.provide(ThreadCommandExecutor.layer)),
+);
+
+it.effect("serializes settled Box deletion with follow-up intake in either order", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      for (const order of ["cleanup-first", "turn-first", "cleanup-error"] as const) {
+        const cleanupFirst = order !== "turn-first";
+        const dispatch = yield* ThreadCommandExecutor.make;
+        const entered = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const now = yield* DateTime.now;
+        const threadId = ThreadId.make("concurrent-follow-up");
+        const instanceId = ProviderInstanceId.make("box-cleanup");
+        const driver = ProviderDriverKind.make("boxCommandCode");
+        let shell = {
+          id: threadId,
+          activeRunId: null,
+          pendingRuntimeRequest: null,
+          pendingBackgroundTasks: [],
+          settledAt: DateTime.makeUnsafe(DateTime.toEpochMillis(now) - 4 * 86_400_000),
+        } as unknown as OrchestrationV2ThreadShell;
+        const thread = {
+          id: ProviderThreadId.make("concurrent-box"),
+          appThreadId: threadId,
+          providerInstanceId: instanceId,
+          driver,
+        } as OrchestrationV2ProviderThread;
+        let started = false;
+        let deleted = false;
+        const adapter = Adapter.ProviderAdapterV2.of({
+          instanceId,
+          driver,
+          getCapabilities: () => Effect.die("unused"),
+          planSelectionTransition: () => Effect.die("unused"),
+          openSession: () => Effect.die("unused"),
+          deleteIdleThread: () =>
+            Effect.gen(function* () {
+              yield* Deferred.succeed(entered, undefined);
+              yield* Deferred.await(release);
+              assert.isFalse(started);
+              if (order === "cleanup-error")
+                return yield* new Adapter.ProviderAdapterProtocolError({
+                  driver,
+                  detail: "Delete failed.",
+                });
+              deleted = true;
+              return true;
+            }),
+        });
+        const sweep = cleanupSettledBoxes(new Set()).pipe(
+          Effect.provideService(ThreadCommandExecutor.ThreadCommandExecutor, dispatch),
+          Effect.provide(ProviderAdapterRegistry.layerFromAdapters([adapter])),
+          Effect.provideService(ProjectionStore.ProjectionStoreV2, {
+            getShellSnapshot: () => Effect.succeed({ threads: [shell] }),
+            getThreadShell: () => Effect.sync(() => shell),
+            getThreadRecords: () => Effect.succeed({ providerThreads: [thread] }),
+          } as unknown as ProjectionStore.ProjectionStoreV2Shape),
+        );
+        const followUp = dispatch.withLock(
+          threadId,
+          Effect.gen(function* () {
+            if (!cleanupFirst) {
+              yield* Deferred.succeed(entered, undefined);
+              yield* Deferred.await(release);
+            }
+            started = true;
+            shell = { ...shell, latestUserMessageAt: now };
+          }),
+        );
+        const first = yield* (cleanupFirst ? sweep : followUp).pipe(
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Deferred.await(entered);
+        const second = yield* (cleanupFirst ? followUp : sweep).pipe(
+          Effect.forkChild({ startImmediately: true }),
+        );
+        assert.isFalse(started);
+        yield* Deferred.succeed(release, undefined);
+        yield* Fiber.join(first);
+        yield* Fiber.join(second);
+        assert.isTrue(started);
+        assert.equal(deleted, order === "cleanup-first");
+      }
+    }),
+  ),
 );
