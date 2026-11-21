@@ -2880,6 +2880,7 @@
   "cde84b45d4aebd17": "Uploaded attachment could not be verified. Retry when the server reconnects.",
   "3a69567de3069c41": "Attachment still uploading",
   "475fcc23da6c9997": "Attachments still uploading",
+  "b2e7398bcfb15350": "Deleting a cloud thread also permanently deletes its Box and any unpushed changes in it.",
   "8a716fa4339878b4": "L{start} (before)",
   "bb4924538fda7405": "L{start} to L{end} (before)",
   "b0c4ffd6931493e9": "L{start} to L{end}",

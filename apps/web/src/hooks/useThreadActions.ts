@@ -40,6 +40,7 @@ import { releaseComposerDraftUploads } from "../lib/composerDraftUploads";
 import { announce } from "../lib/announce";
 import { m } from "../i18n/messages";
 import { readLocalApi } from "../localApi";
+import { boxThreadDeletionWarning } from "../lib/boxThreadDeletionWarning";
 import {
   readDelegatedUnderParent,
   readEnvironmentServerConfigLoaded,
@@ -1030,7 +1031,10 @@ export function useThreadActions() {
               ? m(msg('Delete thread "this thread"?'))
               : m(msg('Delete thread "{title}"?', { title })),
             m(msg("This permanently clears conversation history for this thread.")),
-          ].join("\n"),
+            boxThreadDeletionWarning(resolved ? [resolved.thread] : []),
+          ]
+            .filter(Boolean)
+            .join("\n"),
           { variant: "destructive" },
         ),
       );

@@ -2881,6 +2881,7 @@
   "cde84b45d4aebd17": "Hochgeladener Anhang konnte nicht überprüft werden. Versuche es erneut, wenn der Server wieder verbunden ist.",
   "3a69567de3069c41": "Anhang wird noch hochgeladen",
   "475fcc23da6c9997": "Anhänge werden noch hochgeladen",
+  "b2e7398bcfb15350": "Beim Löschen eines Cloud-Threads werden auch seine Box und alle darin enthaltenen, noch nicht gepushten Änderungen dauerhaft gelöscht.",
   "8a716fa4339878b4": "Z. {start} (vorher)",
   "bb4924538fda7405": "Z. {start} bis Z. {end} (vorher)",
   "b0c4ffd6931493e9": "Z. {start} bis Z. {end}",

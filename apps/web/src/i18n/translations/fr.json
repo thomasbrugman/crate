@@ -2880,6 +2880,7 @@
   "cde84b45d4aebd17": "La pièce jointe envoyée n’a pas pu être vérifiée. Réessayez quand le serveur sera reconnecté.",
   "3a69567de3069c41": "Pièce jointe en cours d’envoi",
   "475fcc23da6c9997": "Pièces jointes en cours d’envoi",
+  "b2e7398bcfb15350": "La suppression d’un fil de discussion cloud supprime aussi définitivement sa Box et toutes les modifications qu’elle contient qui n’ont pas été poussées.",
   "8a716fa4339878b4": "L{start} (avant)",
   "bb4924538fda7405": "L{start} à L{end} (avant)",
   "b0c4ffd6931493e9": "L{start} à L{end}",
