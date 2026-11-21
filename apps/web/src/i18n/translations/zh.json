@@ -3334,7 +3334,7 @@
     " 需要批准"
   ],
   "1b1131295f62c44c": "提供方进程已退出。请中断或重启子会话后再回应。",
-  "2cc98601912fed53": "Not available in cloud threads. Ask the agent to use its Box tools.",
+  "2cc98601912fed53": "云端线程中不可用。请让智能体使用其 Box 工具。",
   "da66023072c473d1": [
     "无法加载输出：",
     {
@@ -9114,10 +9114,10 @@
   "9ebced15e0d0b234": "CLAUDE_CONFIG_DIR 路径",
   "178f36194b25e76d": "自动压缩阈值",
   "df5cc2ff88833f21": "压缩空闲会话",
-  "b5fa42d9412ab917": "Template Box",
-  "04c91643c3c24bb8": "Template default",
-  "13c467f9d514b497": "Box size",
-  "b2ac3183408cf717": "Medium",
+  "b5fa42d9412ab917": "模板 Box",
+  "04c91643c3c24bb8": "模板默认值",
+  "13c467f9d514b497": "Box 大小",
+  "b2ac3183408cf717": "中",
   "bf26888594faef31": "GCP 项目",
   "14153cce2115641e": "GCP 位置",
   "895bcb7433b4b6d0": "ACP 来源",
