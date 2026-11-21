@@ -1,10 +1,12 @@
 import {
   ProviderThreadId,
+  ProviderSetupError,
   type OrchestrationV2ProviderThread,
   type ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
@@ -27,6 +29,16 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
 ) {
   const ids = yield* IdAllocator.IdAllocatorV2;
   const api = yield* BoxApi;
+  const authenticationCause = (error: BoxRuntimeError) => {
+    const detail = !config.apiKey.trim()
+      ? "Upstash Box API key is missing. Add it in Settings → Providers."
+      : error.statusCode === 401 || error.statusCode === 403
+        ? "Upstash Box rejected the API key. Check it in Settings → Providers."
+        : undefined;
+    return detail === undefined
+      ? undefined
+      : new ProviderSetupError({ instanceId, operation: "authenticate", detail });
+  };
   const unsupported = (operation: string) =>
     Effect.fail(
       new Adapter.ProviderAdapterProtocolError({
@@ -110,10 +122,11 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const box = yield* ensureBox(config, name, request.runtimePolicy.repositoryUrl).pipe(
             Effect.provideService(BoxApi, api),
             Effect.mapError(
-              () =>
+              (error) =>
                 new Adapter.ProviderAdapterEnsureThreadError({
                   driver,
                   threadId: request.threadId,
+                  cause: authenticationCause(error),
                 }),
             ),
           );
@@ -148,17 +161,26 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const box = yield* Effect.tryPromise({
             try: async () => {
               try {
+                if (!config.apiKey.trim()) throw new BoxRuntimeError({ operation: "get" });
                 return await api.get(nativeId, config.apiKey);
               } catch (error) {
-                if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
+                if (!isMissingBox(error)) throw error;
                 return null;
               }
             },
-            catch: () =>
+            catch: (error) =>
               new Adapter.ProviderAdapterResumeThreadError({
                 driver,
                 providerSessionId: input.providerSessionId,
                 providerThreadId: previous.id,
+                cause: authenticationCause(
+                  new BoxRuntimeError({
+                    operation: "get",
+                    ...(error instanceof BoxError && error.statusCode !== undefined
+                      ? { statusCode: error.statusCode }
+                      : {}),
+                  }),
+                ),
               }),
           });
           if (!box) {

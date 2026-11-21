@@ -1,4 +1,4 @@
-import type { BoxConfig } from "@upstash/box";
+import { BoxError, type BoxConfig } from "@upstash/box";
 import * as Effect from "effect/Effect";
 import { BoxApi, BoxRuntimeError, boxConfig, isMissingBox, type BoxHandle } from "./BoxApi.ts";
 
@@ -15,13 +15,14 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
   repositoryUrl?: string,
 ) {
   const api = yield* BoxApi;
+  if (!config.apiKey.trim()) return yield* new BoxRuntimeError({ operation: "authenticate" });
   return yield* Effect.tryPromise({
     try: async () => {
       let box: BoxHandle;
       try {
         box = await api.get(name, config.apiKey);
       } catch (error) {
-        if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
+        if (!isMissingBox(error)) throw error;
         box = await api.create(
           boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) }),
         );
@@ -79,6 +80,12 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
         throw new Error("Could not bootstrap the Command Code Box from its template.");
       }
     },
-    catch: () => new BoxRuntimeError({ operation: "bootstrap" }),
+    catch: (error) =>
+      new BoxRuntimeError({
+        operation: "bootstrap",
+        ...(error instanceof BoxError && error.statusCode !== undefined
+          ? { statusCode: error.statusCode }
+          : {}),
+      }),
   });
 });

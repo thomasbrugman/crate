@@ -11,6 +11,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import { knownProviderFailureMessage } from "@t3tools/provider-core/server/failure";
 import {
   ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
@@ -42,6 +43,7 @@ const finish: Chunk = {
 const setup = Effect.fn("test.setupBox")(function* (
   stream: BoxStream,
   deleteBox?: () => Promise<void>,
+  apiKey = "test-key",
 ) {
   const prompts: string[] = [];
   const lookup: { error?: unknown } = {};
@@ -58,7 +60,7 @@ const setup = Effect.fn("test.setupBox")(function* (
     delete: deleteBox ?? (async () => undefined),
   };
   const adapter = yield* makeUpstashBoxAdapter(instanceId, {
-    apiKey: "test-key",
+    apiKey,
     templateBoxName: "cc-harness",
     size: "small",
     model: "",
@@ -124,6 +126,41 @@ const setup = Effect.fn("test.setupBox")(function* (
   };
   return { runtime, turn, prompts, adapter, lookup };
 });
+
+it.effect("explains missing and rejected API keys without exposing upstream details", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, lookup, turn } = yield* setup(fakeStream([]));
+      for (const status of [401, 403, 500]) {
+        lookup.error = new BoxError("private upstream body with test-key", status);
+        const error = yield* runtime
+          .ensureThread({ threadId, modelSelection, runtimePolicy })
+          .pipe(Effect.flip);
+        assert.equal(
+          knownProviderFailureMessage(error),
+          status === 500
+            ? undefined
+            : "Upstash Box rejected the API key. Check it in Settings → Providers.",
+        );
+        assert.notInclude(JSON.stringify(error), "private upstream body");
+        assert.notInclude(JSON.stringify(error), "test-key");
+      }
+      const missing = yield* setup(fakeStream([]), undefined, "").pipe(Effect.flip);
+      assert.equal(
+        knownProviderFailureMessage(missing),
+        "Upstash Box API key is missing. Add it in Settings → Providers.",
+      );
+      lookup.error = new BoxError("private upstream body with test-key", 401);
+      const resumed = yield* runtime
+        .resumeThread({ providerThread: turn.providerThread })
+        .pipe(Effect.flip);
+      assert.equal(
+        knownProviderFailureMessage(resumed),
+        "Upstash Box rejected the API key. Check it in Settings → Providers.",
+      );
+    }),
+  ),
+);
 
 it.effect(
   "deletes native Boxes, tolerates missing identities and Boxes, and sanitizes failures",
