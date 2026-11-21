@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { AgentScope } from "@t3tools/shared/AgentScope";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
@@ -3008,7 +3009,7 @@ export const layerWithOptions = (
                 ),
               );
               const cwd = input.runtimePolicy.cwd;
-              if (cwd !== null && adapter.driver !== "upstashBox") {
+              if (cwd !== null && !isUpstashBoxDriver(adapter.driver)) {
                 const workspaceIsDirectory = yield* fileSystem.stat(cwd).pipe(
                   Effect.map((stat) => stat.type === "Directory"),
                   Effect.catch((error) => Effect.succeed(error.reason._tag !== "NotFound")),

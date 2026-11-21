@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./client": "./src/client.ts",
+    "./harnesses": "./src/harnesses.ts",
     "./server": "./src/server.ts",
     "./settings": "./src/settings.ts"
   },

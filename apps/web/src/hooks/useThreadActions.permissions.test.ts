@@ -75,7 +75,7 @@ vi.mock("../state/session", () => ({
 }));
 vi.mock("../state/environments", () => ({
   readEnvironmentProviders: (environmentId: string) =>
-    environmentId === state.boxEnvironment ? [{ instanceId: "box", driver: "upstashBox" }] : [],
+    environmentId === state.boxEnvironment ? [{ instanceId: "box", driver: "boxCommandCode" }] : [],
 }));
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand:

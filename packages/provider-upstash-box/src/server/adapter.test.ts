@@ -23,6 +23,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import { BoxApi, type BoxHandle, type BoxStream } from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
@@ -46,6 +47,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   stream: BoxStream | (() => Promise<BoxStream>),
   deleteBox?: () => Promise<void>,
   apiKey = "test-key",
+  harness: BoxHarness = "commandCode",
 ) {
   const prompts: string[] = [];
   const harnesses: string[] = [];
@@ -66,12 +68,11 @@ const setup = Effect.fn("test.setupBox")(function* (
     },
     delete: deleteBox ?? (async () => undefined),
   };
-  const adapter = yield* makeUpstashBoxAdapter(instanceId, {
-    apiKey,
-    templateBoxName: "cc-harness",
-    size: "small",
-    model: "",
-  }).pipe(
+  const adapter = yield* makeUpstashBoxAdapter(
+    instanceId,
+    { driver: BOX_HARNESS_DRIVER_KINDS[harness], harness, agentApiKey: "" },
+    Effect.succeed({ apiKey, templateBoxName: "cc-harness", size: "small" }),
+  ).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
       get: async () => {
@@ -137,34 +138,41 @@ const setup = Effect.fn("test.setupBox")(function* (
 it.effect("explains missing and rejected API keys without exposing upstream details", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const { runtime, lookup, turn } = yield* setup(fakeStream([]));
-      for (const status of [401, 403, 500]) {
-        lookup.error = new BoxError("private upstream body with test-key", status);
-        const error = yield* runtime
-          .ensureThread({ threadId, modelSelection, runtimePolicy })
+      for (const harness of ["commandCode", "claudeCode", "codex"] as const) {
+        const { runtime, lookup, turn } = yield* setup(
+          fakeStream([]),
+          undefined,
+          "test-key",
+          harness,
+        );
+        for (const status of [401, 403, 500]) {
+          lookup.error = new BoxError("private upstream body with test-key", status);
+          const error = yield* runtime
+            .ensureThread({ threadId, modelSelection, runtimePolicy })
+            .pipe(Effect.flip);
+          assert.equal(
+            knownProviderFailureMessage(error),
+            status === 500
+              ? undefined
+              : "Upstash Box rejected the API key. Check it in Settings → Providers.",
+          );
+          assert.notInclude(JSON.stringify(error), "private upstream body");
+          assert.notInclude(JSON.stringify(error), "test-key");
+        }
+        const missing = yield* setup(fakeStream([]), undefined, "", harness).pipe(Effect.flip);
+        assert.equal(
+          knownProviderFailureMessage(missing),
+          "Upstash Box API key is missing. Add it in Settings → Providers.",
+        );
+        lookup.error = new BoxError("private upstream body with test-key", 401);
+        const resumed = yield* runtime
+          .resumeThread({ providerThread: turn.providerThread })
           .pipe(Effect.flip);
         assert.equal(
-          knownProviderFailureMessage(error),
-          status === 500
-            ? undefined
-            : "Upstash Box rejected the API key. Check it in Settings → Providers.",
+          knownProviderFailureMessage(resumed),
+          "Upstash Box rejected the API key. Check it in Settings → Providers.",
         );
-        assert.notInclude(JSON.stringify(error), "private upstream body");
-        assert.notInclude(JSON.stringify(error), "test-key");
       }
-      const missing = yield* setup(fakeStream([]), undefined, "").pipe(Effect.flip);
-      assert.equal(
-        knownProviderFailureMessage(missing),
-        "Upstash Box API key is missing. Add it in Settings → Providers.",
-      );
-      lookup.error = new BoxError("private upstream body with test-key", 401);
-      const resumed = yield* runtime
-        .resumeThread({ providerThread: turn.providerThread })
-        .pipe(Effect.flip);
-      assert.equal(
-        knownProviderFailureMessage(resumed),
-        "Upstash Box rejected the API key. Check it in Settings → Providers.",
-      );
     }),
   ),
 );
