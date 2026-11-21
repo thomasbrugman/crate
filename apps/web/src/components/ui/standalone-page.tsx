@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { cn } from "~/lib/utils";
 import { T3Wordmark } from "../T3Wordmark";
 
 export function StandalonePage({ children }: { readonly children: ReactNode }) {
@@ -23,20 +22,11 @@ export function StandalonePageHeader({
 }) {
   return (
     <>
-      <div
-        className={cn(
-          "flex items-baseline gap-3 text-muted-foreground",
-          context ? "justify-between" : "justify-center",
-        )}
-      >
-        <span
-          className="flex items-baseline gap-1.5 text-lg font-medium tracking-tight"
-          role="img"
-          aria-label="T3 Code"
-        >
-          <T3Wordmark className="h-[1cap] w-auto shrink-0 text-foreground" aria-hidden />
+      <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
+        <span className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
+          <T3Wordmark className="h-3 w-auto shrink-0 text-foreground" aria-hidden />
           {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
-          <span>Code</span>
+          <span className="text-lg font-medium tracking-tight">Code</span>
         </span>
         {context ? <span className="text-sm">{context}</span> : null}
       </div>
