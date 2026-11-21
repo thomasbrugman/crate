@@ -10,6 +10,7 @@ import {
   moveThreadContextDrag as moveThreadContextDragGhost,
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
+import { boxThreadDeletionWarning } from "../lib/boxThreadDeletionWarning";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
@@ -2510,7 +2511,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 count,
               }),
               gt("This permanently clears conversation history for these threads."),
-            ].join("\n"),
+              boxThreadDeletionWarning(
+                threadKeys.flatMap((key) => {
+                  const thread = threadByKeyRef.current.get(key);
+                  return thread ? [thread] : [];
+                }),
+              ),
+            ]
+              .filter(Boolean)
+              .join("\n"),
             { variant: "destructive" },
           ),
         );
@@ -2885,7 +2894,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   [
                     gt('Delete thread "{title}"?', { title: thread.title }),
                     gt("This permanently clears conversation history for this thread."),
-                  ].join("\n"),
+                    boxThreadDeletionWarning([thread]),
+                  ]
+                    .filter(Boolean)
+                    .join("\n"),
                   { variant: "destructive" },
                 ),
               );

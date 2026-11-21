@@ -1,6 +1,7 @@
 import { BoxError, type BoxConfig } from "@upstash/box";
 import * as Effect from "effect/Effect";
 import { BoxApi, BoxRuntimeError, boxConfig, isMissingBox, type BoxHandle } from "./BoxApi.ts";
+import { commandCodeHarness } from "./harness.ts";
 
 export interface BoxRuntimeConfig {
   readonly apiKey: string;
@@ -33,12 +34,20 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
         );
       }
       try {
+        const installHarness = () =>
+          box.files.write({
+            path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
+            content: commandCodeHarness,
+          });
         onProgress("check");
         const ready = await box.exec.command(
           "test -f /home/boxuser/.local/bin/t3stash-harness.mjs && test -x /home/boxuser/.local/bin/command-code && test -f /home/boxuser/.commandcode/auth.json" +
             (repositoryUrl ? " && test -d /workspace/home/repo/.git" : ""),
         );
-        if (ready.exitCode === 0) return box;
+        if (ready.exitCode === 0) {
+          await installHarness();
+          return box;
+        }
         const template = await api.get(config.templateBoxName, config.apiKey);
         onProgress("install");
         const install = await box.exec.command(
@@ -50,10 +59,10 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
           "mkdir -p /home/boxuser/.commandcode /home/boxuser/.local/bin && chmod 700 /home/boxuser/.commandcode",
         );
         if (mkdir.exitCode !== 0) throw new Error("Box workspace setup failed.");
+        await installHarness();
         for (const [source, destination] of [
           ["~/.commandcode/auth.json", "/home/boxuser/.commandcode/auth.json"],
           ["~/.commandcode/config.json", "/home/boxuser/.commandcode/config.json"],
-          ["~/.local/bin/boxjob-cc-harness.mjs", "/home/boxuser/.local/bin/t3stash-harness.mjs"],
         ] as const) {
           const result = await template.exec.command(`cat ${source}`);
           if (result.exitCode !== 0 || !result.stdout)
