@@ -232,6 +232,9 @@ it.effect("recreates a deleted Box before a follow-up even when the thread stays
       const failed = yield* collect(runtime.events);
       assert.equal(failed.at(-1)?.type, "turn.terminal");
       assert.equal(failed.find((e) => e.type === "turn.terminal")?.status, "failed");
+      assert.isFalse(
+        failed.some((e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice"),
+      );
       lookup.streamError = undefined;
       lookup.statusError = new BoxError("deleted", 404);
       lookup.replacement = {
@@ -252,6 +255,25 @@ it.effect("recreates a deleted Box before a follow-up even when the thread stays
       assert.equal(thread.providerThread.id, turn.providerThread.id);
       assert.isNull(thread.providerThread.nativeConversationHeadRef);
       assert.equal(lookup.resumes, 0);
+      const notices = recovered.filter(
+        (e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice",
+      );
+      assert.lengthOf(notices, 1);
+      const notice = notices[0];
+      if (notice?.type !== "turn_item.updated" || notice.turnItem.type !== "system_notice") return;
+      assert.equal(notice.turnItem.level, "warning");
+      assert.equal(
+        notice.turnItem.message,
+        "This thread's Box was gone, so a new one was started. The agent doesn't have the earlier conversation, and uncommitted changes from the old Box are lost.",
+      );
+      assert.equal(notice.turnItem.threadId, turn.threadId);
+      assert.equal(notice.turnItem.runId, turn.runId);
+      for (const event of recovered) yield* decodeEvent(event);
+      yield* runtime.startTurn({ ...turn, providerThread: thread.providerThread });
+      const next = yield* collect(runtime.events);
+      assert.isFalse(
+        next.some((e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice"),
+      );
     }),
   ),
 );

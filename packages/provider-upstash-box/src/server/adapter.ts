@@ -70,6 +70,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const scope = yield* Effect.scope;
       const events = yield* Queue.unbounded<Adapter.ProviderAdapterV2Event>();
       const boxes = new Map<string, BoxHandle>();
+      const recreatedThreads = new Set<ProviderThreadId>();
       let active: ActiveTurn | undefined;
       const now = yield* DateTime.now;
       const providerSession = {
@@ -178,7 +179,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               ),
             );
             boxes.delete(nativeId);
-            return yield* saveThread(
+            const recreated = yield* saveThread(
               {
                 ...previous,
                 providerSessionId: input.providerSessionId,
@@ -192,6 +193,8 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               },
               replacement,
             );
+            recreatedThreads.add(recreated.id);
+            return recreated;
           }
           return yield* saveThread(
             {
@@ -228,6 +231,39 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const turn: ActiveTurn = { translation, interrupted: false };
           active = turn;
           yield* publish(translation.start(yield* DateTime.now));
+          if (recreatedThreads.has(providerThread.id)) {
+            const at = yield* DateTime.now;
+            yield* publish([
+              {
+                type: "turn_item.updated",
+                driver,
+                turnItem: {
+                  id: ids.derive.turnItemFromProviderItem({
+                    driver,
+                    nativeItemId: `${request.attemptId}:box-recreated`,
+                  }),
+                  threadId: request.threadId,
+                  runId: request.runId,
+                  nodeId: request.rootNodeId,
+                  providerThreadId: providerThread.id,
+                  providerTurnId: translation.providerTurnId,
+                  nativeItemRef: null,
+                  parentItemId: null,
+                  ordinal: 0,
+                  status: "completed",
+                  title: "A new Box was started",
+                  type: "system_notice",
+                  level: "warning",
+                  message:
+                    "This thread's Box was gone, so a new one was started. The agent doesn't have the earlier conversation, and uncommitted changes from the old Box are lost.",
+                  startedAt: at,
+                  completedAt: at,
+                  updatedAt: at,
+                },
+              },
+            ]);
+            recreatedThreads.delete(providerThread.id);
+          }
           const process = Effect.gen(function* () {
             // Box supplies the prior finish.sessionId to its custom harness as --session.
             const stream = yield* Effect.tryPromise({
