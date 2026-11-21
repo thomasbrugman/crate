@@ -224,6 +224,43 @@ const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>
     Stream.runCollect,
   );
 
+it.effect("publishes setup status and clears it on success or failure", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, lookup } = yield* setup(fakeStream([]));
+      assert.equal(runtime.providerSession.status, "ready");
+      lookup.error = new Error("private bootstrap failure");
+      yield* runtime.ensureThread({ threadId, modelSelection, runtimePolicy }).pipe(Effect.flip);
+      assert.equal(runtime.providerSession.status, "error");
+      const events = yield* runtime.events.pipe(
+        Stream.takeUntil(
+          (event) =>
+            event.type === "provider_session.updated" && event.providerSession.status === "error",
+        ),
+        Stream.runCollect,
+      );
+      assert.deepEqual(
+        events
+          .filter((event) => event.type === "provider_session.updated")
+          .map((event) => [
+            event.providerSession.status,
+            event.providerSession.extensionStatuses?.map((status) => status.text).join(),
+          ]),
+        [
+          ["starting", ""],
+          ["starting", "Connecting to the Box"],
+          ["starting", "Checking the Box setup"],
+          ["ready", ""],
+          ["starting", ""],
+          ["starting", "Connecting to the Box"],
+          ["error", ""],
+        ],
+      );
+      assert.notInclude(JSON.stringify(events), "private bootstrap failure");
+    }),
+  ),
+);
+
 it.effect(
   "translates a fake stream into accumulated text, paired tools, continuation identity and usage",
   () =>
@@ -323,6 +360,63 @@ it.effect(
         assert.equal(saved?.nativeConversationHeadRef?.nativeId, "cc-session");
       }),
     ),
+);
+
+it.effect("splits assistant messages around tools without duplicating finish output", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      for (const fail of [false, true]) {
+        const { runtime, turn } = yield* setup(
+          fakeStream(
+            [
+              { type: "text-delta", text: "editing." },
+              { type: "tool-call", toolName: "Write", input: {} },
+              { type: "tool-result", output: "done" },
+              { type: "tool-call", toolName: "Read", input: {} },
+              { type: "tool-result", output: "done" },
+              { type: "text-delta", text: "Default " },
+              { type: "text-delta", text: "verify." },
+              { type: "tool-call", toolName: "Check", input: {} },
+              { type: "tool-result", output: "done" },
+              ...(fail ? [] : [{ ...finish, output: "editing.Default verify." }]),
+            ],
+            fail,
+          ),
+        );
+        yield* runtime.startTurn(turn);
+        const events = yield* collect(runtime.events);
+        for (const event of events) yield* decodeEvent(event);
+        const messages = events.flatMap((event) =>
+          event.type === "message.updated" && !event.message.streaming ? [event.message] : [],
+        );
+        assert.deepEqual(
+          messages.map((message) => message.text),
+          ["editing.", "Default verify."],
+        );
+        assert.equal(new Set(messages.map((message) => message.id)).size, 2);
+        const items = events.flatMap((event) =>
+          event.type === "turn_item.updated" && event.turnItem.status === "completed"
+            ? [event.turnItem]
+            : [],
+        );
+        assert.deepEqual(
+          items.map((item) => [item.type, item.ordinal]),
+          [
+            ["assistant_message", 1],
+            ["dynamic_tool", 2],
+            ["dynamic_tool", 3],
+            ["assistant_message", 4],
+            ["dynamic_tool", 5],
+          ],
+        );
+        assert.equal(new Set(items.map((item) => item.id)).size, 5);
+        assert.deepEqual(
+          items.flatMap((item) => (item.type === "assistant_message" ? [item.messageId] : [])),
+          messages.map((message) => message.id),
+        );
+      }
+    }),
+  ),
 );
 
 it.effect(

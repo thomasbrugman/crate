@@ -453,6 +453,7 @@ it.each([
 
 function makeLocalCommandHarness(input: {
   readonly text: string;
+  readonly box?: boolean;
   readonly manualContinuation?: boolean;
   readonly nativeResumeUnsupported?: boolean;
   readonly steeringRestart?: boolean;
@@ -542,7 +543,11 @@ function makeLocalCommandHarness(input: {
   const providerThread: OrchestrationV2ThreadProjection["providerThreads"][number] = {
     id: providerThreadId,
     driver: ProviderDriverKind.make(
-      input.nativeGoals === undefined ? "codex" : (input.goalDriver ?? "opencode"),
+      input.box
+        ? "upstashBox"
+        : input.nativeGoals === undefined
+          ? "codex"
+          : (input.goalDriver ?? "opencode"),
     ),
     providerInstanceId: newInstanceId,
     providerSessionId: input.missingProviderSession === true ? null : providerSessionId,
@@ -1445,6 +1450,42 @@ function makeLocalCommandHarness(input: {
     }).pipe(Effect.provide(layer)),
   };
 }
+
+effectIt.effect("counts Box setup before native turn start without counting queued time", () =>
+  Effect.gen(function* () {
+    const harness = makeLocalCommandHarness({
+      text: "Hello",
+      box: true,
+      failReadsAfterRunning: true,
+    });
+    const entered = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const open = harness.open.getMockImplementation()!;
+    harness.open.mockImplementation(() =>
+      Effect.gen(function* () {
+        yield* Deferred.succeed(entered, undefined);
+        yield* Deferred.await(release);
+        return yield* open();
+      }),
+    );
+    const before = yield* DateTime.now;
+    harness.setProjection({
+      ...harness.projection(),
+      runs: harness
+        .projection()
+        .runs.map((run) => ({ ...run, requestedAt: DateTime.subtract(before, { hours: 1 }) })),
+    });
+    const starting = yield* harness.start.pipe(Effect.forkChild);
+    yield* Deferred.await(entered);
+    expect(harness.projection().runs.at(-1)?.workStartedAt).toEqual(before);
+    yield* TestClock.adjust("36 seconds");
+    yield* Deferred.succeed(release, undefined);
+    yield* Fiber.join(starting);
+    const run = harness.projection().runs.at(-1)!;
+    expect(run.workStartedAt).toEqual(before);
+    expect(run.startedAt).toEqual(DateTime.add(before, { seconds: 36 }));
+  }),
+);
 
 function layerStartEffectWorker(
   harness: ReturnType<typeof makeLocalCommandHarness>,
