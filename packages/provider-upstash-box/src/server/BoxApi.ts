@@ -12,6 +12,7 @@ import {
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 
 import type { BoxHarness } from "../harnesses.ts";
 
@@ -20,6 +21,44 @@ import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
 
 export const BOX_WORKSPACE_PATH = "/workspace/home";
 export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
+
+export const BoxErrorDetails = Schema.Struct({
+  message: Schema.String,
+  statusCode: Schema.optional(Schema.Number),
+  boxId: Schema.optional(Schema.String),
+});
+
+export function boxErrorDetails(
+  error: unknown,
+  options: { readonly apiKeys?: ReadonlyArray<string>; readonly boxId?: string } = {},
+): typeof BoxErrorDetails.Type {
+  let message = error instanceof Error && !/[{}]/u.test(error.message) ? error.message : "";
+  for (const key of options.apiKeys ?? []) {
+    if (key) message = message.replaceAll(key, "[REDACTED]");
+  }
+  message = makeProviderFailure({ message })
+    .message.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, "[REDACTED]")
+    .replace(/\b(?:sk|ghp|gho|github_pat|upstash|qstash)[_-][A-Za-z0-9_-]+\b/gu, "[REDACTED]")
+    .replace(/\b[A-Za-z0-9_+/=-]{32,}\b/gu, "[REDACTED]")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const statusCode =
+    error instanceof Error &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number" &&
+    Number.isInteger(error.statusCode) &&
+    error.statusCode >= 100 &&
+    error.statusCode <= 599
+      ? error.statusCode
+      : undefined;
+  return {
+    message: Array.from(message || "Upstash Box request failed.")
+      .slice(0, 200)
+      .join(""),
+    ...(statusCode === undefined ? {} : { statusCode }),
+    ...(options.boxId === undefined ? {} : { boxId: options.boxId }),
+  };
+}
 
 export class BoxRuntimeError extends Schema.TaggedError<BoxRuntimeError>()("BoxRuntimeError", {
   operation: Schema.String,

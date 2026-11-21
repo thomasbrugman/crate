@@ -1,9 +1,34 @@
 import { assert, it } from "@effect/vitest";
-import { Box } from "@upstash/box";
+import { Box, BoxError } from "@upstash/box";
 import * as Effect from "effect/Effect";
 import { vi } from "vite-plus/test";
 
-import { BoxApi, layer } from "./BoxApi.ts";
+import { BoxApi, boxErrorDetails, layer } from "./BoxApi.ts";
+
+it("keeps only sanitized diagnostic fields from SDK errors", () => {
+  const sentinel = "sdk-credential-fixture";
+  const metadata = { headers: { Authorization: sentinel }, apiKey: sentinel };
+  const error = Object.assign(
+    new BoxError(`Delete refused for ${sentinel}`, 503, { cause: metadata }),
+    {
+      request: metadata,
+      response: metadata,
+      ...metadata,
+    },
+  );
+  const detail = boxErrorDetails(error, { apiKeys: [sentinel], boxId: "box" });
+  assert.deepEqual(detail, {
+    message: "Delete refused for [REDACTED]",
+    statusCode: 503,
+    boxId: "box",
+  });
+  for (const input of [undefined, new Error(""), new BoxError(JSON.stringify(metadata))]) {
+    const value = boxErrorDetails(input);
+    assert.deepEqual(Object.keys(value), ["message"]);
+    assert.isNotEmpty(value.message);
+    assert.isFalse(JSON.stringify(value).includes(sentinel));
+  }
+});
 
 it.effect("projects SDK handles and responses without retaining credential metadata", () =>
   Effect.gen(function* () {
