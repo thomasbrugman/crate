@@ -71,6 +71,7 @@ interface ProjectScriptsControlProps {
   fileScripts?: ReadonlyArray<T3ProjectFileScript>;
   preferredScriptId?: string | null;
   onRunScript?: ((script: ProjectScript) => void) | undefined;
+  runUnavailableReason?: string | undefined;
   onAddScript: (input: NewProjectScriptInput) => Promise<ProjectScriptActionResult>;
   onUpdateScript: (
     scriptId: string,
@@ -88,6 +89,7 @@ export default function ProjectScriptsControl({
   fileScripts = NO_FILE_SCRIPTS,
   preferredScriptId = null,
   onRunScript,
+  runUnavailableReason,
   onAddScript,
   onUpdateScript,
   onDeleteScript,
@@ -351,7 +353,8 @@ export default function ProjectScriptsControl({
             <TooltipPopup side="top">
               {onRunScript
                 ? gt("Run {name}", { name: primaryScript.name })
-                : gt("Pair this client again with permission to run terminal commands.")}
+                : (runUnavailableReason ??
+                  gt("Pair this client again with permission to run terminal commands."))}
             </TooltipPopup>
           </Tooltip>
           {isPanel ? (

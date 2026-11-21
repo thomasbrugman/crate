@@ -7,6 +7,29 @@ import { page, userEvent } from "vite-plus/test/browser";
 import { act, render } from "../../test/render";
 import ProjectScriptsControl, { type ProjectScriptActionResult } from "./ProjectScriptsControl";
 
+it("explains unavailable script runs without hiding script management", async () => {
+  const reason = "Not available in cloud threads. Ask the agent to use its Box tools.";
+  await using screen = await render(
+    <ProjectScriptsControl
+      environmentId={EnvironmentId.make("test")}
+      displayMode="panel"
+      scripts={[
+        { id: "list", name: "List files", command: "ls", icon: "play", runOnWorktreeCreate: false },
+      ]}
+      runUnavailableReason={reason}
+      onAddScript={async () => AsyncResult.success(undefined)}
+      onUpdateScript={async () => AsyncResult.success(undefined)}
+      onDeleteScript={async () => AsyncResult.success(undefined)}
+    />,
+  );
+  const run = screen.getByRole("button", { name: "Run List files" });
+  await expect.element(run).toHaveAttribute("aria-disabled", "true");
+  await run.hover();
+  await expect.element(page.getByText(reason)).toBeVisible();
+  await screen.getByRole("button", { name: "Script actions" }).click();
+  await expect.element(page.getByRole("menuitem", { name: "Add project script" })).toBeVisible();
+});
+
 it.each(["edit", "dismiss", "newer import fails first"] as const)(
   "keeps a failed import from replacing a newer action after %s",
   async (nextAction) => {

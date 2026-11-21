@@ -82,6 +82,7 @@ interface ThreadDetailsPanelProps extends Pick<
   onCheckoutPullRequestRequest?: (reference: string) => void;
   onComposerFocusRequest: () => void;
   onOpenChanges?: () => void;
+  projectScriptsAvailable: boolean;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<ProjectScriptActionResult>;
   onUpdateProjectScript: (
@@ -220,7 +221,16 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                         scripts={props.activeProjectScripts}
                         fileScripts={fileScripts}
                         preferredScriptId={props.preferredScriptId}
-                        onRunScript={props.onRunProjectScript}
+                        onRunScript={
+                          props.projectScriptsAvailable ? props.onRunProjectScript : undefined
+                        }
+                        runUnavailableReason={
+                          !props.projectScriptsAvailable
+                            ? gt(
+                                "Not available in cloud threads. Ask the agent to use its Box tools.",
+                              )
+                            : undefined
+                        }
                         onAddScript={props.onAddProjectScript}
                         onUpdateScript={props.onUpdateProjectScript}
                         onDeleteScript={props.onDeleteProjectScript}
