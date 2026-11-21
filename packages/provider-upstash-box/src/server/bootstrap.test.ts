@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { BoxError, type BoxConfig } from "@upstash/box";
+import { Agent, BoxApiKey, BoxError, type BoxConfig } from "@upstash/box";
 import * as Effect from "effect/Effect";
 
 import { BoxApi, type BoxHandle } from "./BoxApi.ts";
@@ -64,7 +64,14 @@ it.effect(
           list: async () => [],
         };
         const bootstrap = ensureBox(
-          { apiKey: "key", templateBoxName: "template", size: "small", model: "" },
+          {
+            apiKey: "key",
+            templateBoxName: "template",
+            size: "small",
+            harness: "commandCode",
+            model: "default",
+            agentApiKey: "",
+          },
           "thread-box",
           repositoryUrl,
         ).pipe(Effect.provideService(BoxApi, api));
@@ -85,4 +92,65 @@ it.effect(
         );
       }
     }),
+);
+
+it.effect("bootstraps a managed agent Box without installing Command Code", () =>
+  Effect.gen(function* () {
+    const created: BoxConfig[] = [];
+    const commands: string[] = [];
+    let cloned = false;
+    const box: BoxHandle = {
+      id: "box-claude",
+      agent: {
+        stream: async () => {
+          throw new Error("unexpected agent call");
+        },
+      },
+      exec: {
+        command: async (command) => {
+          commands.push(command);
+          if (command.includes("git clone --")) cloned = true;
+          else if (command.startsWith("test -d")) return { stdout: "", exitCode: cloned ? 0 : 1 };
+          return { stdout: "", exitCode: 0 };
+        },
+      },
+      files: { write: async () => undefined },
+      delete: async () => undefined,
+    };
+    const api = {
+      get: async (id: string) => {
+        if (id === "template") return box;
+        if (!created.length) throw new BoxError("missing", 404);
+        return box;
+      },
+      create: async (config: BoxConfig) => {
+        created.push(config);
+        return box;
+      },
+      list: async () => [],
+    };
+    const bootstrap = ensureBox(
+      {
+        apiKey: "key",
+        templateBoxName: "template",
+        size: "medium",
+        harness: "claudeCode",
+        model: "anthropic/claude-opus-5",
+        agentApiKey: "",
+      },
+      "thread-box",
+      "https://github.com/owner/repo.git",
+    ).pipe(Effect.provideService(BoxApi, api));
+    yield* bootstrap;
+    yield* bootstrap;
+    assert.deepEqual(created[0]?.agent, {
+      harness: Agent.ClaudeCode,
+      model: "anthropic/claude-opus-5",
+      apiKey: BoxApiKey.StoredKey,
+    });
+    assert.equal(created[0]?.size, "medium");
+    assert.isUndefined(created[0]?.env);
+    assert.isFalse(commands.some((command) => command.includes("command-code")));
+    assert.equal(commands.filter((command) => command.includes("git clone --")).length, 1);
+  }),
 );

@@ -372,7 +372,7 @@ function launchInput(input: {
 }
 
 it.effect("launches Box threads without host worktrees, branches, or setup", () => {
-  const cloudAdapter = { ...adapter, driver: ProviderDriverKind.make("upstashBox") };
+  const cloudAdapter = { ...adapter, driver: ProviderDriverKind.make("boxCommandCode") };
   const harness = makeHarness({
     adapters: [cloudAdapter],
     providers: [

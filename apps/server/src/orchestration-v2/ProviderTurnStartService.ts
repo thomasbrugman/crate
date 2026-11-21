@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
@@ -803,7 +804,7 @@ export const layer: Layer.Layer<
           return;
         }
       }
-      const cloud = providerThread.driver === "upstashBox";
+      const cloud = isUpstashBoxDriver(providerThread.driver);
       const recreateResult = yield* Effect.result(
         cloud ? Effect.void : restoreMissingWorktree(projection.thread),
       );
@@ -2167,7 +2168,8 @@ export const layer: Layer.Layer<
             );
             const cloud = providerThreads.some(
               (provider) =>
-                provider.id === thread.activeProviderThreadId && provider.driver === "upstashBox",
+                provider.id === thread.activeProviderThreadId &&
+                isUpstashBoxDriver(provider.driver),
             );
             const cwd = cloud
               ? undefined

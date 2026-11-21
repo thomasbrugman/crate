@@ -964,6 +964,17 @@ const TextGeneratorBaseUrl = TrimmedNonEmptyString.check(
   }),
 );
 
+export const UpstashBoxSize = Schema.Literals(["small", "medium", "large"]);
+export type UpstashBoxSize = typeof UpstashBoxSize.Type;
+
+/** The Upstash Box environment every thread runs in, whichever provider drives it. */
+export const UpstashBoxEnvironmentSettings = Schema.Struct({
+  apiKey: SettingsSecretValue.pipe(Schema.withDecodingDefault(Effect.succeed("")), secretSetting),
+  templateBoxName: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("cc-harness"))),
+  size: UpstashBoxSize.pipe(Schema.withDecodingDefault(Effect.succeed("small" as const))),
+});
+export type UpstashBoxEnvironmentSettings = typeof UpstashBoxEnvironmentSettings.Type;
+
 /** A model API that only generates text. Its key shares the id namespace with provider instances. */
 export const TextGeneratorConfig = Schema.Struct({
   kind: TextGeneratorKind,
@@ -1587,6 +1598,11 @@ export const ServerSettings = Schema.Struct({
   textGenerators: Schema.Record(ProviderInstanceId, TextGeneratorConfig).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
+  upstashBox: UpstashBoxEnvironmentSettings.pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed(Schema.decodeSync(UpstashBoxEnvironmentSettings)({})),
+    ),
+  ),
   secretProviders: Schema.Record(SecretProviderId, SecretProviderConfig).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1980,6 +1996,13 @@ export const ServerSettingsPatch = Schema.Struct({
   textGenerators: Schema.optionalKey(
     Schema.Record(ProviderInstanceId, Schema.NullOr(TextGeneratorConfig)),
   ),
+  upstashBox: Schema.optionalKey(
+    Schema.Struct({
+      apiKey: Schema.optionalKey(SettingsSecretValue),
+      templateBoxName: Schema.optionalKey(TrimmedString),
+      size: Schema.optionalKey(UpstashBoxSize),
+    }),
+  ),
   secretProviders: Schema.optionalKey(
     Schema.Record(SecretProviderId, Schema.NullOr(SecretProviderConfigWrite)),
   ),
@@ -2016,6 +2039,7 @@ export function requiredScopesForServerSettingsPatch(
       key === "providerInstances" ||
       key === "usageLimitSources" ||
       key === "textGenerators" ||
+      key === "upstashBox" ||
       key === "secretProviders"
     ) {
       changesProviders = true;

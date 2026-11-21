@@ -9,6 +9,7 @@ import {
   type SettingsSecretValue,
   SimlockDeviceHostConfig,
   TextGeneratorConfig,
+  UpstashBoxEnvironmentSettings,
   UsageLimitSourceConfig,
   isSecretReference,
   secretSettingsFields,
@@ -48,6 +49,7 @@ const providerSecretFields = new Map([
 ]);
 const usageLimitSecretFields = secretSettingsFields(UsageLimitSourceConfig);
 const textGeneratorSecretFields = secretSettingsFields(TextGeneratorConfig);
+const upstashBoxSecretFields = secretSettingsFields(UpstashBoxEnvironmentSettings);
 const voiceSecretFields = secretSettingsFields(CloudSpeechCredentials);
 const easDeviceHostSecretFields = secretSettingsFields(EasDeviceHostConfig);
 const simlockDeviceHostSecretFields = secretSettingsFields(SimlockDeviceHostConfig);
@@ -258,6 +260,12 @@ function mapSecretFieldGroups(
     sourceControlHosts,
     usageLimitSources,
     textGenerators,
+    upstashBox: mapFields(
+      settings.upstashBox,
+      upstashBoxSecretFields,
+      (field, serverHost) =>
+        `upstash-box-${encode(field)}` + (serverHost === null ? "" : `-${encode(serverHost)}`),
+    ) as ServerSettings["upstashBox"],
     easDeviceHosts,
     simlockDeviceHosts,
   };
