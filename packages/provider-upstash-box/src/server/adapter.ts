@@ -22,10 +22,10 @@ interface ActiveTurn {
 }
 
 // Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
-// untracked files, stashes, or commits missing from the remote; without a repository, no files.
+// untracked files, stashes, commits missing from the remote, or files beside the repository.
 const SAVED_WORK_CHECK = [
   "if [ -d /workspace/home/repo/.git ]; then",
-  "cd /workspace/home/repo &&",
+  'cd /workspace/home && files=$(ls -A) && test "$files" = repo && cd repo &&',
   'status=$(git status --porcelain) && test -z "$status" &&',
   'stash=$(git stash list) && test -z "$stash" &&',
   'unpushed=$(git rev-list --count HEAD --branches --not --remotes) && test "$unpushed" = 0;',
