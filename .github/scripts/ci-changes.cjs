@@ -48,9 +48,6 @@ const TEST_ONLY_DEPS = {
 // The server bundles the web build without importing it.
 const BUILD_ONLY_DEPS = { t3: ["@t3tools/web"] };
 
-const MOBILE_NATIVE =
-  /^apps\/mobile\/.*\.(swift|kt|kts)$|^apps\/mobile\/(\.swiftlint\.yml|detekt\.yml|\.editorconfig|Brewfile)$|^scripts\/mobile-native-static-check\.ts$|^package\.json$|^\.github\/workflows\/ci\.yml$|^\.github\/scripts\/ci-changes\.cjs$|^\.github\/actions\/ci-changes\//;
-
 // Startup, migration, settlement, and sidebar paths that decide whether an upgraded user's
 // threads show after launch. Build runs scripts/smoke-desktop-app.ts for them, so they do not
 // first fail in the release launch check.
@@ -128,10 +125,8 @@ function decide(files, packages, full) {
   const all = new Set(packages.map((pkg) => pkg.name));
   let affected = new Set();
   let everything = full || files === null;
-  let rust = false;
 
   for (const file of files ?? []) {
-    if (RUST.test(file)) rust = true;
     const owners = ownersOf(file, packages);
     if (owners === null) {
       everything = true;
@@ -141,8 +136,6 @@ function decide(files, packages, full) {
     }
   }
 
-  // Release smoke reads scripts/ itself, not what the scripts tests read.
-  let scriptsChanged = everything;
   if (everything) {
     affected = all;
   } else {
@@ -156,7 +149,6 @@ function decide(files, packages, full) {
         }
       }
     }
-    scriptsChanged = affected.has("@t3tools/scripts");
     for (const [name, deps] of Object.entries(TEST_ONLY_DEPS)) {
       if (deps.some((dep) => affected.has(dep))) affected.add(name);
     }
@@ -183,9 +175,6 @@ function decide(files, packages, full) {
       test_packages: everything ? "" : tested.map((pkg) => pkg.name).join(" "),
       test_web: has("@t3tools/web"),
       test_server: has("t3"),
-      rust: everything || rust,
-      release_smoke: scriptsChanged,
-      mobile_native: files === null || files.some((file) => MOBILE_NATIVE.test(file)),
     },
   };
 }
