@@ -2,6 +2,7 @@ import { type EnvironmentId, UpstashBoxSize } from "@t3tools/contracts";
 import { msg, useGT, useMessages } from "gt-react";
 
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
+import { Button } from "../ui/button";
 import { DraftInput } from "../ui/draft-input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SecretInput } from "./SecretInput";
@@ -25,6 +26,7 @@ export function UpstashBoxEnvironmentSettings({
   const m = useMessages();
   const box = useEnvironmentSettings(environmentId, (settings) => settings.upstashBox);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
+  const keyConfigured = typeof box.apiKey !== "string" || box.apiKey !== "";
   const update = (patch: Partial<typeof box>) => updateSettings({ upstashBox: patch });
 
   return (
@@ -33,13 +35,20 @@ export function UpstashBoxEnvironmentSettings({
         title={gt("API key")}
         description={gt("Each thread gets its own Box. Falls back to UPSTASH_BOX_API_KEY.")}
         control={
-          <SecretInput
-            aria-label={gt("Upstash Box API key")}
-            configured={typeof box.apiKey !== "string" || box.apiKey !== ""}
-            disabled={readOnly}
-            value=""
-            onCommit={(apiKey) => update({ apiKey })}
-          />
+          <div className="flex items-center gap-2">
+            <SecretInput
+              aria-label={gt("Upstash Box API key")}
+              configured={keyConfigured}
+              disabled={readOnly}
+              value=""
+              onCommit={(apiKey) => update({ apiKey })}
+            />
+            {keyConfigured && !readOnly ? (
+              <Button size="sm" variant="outline" onClick={() => update({ apiKey: "" })}>
+                {gt("Remove")}
+              </Button>
+            ) : null}
+          </div>
         }
       />
       <SettingsRow

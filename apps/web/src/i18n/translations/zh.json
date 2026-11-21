@@ -11221,6 +11221,7 @@
   "379acbbb0a06da0b": "Upstash Box 环境",
   "c95534c403e2d267": "每个线程都有自己的 Box。未设置时使用 UPSTASH_BOX_API_KEY。",
   "5cc965d9a688198b": "Upstash Box API 密钥",
+  "2c5674665579a329": "移除",
   "b5fa42d9412ab917": "模板 Box",
   "701bc68befe01da1": "新 Box 会从此 Box 复制 Git 凭据和 Command Code 登录信息。",
   "13c467f9d514b497": "Box 大小",

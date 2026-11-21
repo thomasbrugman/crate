@@ -11146,6 +11146,7 @@
   "379acbbb0a06da0b": "Upstash Box 환경",
   "c95534c403e2d267": "스레드마다 전용 Box가 생성됩니다. 설정하지 않으면 UPSTASH_BOX_API_KEY를 사용합니다.",
   "5cc965d9a688198b": "Upstash Box API 키",
+  "2c5674665579a329": "제거",
   "b5fa42d9412ab917": "템플릿 Box",
   "701bc68befe01da1": "새 Box는 이 Box에서 Git 자격 증명과 Command Code 로그인을 복사합니다.",
   "13c467f9d514b497": "Box 크기",

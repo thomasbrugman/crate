@@ -11199,6 +11199,7 @@
   "379acbbb0a06da0b": "Environnement Upstash Box",
   "c95534c403e2d267": "Chaque fil obtient sa propre Box. Utilise UPSTASH_BOX_API_KEY par défaut.",
   "5cc965d9a688198b": "Clé API Upstash Box",
+  "2c5674665579a329": "Supprimer",
   "b5fa42d9412ab917": "Box modèle",
   "701bc68befe01da1": "Les nouvelles Box copient les identifiants Git et la connexion Command Code de cette Box.",
   "13c467f9d514b497": "Taille de la Box",
