@@ -16,7 +16,7 @@ import {
   ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
 } from "@t3tools/provider-core/server/ProviderAdapter";
-import { BoxError, type Chunk } from "@upstash/box";
+import { BoxError, type BoxConfig, type Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -51,6 +51,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   const prompts: string[] = [];
   const harnesses: string[] = [];
   const lookup: { error?: unknown } = {};
+  const createdSizes: BoxConfig["size"][] = [];
   const box: BoxHandle = {
     id: "box-123",
     agent: {
@@ -83,7 +84,10 @@ const setup = Effect.fn("test.setupBox")(function* (
         if (lookup.error) throw lookup.error;
         return box;
       },
-      create: async () => box,
+      create: async ({ size }) => {
+        createdSizes.push(size);
+        return box;
+      },
       list: async () => [],
     }),
   );
@@ -136,8 +140,28 @@ const setup = Effect.fn("test.setupBox")(function* (
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn, prompts, adapter, lookup, commands, harnesses };
+  return { runtime, turn, prompts, adapter, lookup, commands, harnesses, createdSizes };
 });
+
+it.effect("uses the saved Box size for provisioning and reprovisioning", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn, lookup, createdSizes } = yield* setup(fakeStream([]));
+      lookup.error = new BoxError("Box not found", 404);
+      yield* runtime.ensureThread({ threadId, modelSelection, runtimePolicy });
+      yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy: { ...runtimePolicy, boxSize: "medium" },
+      });
+      yield* runtime.resumeThread({
+        providerThread: turn.providerThread,
+        runtimePolicy: { ...runtimePolicy, boxSize: "large" },
+      });
+      assert.deepEqual(createdSizes, ["small", "medium", "large"]);
+    }),
+  ),
+);
 
 it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitizes failures", () =>
   Effect.scoped(

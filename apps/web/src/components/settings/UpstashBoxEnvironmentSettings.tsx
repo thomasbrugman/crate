@@ -8,7 +8,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { SecretInput } from "./SecretInput";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 
-const SIZES = {
+export const UPSTASH_BOX_SIZE_LABELS = {
   small: msg("Small"),
   medium: msg("Medium"),
   large: msg("Large"),
@@ -78,12 +78,14 @@ export function UpstashBoxEnvironmentSettings({
             }}
           >
             <SelectTrigger size="sm" aria-label={gt("Box size")}>
-              <SelectValue>{(value: UpstashBoxSize) => m(SIZES[value])}</SelectValue>
+              <SelectValue>
+                {(value: UpstashBoxSize) => m(UPSTASH_BOX_SIZE_LABELS[value])}
+              </SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
               {UpstashBoxSize.literals.map((size) => (
                 <SelectItem key={size} value={size}>
-                  {m(SIZES[size])}
+                  {m(UPSTASH_BOX_SIZE_LABELS[size])}
                 </SelectItem>
               ))}
             </SelectPopup>
