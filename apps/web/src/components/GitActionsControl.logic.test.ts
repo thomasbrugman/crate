@@ -41,6 +41,46 @@ function pushDisabledReason(gitStatus: VcsStatusResult): string | null {
   return getMenuActionDisabledReason({ item, gitStatus, isBusy: false, hasPrimaryRemote: true });
 }
 
+it("offers manual commits and plain pushes, but no generated PRs, without a text generator", () => {
+  for (const hasUpstream of [true, false]) {
+    const clean = status({ aheadCount: 2, aheadOfDefaultCount: 2, hasUpstream });
+    assert.isFalse(
+      buildMenuItems(clean, false, true, undefined, false).some((item) => item.id === "pr"),
+    );
+    for (const isDefaultRef of [true, false]) {
+      assert.deepInclude(resolveQuickAction(clean, false, isDefaultRef, true, undefined, false), {
+        action: "push",
+        kind: "run_action",
+        disabled: false,
+      });
+      assert.deepInclude(
+        resolveQuickAction(
+          { ...clean, hasWorkingTreeChanges: true },
+          false,
+          isDefaultRef,
+          true,
+          undefined,
+          false,
+        ),
+        {
+          action: "commit",
+          kind: "open_commit",
+          disabled: false,
+        },
+      );
+    }
+  }
+  assert.isTrue(
+    resolveQuickAction(status({ aheadOfDefaultCount: 2 }), false, false, true, undefined, false)
+      .disabled,
+  );
+  assert.isTrue(resolveQuickAction(null, false, false, true, undefined, false).disabled);
+  assert.isTrue(
+    resolveQuickAction(status({ hasWorkingTreeChanges: true }), true, false, true, undefined, false)
+      .disabled,
+  );
+});
+
 describe("when: ref is clean, ahead, and has an open PR", () => {
   it("resolveQuickAction prefers push", () => {
     const quick = resolveQuickAction(

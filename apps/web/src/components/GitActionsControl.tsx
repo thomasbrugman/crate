@@ -145,6 +145,7 @@ interface GitActionsControlProps {
   showActions?: boolean;
   showChanges?: boolean;
   openInEditorAvailable?: boolean;
+  canGenerateText?: boolean;
   onOpenChanges?: () => void;
   workspaceMutationId?: string | null;
 }
@@ -977,6 +978,7 @@ function CheckoutGitActionsControl({
   showActions = true,
   showChanges = true,
   openInEditorAvailable = true,
+  canGenerateText = true,
   onOpenChanges,
   workspaceMutationId = null,
 }: GitActionsControlProps) {
@@ -1218,6 +1220,7 @@ function CheckoutGitActionsControl({
     isGitActionRunning,
     hasPrimaryRemote,
     messages,
+    canGenerateText,
   );
   const quickAction = resolveQuickAction(
     gitStatusForActions,
@@ -1225,6 +1228,7 @@ function CheckoutGitActionsControl({
     isDefaultRef,
     hasPrimaryRemote,
     messages,
+    canGenerateText,
   );
   const quickActionDisabledReason = !canWriteSourceControl
     ? gt("This connection cannot change source control.")
@@ -1300,6 +1304,14 @@ function CheckoutGitActionsControl({
     const includesCommit =
       actionCanCommit &&
       (action === "commit" || !!actionStatus?.hasWorkingTreeChanges || featureBranch);
+    if (
+      !canGenerateText &&
+      (featureBranch ||
+        action === "create_pr" ||
+        action === "commit_push_pr" ||
+        (includesCommit && !commitMessage?.trim()))
+    )
+      return false;
     if (
       !skipDefaultBranchPrompt &&
       requiresDefaultBranchConfirmation(action, actionIsDefaultBranch) &&
@@ -1396,7 +1408,7 @@ function CheckoutGitActionsControl({
   };
 
   const runDialogActionOnNewBranch = () => {
-    if (!isCommitDialogOpen) return;
+    if (!isCommitDialogOpen || (!canGenerateText && !dialogCommitMessage.trim())) return;
     const commitMessage = dialogCommitMessage.trim();
 
     setIsCommitDialogOpen(false);
@@ -1414,6 +1426,12 @@ function CheckoutGitActionsControl({
   };
 
   const runQuickAction = () => {
+    if (quickAction.kind === "open_commit") {
+      setExcludedFiles(new Set());
+      setIsEditingFiles(false);
+      setIsCommitDialogOpen(true);
+      return;
+    }
     if (quickAction.kind === "open_publish") {
       setIsPublishDialogOpen(true);
       return;
@@ -1489,7 +1507,7 @@ function CheckoutGitActionsControl({
   };
 
   const runDialogAction = () => {
-    if (!isCommitDialogOpen) return;
+    if (!isCommitDialogOpen || (!canGenerateText && !dialogCommitMessage.trim())) return;
     const commitMessage = dialogCommitMessage.trim();
     setIsCommitDialogOpen(false);
     setDialogCommitMessage("");
@@ -1885,7 +1903,11 @@ function CheckoutGitActionsControl({
         <DialogPopup>
           <DialogHeader>
             <DialogTitle>{messages(COMMIT_DIALOG_TITLE)}</DialogTitle>
-            <DialogDescription>{messages(COMMIT_DIALOG_DESCRIPTION)}</DialogDescription>
+            <DialogDescription>
+              {canGenerateText
+                ? messages(COMMIT_DIALOG_DESCRIPTION)
+                : gt("Review and confirm your commit.")}
+            </DialogDescription>
           </DialogHeader>
           <DialogPanel>
             <div className="space-y-3 rounded-xl bg-zinc-25 p-3 text-sm ring-1 ring-black/5 dark:bg-white/[0.035] dark:ring-white/5">
@@ -2032,12 +2054,14 @@ function CheckoutGitActionsControl({
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium">
-                <T>Commit message (optional)</T>
+                {canGenerateText ? <T>Commit message (optional)</T> : <T>Commit message</T>}
               </p>
               <Textarea
                 value={dialogCommitMessage}
                 onChange={(event) => setDialogCommitMessage(event.target.value)}
-                placeholder={gt("Leave empty to auto-generate")}
+                placeholder={
+                  canGenerateText ? gt("Leave empty to auto-generate") : gt("Commit message")
+                }
                 size="sm"
               />
             </div>
@@ -2058,14 +2082,18 @@ function CheckoutGitActionsControl({
             <Button
               variant="outline"
               size="sm"
-              disabled={!canChangeThreadBranch || noneSelected}
+              disabled={!canGenerateText || !canChangeThreadBranch || noneSelected}
               onClick={runDialogActionOnNewBranch}
             >
               <T>Commit on new branch</T>
             </Button>
             <Button
               size="sm"
-              disabled={!canWriteSourceControl || noneSelected}
+              disabled={
+                !canWriteSourceControl ||
+                noneSelected ||
+                (!canGenerateText && !dialogCommitMessage.trim())
+              }
               onClick={runDialogAction}
             >
               <T context="verb">Commit</T>
@@ -2124,7 +2152,11 @@ function CheckoutGitActionsControl({
               className="w-full max-w-full sm:w-auto"
               size="sm-multiline"
               onClick={() => continuePendingDefaultBranchAction(true)}
-              disabled={!canChangeThreadBranch || featureBranchUnavailableReason !== null}
+              disabled={
+                !canGenerateText ||
+                !canChangeThreadBranch ||
+                featureBranchUnavailableReason !== null
+              }
             >
               <T>Check out feature branch & continue</T>
             </Button>
