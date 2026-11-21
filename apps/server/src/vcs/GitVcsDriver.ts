@@ -595,7 +595,7 @@ const gitCommand = Effect.fn("GitVcsDriver.gitCommand")(function* (
     readonly onSpawn?: () => void;
     readonly env?: NodeJS.ProcessEnv;
     readonly allowNonZeroExit?: boolean;
-    readonly timeoutMs?: number;
+    readonly timeoutMs?: number | null;
     readonly maxOutputBytes?: number;
     readonly outputMode?: VcsProcess.VcsProcessInput["outputMode"];
     readonly appendTruncationMarker?: boolean;

@@ -38,7 +38,7 @@ export interface GitActionMenuItem {
 export interface GitQuickAction {
   label: string;
   disabled: boolean;
-  kind: "run_action" | "run_pull" | "open_publish" | "show_hint";
+  kind: "run_action" | "run_pull" | "open_publish" | "open_commit" | "show_hint";
   action?: GitStackedAction;
   hint?: string;
 }
@@ -126,6 +126,7 @@ export function buildMenuItems(
   isBusy: boolean,
   hasPrimaryRemote = true,
   resolve: MessageResolver = m,
+  canGenerateText = true,
 ): GitActionMenuItem[] {
   if (!gitStatus) return [];
   const terminology = changeRequestTerminologyFor(gitStatus);
@@ -173,7 +174,7 @@ export function buildMenuItems(
     dialogAction: "push",
   };
 
-  if (hasOpenPr) {
+  if (hasOpenPr || !canGenerateText) {
     return [commitItem, pushItem];
   }
 
@@ -301,6 +302,7 @@ export function resolveQuickAction(
   isDefaultRef = false,
   hasPrimaryRemote = true,
   resolve: MessageResolver = m,
+  canGenerateText = true,
 ): GitQuickAction {
   if (isBusy) {
     return {
@@ -344,11 +346,11 @@ export function resolveQuickAction(
   }
 
   if (hasChanges) {
-    if (isBehind || (!gitStatus.hasUpstream && !hasPrimaryRemote)) {
+    if (!canGenerateText || isBehind || (!gitStatus.hasUpstream && !hasPrimaryRemote)) {
       return {
         label: resolve(msg("Commit", { $context: "verb, git action" })),
         disabled: false,
-        kind: "run_action",
+        kind: canGenerateText ? "run_action" : "open_commit",
         action: "commit",
       };
     }
@@ -396,12 +398,12 @@ export function resolveQuickAction(
         hint: resolve(msg("No local commits to push.")),
       };
     }
-    if (hasOpenPr || isDefaultRef) {
+    if (hasOpenPr || isDefaultRef || !canGenerateText) {
       return {
         label: resolve(msg("Push", { $context: "verb, git action" })),
         disabled: false,
         kind: "run_action",
-        action: isDefaultRef ? "commit_push" : "push",
+        action: isDefaultRef && canGenerateText ? "commit_push" : "push",
       };
     }
     return {
@@ -434,12 +436,12 @@ export function resolveQuickAction(
   }
 
   if (isAhead) {
-    if (hasOpenPr || isDefaultRef) {
+    if (hasOpenPr || isDefaultRef || !canGenerateText) {
       return {
         label: resolve(msg("Push", { $context: "verb, git action" })),
         disabled: false,
         kind: "run_action",
-        action: isDefaultRef ? "commit_push" : "push",
+        action: isDefaultRef && canGenerateText ? "commit_push" : "push",
       };
     }
     return {
@@ -463,7 +465,7 @@ export function resolveQuickAction(
     };
   }
 
-  if (hasDefaultBranchDelta && !isDefaultRef) {
+  if (hasDefaultBranchDelta && !isDefaultRef && canGenerateText) {
     return {
       label: resolve(
         msg("Create {term, select, mr {MR} cr {change request} other {PR}}", {

@@ -137,6 +137,18 @@ it.effect("fails closed without creating Boxes or exposing SDK errors", () =>
     for (const [resolve, reason] of [
       [() => Effect.succeed(null), "thread_unavailable"],
       [
+        () =>
+          Effect.fail(
+            Object.assign(new BoxExec.BoxExecError({ threadId, reason: "resolve_failed" }), {
+              cause: Object.assign(new BoxError("private SDK failure"), {
+                headers: { Authorization: "private SDK credential" },
+                apiKey: "private SDK credential",
+              }),
+            }),
+          ),
+        "resolve_failed",
+      ],
+      [
         () => Effect.fail(new BoxExec.BoxExecError({ threadId, reason: "resolve_failed" })),
         "resolve_failed",
       ],

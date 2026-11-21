@@ -21,6 +21,7 @@ export class BoxThreadCleanupError extends Schema.TaggedError<BoxThreadCleanupEr
   {
     threadId: ThreadId,
     providerThreadId: Schema.optional(ProviderThreadId),
+    boxError: Schema.optional(BoxApi.BoxErrorDetails),
     reason: Schema.Literals([
       "load_failed",
       "invalid_reference",
@@ -30,7 +31,7 @@ export class BoxThreadCleanupError extends Schema.TaggedError<BoxThreadCleanupEr
   },
 ) {
   override get message(): string {
-    return `Could not delete the thread Box (${this.reason}).`;
+    return `Could not delete the thread Box (${this.reason}).${this.boxError ? ` ${this.boxError.message}` : ""}`;
   }
 }
 
@@ -107,7 +108,13 @@ const make = Effect.gen(function* () {
             if (!BoxApi.isMissingBox(error)) throw error;
           }
         },
-        catch: () => failure("delete_failed"),
+        catch: (error) =>
+          new BoxThreadCleanupError({
+            threadId,
+            providerThreadId: thread.id,
+            reason: "delete_failed",
+            boxError: BoxApi.boxErrorDetails(error, { apiKeys: [apiKey], boxId: nativeId }),
+          }),
       });
     }),
   });

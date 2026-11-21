@@ -3849,5 +3849,5 @@ const makeInstance = Effect.gen(function* () {
   });
 });
 
-export const make = VcsThreadTarget.partition(makeInstance);
+export const make = VcsThreadTarget.partition(makeInstance, ["subscribePullRequestStateChanges"]);
 export const layer = Layer.effect(GitManager, make);

@@ -1,9 +1,9 @@
 import type { ThreadId } from "@t3tools/contracts";
-import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Scope from "effect/Scope";
+import * as RcMap from "effect/RcMap";
 import * as Stream from "effect/Stream";
 
 export interface Target {
@@ -12,7 +12,7 @@ export interface Target {
   readonly checkoutRoot: string;
 }
 
-const targetKey = (target: Target) => JSON.stringify(target);
+class TargetKey extends Data.Class<Target> {}
 
 export class VcsThreadTarget extends Context.Reference<Target | undefined>(
   "t3/vcs/VcsThreadTarget",
@@ -22,21 +22,17 @@ export class VcsThreadTarget extends Context.Reference<Target | undefined>(
 /** Each Box owns its caches, locks and background subscribers, even when host cwd is shared. */
 export const partition = Effect.fn("VcsThreadTarget.partition")(function* <T extends object, E, R>(
   make: Effect.Effect<T, E, R>,
+  callerScopedEffects: ReadonlyArray<keyof T> = [],
 ) {
-  const context = yield* Effect.context<R | Scope.Scope>();
   const local = yield* make;
-  const targets = new Map<string, Target>();
-  const instances = yield* Cache.makeWith(
-    (key: string) =>
-      make.pipe(Effect.provideService(VcsThreadTarget, targets.get(key)), Effect.provide(context)),
-    { capacity: Number.POSITIVE_INFINITY, timeToLive: () => Duration.infinity },
-  );
+  const instances = yield* RcMap.make({
+    lookup: (target: Target) => make.pipe(Effect.provideService(VcsThreadTarget, target)),
+    idleTimeToLive: Duration.minutes(5),
+  });
   const instance = Effect.gen(function* () {
     const target = yield* VcsThreadTarget;
     if (!target) return local;
-    const key = targetKey(target);
-    targets.set(key, target);
-    return yield* Cache.get(instances, key);
+    return yield* RcMap.get(instances, new TargetKey(target));
   });
   return new Proxy(local, {
     get(object, key) {
@@ -57,14 +53,16 @@ export const partition = Effect.fn("VcsThreadTarget.partition")(function* <T ext
               ),
             );
           if (!Effect.isEffect(result)) return result;
-          return Effect.flatMap(
-            instance,
-            (service) =>
-              Reflect.apply(
-                Reflect.get(service, key) as (...args: unknown[]) => unknown,
-                service,
-                args,
-              ) as Effect.Effect<unknown>,
+          return Effect.scoped(
+            Effect.flatMap(
+              instance,
+              (service) =>
+                Reflect.apply(
+                  Reflect.get(service, key) as (...args: unknown[]) => unknown,
+                  service,
+                  args,
+                ) as Effect.Effect<unknown>,
+            ),
           );
         };
       }
@@ -74,10 +72,11 @@ export const partition = Effect.fn("VcsThreadTarget.partition")(function* <T ext
         );
       }
       if (Effect.isEffect(member)) {
-        return Effect.flatMap(
+        const effect = Effect.flatMap(
           instance,
           (service) => Reflect.get(service, key) as Effect.Effect<unknown>,
         );
+        return callerScopedEffects.includes(key as keyof T) ? effect : Effect.scoped(effect);
       }
       return member;
     },

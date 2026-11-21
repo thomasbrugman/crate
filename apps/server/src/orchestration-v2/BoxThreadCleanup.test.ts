@@ -81,7 +81,12 @@ it.effect.each(scenarios)(
       updatedAt: now,
     };
     const calls: string[] = [];
-    const upstreamError = new Error("private upstream details");
+    const upstreamError = Object.assign(new Error("Box deletion refused for private-key"), {
+      statusCode: scenario.status,
+      headers: { Authorization: "private upstream details" },
+      apiKey: "private-key",
+      cause: { request: { headers: { Authorization: "private upstream details" } } },
+    });
     const unexpected = async (): Promise<never> => {
       throw new Error("Unexpected Box operation");
     };
@@ -134,6 +139,14 @@ it.effect.each(scenarios)(
         if (result._tag === "Failure") {
           assert.equal(result.failure.reason, scenario.reason);
           assert.notInclude(JSON.stringify(result.failure), "private upstream details");
+          assert.notInclude(JSON.stringify(result.failure), "private-key");
+          if (scenario.reason === "delete_failed") {
+            assert.deepEqual(result.failure.boxError, {
+              message: "Box deletion refused for [REDACTED]",
+              statusCode: scenario.status,
+              boxId: "persisted-box",
+            });
+          }
         }
       } else assert.equal(result._tag, "Success");
       assert.deepEqual(

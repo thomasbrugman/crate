@@ -12,6 +12,7 @@ import {
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 
 import type { BoxHarness } from "../harnesses.ts";
 
@@ -20,6 +21,44 @@ import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
 
 export const BOX_WORKSPACE_PATH = "/workspace/home";
 export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
+
+export const BoxErrorDetails = Schema.Struct({
+  message: Schema.String,
+  statusCode: Schema.optional(Schema.Number),
+  boxId: Schema.optional(Schema.String),
+});
+
+export function boxErrorDetails(
+  error: unknown,
+  options: { readonly apiKeys?: ReadonlyArray<string>; readonly boxId?: string } = {},
+): typeof BoxErrorDetails.Type {
+  let message = error instanceof Error && !/[{}]/u.test(error.message) ? error.message : "";
+  for (const key of options.apiKeys ?? []) {
+    if (key) message = message.replaceAll(key, "[REDACTED]");
+  }
+  message = makeProviderFailure({ message })
+    .message.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, "[REDACTED]")
+    .replace(/\b(?:sk|ghp|gho|github_pat|upstash|qstash)[_-][A-Za-z0-9_-]+\b/gu, "[REDACTED]")
+    .replace(/\b[A-Za-z0-9_+/=-]{32,}\b/gu, "[REDACTED]")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const statusCode =
+    error instanceof Error &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number" &&
+    Number.isInteger(error.statusCode) &&
+    error.statusCode >= 100 &&
+    error.statusCode <= 599
+      ? error.statusCode
+      : undefined;
+  return {
+    message: Array.from(message || "Upstash Box request failed.")
+      .slice(0, 200)
+      .join(""),
+    ...(statusCode === undefined ? {} : { statusCode }),
+    ...(options.boxId === undefined ? {} : { boxId: options.boxId }),
+  };
+}
 
 export class BoxRuntimeError extends Schema.TaggedError<BoxRuntimeError>()("BoxRuntimeError", {
   operation: Schema.String,
@@ -70,10 +109,52 @@ export class BoxApi extends Context.Service<
   }
 >()("@t3tools/provider-upstash-box/server/BoxApi") {}
 
+function projectBox(box: Box): BoxHandle {
+  return {
+    id: box.id,
+    agent: {
+      stream: async (options) => {
+        const stream = await box.agent.stream(options);
+        return {
+          get id() {
+            return stream.id;
+          },
+          cancel: async () => {
+            await stream.cancel();
+          },
+          async *[Symbol.asyncIterator]() {
+            yield* stream;
+          },
+        };
+      },
+    },
+    exec: {
+      command: async (command) => {
+        const result = await box.exec.command(command);
+        return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+      },
+    },
+    files: {
+      write: async (options) => {
+        await box.files.write(options);
+      },
+    },
+    delete: async () => {
+      await box.delete();
+    },
+    resume: async () => {
+      await box.resume();
+    },
+    getStatus: async () => ({ status: (await box.getStatus()).status }),
+  };
+}
+
 export const layer = Layer.succeed(BoxApi, {
-  get: (id, apiKey) => Box.get(id, { apiKey }),
-  create: (config) => Box.create(config),
-  list: (apiKey) => Box.list({ apiKey }),
+  get: async (id, apiKey) => projectBox(await Box.get(id, { apiKey })),
+  create: async (config) => projectBox(await Box.create(config)),
+  list: async (apiKey) => {
+    await Box.list({ apiKey });
+  },
   checkModelKey: async (harness, apiKey) => {
     // @effect-diagnostics-next-line globalFetch:off - This service is the Promise boundary the Box SDK already uses.
     const response = await fetch(

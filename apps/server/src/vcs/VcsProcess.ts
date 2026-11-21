@@ -40,7 +40,7 @@ export interface VcsProcessInput {
   readonly onSpawn?: () => void;
   readonly env?: NodeJS.ProcessEnv;
   readonly allowNonZeroExit?: boolean;
-  readonly timeoutMs?: number;
+  readonly timeoutMs?: number | null;
   readonly maxOutputBytes?: number;
   readonly outputMode?: ProcessRunner.ProcessRunInput["outputMode"];
   readonly appendTruncationMarker?: boolean;
@@ -254,7 +254,8 @@ export const make = Effect.gen(function* () {
           ...input.env,
           ...explicitBareRepositoryEnv({ ...process.env, ...input.env }, hostPlatform),
         },
-        timeout: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        timeout:
+          input.timeoutMs === null ? Duration.infinity : (input.timeoutMs ?? DEFAULT_TIMEOUT_MS),
         maxOutputBytes: input.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
         outputMode: input.outputMode ?? "truncate",
         truncatedMarker: input.appendTruncationMarker ? OUTPUT_TRUNCATED_MARKER : "",
@@ -451,7 +452,8 @@ export const runInBox = Effect.fn("VcsProcess.runInBox")(function* (input: VcsPr
         }),
     ),
     Effect.timeoutOrElse({
-      duration: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      duration:
+        input.timeoutMs === null ? Duration.infinity : (input.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       orElse: () =>
         Effect.fail(
           new VcsProcessTimeoutError({
