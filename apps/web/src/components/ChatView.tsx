@@ -3963,6 +3963,7 @@ export default function ChatView(props: ChatViewProps) {
                 />
 
                 <ThreadDetailsPanel
+                  cloudThread={cloudThread}
                   anchor={threadPanelPopoverAnchorRef}
                   handle={threadPanelPopoverHandle}
                   forceNewWorktree={multipleModelSelections !== null}
@@ -4119,6 +4120,7 @@ export default function ChatView(props: ChatViewProps) {
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
           diffAvailable={isServerThread && isGitRepo}
+          cloudThread={cloudThread}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           pullRequestsAvailable={linkedItemsSurfaceAvailable}
