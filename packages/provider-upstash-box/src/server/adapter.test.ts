@@ -1,3 +1,8 @@
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
 import { assert, it } from "@effect/vitest";
 import {
   MessageId,
@@ -201,6 +206,59 @@ it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitiz
       assert.lengthOf(
         commands.filter((text) => text.includes("git stash")),
         2,
+      );
+    }),
+  ),
+);
+
+it.live("keeps idle Boxes whose workspace holds work beyond the Box's own directories", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "box-saved-work-"));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => NodeFS.rmSync(root, { recursive: true, force: true })),
+      );
+      const workspace = NodePath.join(root, "home");
+      const repo = NodePath.join(workspace, "repo");
+      const git = (cwd: string, ...args: string[]) =>
+        NodeChildProcess.execFileSync(
+          "git",
+          ["-c", "user.name=t", "-c", "user.email=t@t", ...args],
+          {
+            cwd,
+            stdio: "ignore",
+          },
+        );
+      git(root, "init", "-q", "--bare", "origin.git");
+      git(root, "clone", "-q", "origin.git", "seed");
+      git(NodePath.join(root, "seed"), "commit", "-q", "--allow-empty", "-m", "init");
+      git(NodePath.join(root, "seed"), "push", "-q", "origin", "HEAD");
+      const { adapter, turn } = yield* setup(fakeStream([]), undefined, async (command) => ({
+        stdout: "",
+        exitCode: command.includes("git stash")
+          ? NodeChildProcess.spawnSync("sh", [
+              "-c",
+              command.replaceAll("/workspace/home", workspace),
+            ]).status
+          : 0,
+      }));
+      const deletable = (prepare: () => void) => {
+        NodeFS.rmSync(workspace, { recursive: true, force: true });
+        for (const dir of [".claude", ".codex", ".cursor", ".local"])
+          NodeFS.mkdirSync(NodePath.join(workspace, dir), { recursive: true });
+        git(root, "clone", "-q", "origin.git", repo);
+        prepare();
+        return adapter.deleteIdleThread!(turn.providerThread);
+      };
+      assert.isTrue(yield* deletable(() => {}));
+      assert.isFalse(
+        yield* deletable(() => NodeFS.writeFileSync(NodePath.join(workspace, "notes.md"), "")),
+      );
+      assert.isFalse(
+        yield* deletable(() => NodeFS.writeFileSync(NodePath.join(repo, "notes.md"), "")),
+      );
+      assert.isFalse(
+        yield* deletable(() => git(repo, "commit", "-q", "--allow-empty", "-m", "wip")),
       );
     }),
   ),
