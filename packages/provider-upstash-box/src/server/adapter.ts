@@ -26,7 +26,7 @@ interface ActiveTurn {
 const SAVED_WORK_CHECK = [
   "if [ -d /workspace/home/repo/.git ]; then",
   'cd /workspace/home && files=$(ls -A) && test "$files" = repo && cd repo &&',
-  'status=$(git status --porcelain) && test -z "$status" &&',
+  'status=$(git -c status.showUntrackedFiles=all status --porcelain) && test -z "$status" &&',
   'stash=$(git stash list) && test -z "$stash" &&',
   'unpushed=$(git rev-list --count HEAD --branches --not --remotes) && test "$unpushed" = 0;',
   'else files=$(ls -A /workspace/home) && test -z "$files"; fi',
