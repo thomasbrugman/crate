@@ -42,6 +42,9 @@ export const cancelBoxRun = Effect.fn("UpstashBox.cancelBoxRun")(function* (
     try: () => stream.cancel(),
     catch: () => new BoxRuntimeError({ operation: "cancel" }),
   }).pipe(
+    Effect.interruptible,
+    Effect.timeout("4 seconds"),
+    Effect.mapError(() => new BoxRuntimeError({ operation: "cancel" })),
     Effect.ensuring(
       Effect.tryPromise({
         try: async () => {
@@ -49,7 +52,11 @@ export const cancelBoxRun = Effect.fn("UpstashBox.cancelBoxRun")(function* (
           if (result.exitCode !== 0) throw new Error("Process cleanup failed");
         },
         catch: () => new BoxRuntimeError({ operation: "kill-harness" }),
-      }).pipe(Effect.catch(() => Effect.logWarning("Could not stop the Box agent process tree"))),
+      }).pipe(
+        Effect.interruptible,
+        Effect.timeout("4 seconds"),
+        Effect.catch(() => Effect.logWarning("Could not stop the Box agent process tree")),
+      ),
     ),
     Effect.uninterruptible,
   );

@@ -19,8 +19,10 @@ import {
 import { BoxError, type Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import { BOX_HARNESS_DRIVER_KINDS } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
@@ -455,12 +457,13 @@ it.effect(
     ),
 );
 
-it.effect.each(["ok", "throw", "exit"] as const)(
+it.effect.each(["ok", "throw", "exit", "hang"] as const)(
   "cancels the active stream and interrupts despite %s cleanup",
   (cleanup) =>
     Effect.scoped(
       Effect.gen(function* () {
         const cancelled = Promise.withResolvers<void>();
+        const releaseCleanup = Promise.withResolvers<{ stdout: string; exitCode: number }>();
         let cancelCount = 0;
         const order: string[] = [];
         const { runtime, turn, lookup } = yield* setup({
@@ -479,6 +482,7 @@ it.effect.each(["ok", "throw", "exit"] as const)(
           assert.include(command, "t3stash-harness.mjs");
           order.push("kill");
           if (cleanup === "throw") throw new Error("private cleanup failure");
+          if (cleanup === "hang") return releaseCleanup.promise;
           return { stdout: "", exitCode: cleanup === "exit" ? 1 : 0 };
         };
         yield* runtime.startTurn(turn);
@@ -494,10 +498,19 @@ it.effect.each(["ok", "throw", "exit"] as const)(
         assert.isDefined(event);
         if (event?.type !== "provider_turn.updated")
           return yield* Effect.die("Missing start event");
-        yield* runtime.interruptTurn({
-          providerThread: turn.providerThread,
-          providerTurnId: event.providerTurn.id,
-        });
+        const interrupt = yield* runtime
+          .interruptTurn({
+            providerThread: turn.providerThread,
+            providerTurnId: event.providerTurn.id,
+          })
+          .pipe(Effect.forkChild);
+        if (cleanup === "hang") {
+          yield* TestClock.adjust("8 seconds");
+          const finished = interrupt.pollUnsafe();
+          releaseCleanup.resolve({ stdout: "", exitCode: 0 });
+          assert.isDefined(finished);
+        }
+        yield* Fiber.join(interrupt);
         const events = yield* collect(runtime.events);
         assert.equal(cancelCount, 1);
         assert.deepEqual(order, ["cancel", "kill"]);
