@@ -13,10 +13,10 @@ them to T3 Code. t3stash would create boxes on Upstash and do the same.
 
 Box bills per active CPU second, not per wall-clock hour or per box that exists.
 
-| Size   | vCPU | RAM  | Disk  | All cores busy | Idle |
-| ------ | ---- | ---- | ----- | -------------- | ---- |
-| Small  | 2    | 4 GB | 10 GB | $0.10/hr       | $0   |
-| Medium | 4    | 8 GB | 30 GB | $0.20/hr       | $0   |
+| Size   | vCPU | RAM   | Disk  | All cores busy | Idle |
+| ------ | ---- | ----- | ----- | -------------- | ---- |
+| Small  | 2    | 4 GB  | 10 GB | $0.10/hr       | $0   |
+| Medium | 4    | 8 GB  | 30 GB | $0.20/hr       | $0   |
 | Large  | 8    | 16 GB | 30 GB | $0.40/hr       | $0   |
 
 An agent spends most of a thread waiting: on the model, on you, on a build it started. A medium box
