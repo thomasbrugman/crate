@@ -24,10 +24,6 @@ permissions:
   issues: write
   pull-requests: write
 
-concurrency:
-  group: pr-limits-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
-
 jobs:
   open-limit:
     name: Open PR limit
