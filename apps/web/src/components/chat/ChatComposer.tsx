@@ -272,6 +272,7 @@ import {
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
+import { getProviderClient } from "@t3tools/client-runtime/provider-clients";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { Kbd } from "../ui/kbd";
@@ -930,13 +931,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ? providerInstanceEntries.find((entry) => hasProviderSetup(entry.snapshot))?.instanceId
         : undefined))
     : undefined;
-  // A started thread whose provider this build can't run (a removed driver) only goes on in a new one.
+  // A started thread on a driver this build doesn't have only goes on in a new thread. A locked
+  // secret or a disabled instance keeps the settings path, since those recover in place.
   const threadProviderRetired =
-    showProviderUnavailable &&
-    threadHasStarted(activeThread) &&
-    providerInstanceEntries.some(
-      (entry) => entry.instanceId === unavailableProviderInstanceId && !entry.isAvailable,
-    );
+    showProviderUnavailable && lockedProvider !== null && !getProviderClient(lockedProvider);
   const handleNewThread = useNewThreadHandler();
   const startNewThread = useStableCallback(() => {
     if (activeProjectId) void handleNewThread(scopeProjectRef(environmentId, activeProjectId));
