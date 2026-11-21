@@ -48,6 +48,8 @@ it.effect(
             },
           },
           delete: async () => undefined,
+          resume: async () => undefined,
+          getStatus: async () => ({ status: "idle" }),
         };
         const api = {
           get: async (id: string) => {
@@ -118,6 +120,8 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
     let clones = 0;
     const box: BoxHandle = {
       id: "box-claude",
+      resume: async () => undefined,
+      getStatus: async () => ({ status: "idle" }),
       agent: {
         stream: async () => {
           throw new Error("unexpected agent call");

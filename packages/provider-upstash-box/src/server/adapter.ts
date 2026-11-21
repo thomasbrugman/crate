@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
@@ -126,6 +127,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const scope = yield* Effect.scope;
       const events = yield* Queue.unbounded<Adapter.ProviderAdapterV2Event>();
       const boxes = new Map<string, BoxHandle>();
+      const recreatedThreads = new Set<ProviderThreadId>();
       let active: ActiveTurn | undefined;
       const now = yield* DateTime.now;
       let providerSession: OrchestrationV2ProviderSession = {
@@ -176,6 +178,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         instanceId,
         driver,
         providerSessionId: input.providerSessionId,
+        revalidateLoadedThreads: true,
         get providerSession() {
           return providerSession;
         },
@@ -240,18 +243,26 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const previous = request.providerThread;
           const nativeId = previous.nativeThreadRef?.nativeId;
           if (!nativeId) return yield* unsupported("Resuming a thread without a Box identity");
-          const { apiKey } = yield* environment;
+          const runtimePolicy = request.runtimePolicy ?? input.runtimePolicy;
+          const config: BoxRuntimeConfig = {
+            ...(yield* environment),
+            harness,
+            model: request.modelSelection?.model ?? input.modelSelection.model,
+            agentApiKey: agent.agentApiKey,
+          };
           const box = yield* Effect.tryPromise({
             try: async () => {
               try {
-                const box = await api.get(nativeId, apiKey);
+                const existing = await api.get(nativeId, config.apiKey);
+                // Lookup by ID also returns deleted Box tombstones; status does not.
+                await existing.getStatus();
                 if (harness === "commandCode") {
-                  await box.files.write({
+                  await existing.files.write({
                     path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
                     content: commandCodeHarness,
                   });
                 }
-                return box;
+                return existing;
               } catch (error) {
                 if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
                 return null;
@@ -268,11 +279,37 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             const threadId = request.threadId ?? previous.appThreadId;
             if (!threadId)
               return yield* unsupported("Recreating a Box without an app thread identity");
-            return yield* runtime.ensureThread({
-              threadId,
-              runtimePolicy: request.runtimePolicy ?? input.runtimePolicy,
-              modelSelection: input.modelSelection,
-            });
+            yield* setSessionStatus("starting");
+            const replacement = yield* ensureBox(
+              { ...config, size: runtimePolicy.boxSize ?? config.size },
+              `t3-${Buffer.from(threadId).toString("hex")}`,
+              runtimePolicy.repositoryUrl,
+              showSetupStep,
+            ).pipe(
+              Effect.provideService(BoxApi, api),
+              Effect.tapError(() => setSessionStatus("error")),
+              Effect.mapError(
+                () => new Adapter.ProviderAdapterEnsureThreadError({ driver, threadId }),
+              ),
+            );
+            yield* setSessionStatus("ready");
+            boxes.delete(nativeId);
+            const recreated = yield* saveThread(
+              {
+                ...previous,
+                providerSessionId: input.providerSessionId,
+                nativeThreadRef: { driver, nativeId: replacement.id, strength: "strong" },
+                nativeConversationHeadRef: null,
+                pendingBackgroundTasks: [],
+                contextUsage: null,
+                nativeMetadata: null,
+                status: "idle",
+                updatedAt: yield* DateTime.now,
+              },
+              replacement,
+            );
+            recreatedThreads.add(recreated.id);
+            return recreated;
           }
           return yield* saveThread(
             {
@@ -295,22 +332,68 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             return yield* unsupported("Attachments, native resume, and application context");
           if (request.runtimePolicy.runtimeMode !== "full-access")
             return yield* unsupported("Restricted runtime policies");
-          const box = boxes.get(request.providerThread.nativeThreadRef?.nativeId ?? "");
+          const providerThread = request.providerThread;
+          const box = boxes.get(providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
           // Managed agents start in the Box workspace, so they are told where the clone is.
           const prompt =
             harness !== "commandCode" && request.runtimePolicy.repositoryUrl
               ? `The repository is checked out at ${BOX_REPOSITORY_PATH}.\n\n${request.message.text}`
               : request.message.text;
-          const translation = new BoxTurnTranslation(request, ids.derive, yield* DateTime.now);
+          const translation = new BoxTurnTranslation(
+            { ...request, providerThread },
+            ids.derive,
+            yield* DateTime.now,
+          );
           const turn: ActiveTurn = { translation, interrupted: false };
           active = turn;
           yield* publish(translation.start(yield* DateTime.now));
+          if (recreatedThreads.has(providerThread.id)) {
+            const at = yield* DateTime.now;
+            yield* publish([
+              {
+                type: "turn_item.updated",
+                driver,
+                turnItem: {
+                  id: ids.derive.turnItemFromProviderItem({
+                    driver,
+                    nativeItemId: `${request.attemptId}:box-recreated`,
+                  }),
+                  threadId: request.threadId,
+                  runId: request.runId,
+                  nodeId: request.rootNodeId,
+                  providerThreadId: providerThread.id,
+                  providerTurnId: translation.providerTurnId,
+                  nativeItemRef: null,
+                  parentItemId: null,
+                  ordinal: 0,
+                  status: "completed",
+                  title: "A new Box was started",
+                  type: "system_notice",
+                  level: "warning",
+                  message:
+                    "This thread's Box was gone, so a new one was started. The agent doesn't have the earlier conversation, and uncommitted changes from the old Box are lost.",
+                  startedAt: at,
+                  completedAt: at,
+                  updatedAt: at,
+                },
+              },
+            ]);
+            recreatedThreads.delete(providerThread.id);
+          }
           const process = Effect.gen(function* () {
             // Box resumes the agent from the prior finish.sessionId.
             const stream = yield* Effect.tryPromise({
               try: async () => {
-                const stream = await box.agent.stream({ prompt });
+                let stream: BoxStream;
+                try {
+                  stream = await box.agent.stream({ prompt });
+                } catch (error) {
+                  if (!(error instanceof BoxError) || error.statusCode !== 409) throw error;
+                  // A cancelled run can leave the Box rejecting work until explicitly resumed.
+                  await box.resume();
+                  stream = await box.agent.stream({ prompt });
+                }
                 turn.stream = stream;
                 return stream;
               },
@@ -342,7 +425,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             Effect.flatMap(
               Effect.fn("UpstashBox.finishTurn")(function* (failed) {
                 if (translation.sessionId) {
-                  const thread = request.providerThread;
+                  const thread = providerThread;
                   yield* saveThread(
                     {
                       ...thread,
