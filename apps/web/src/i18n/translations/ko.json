@@ -3324,7 +3324,7 @@
     "에서 승인이 필요합니다"
   ],
   "1b1131295f62c44c": "제공자 프로세스가 종료되었습니다. 응답하려면 하위 스레드를 중단하거나 다시 시작하세요.",
-  "2cc98601912fed53": "Not available in cloud threads. Ask the agent to use its Box tools.",
+  "2cc98601912fed53": "클라우드 스레드에서는 사용할 수 없습니다. 에이전트에게 Box 도구를 사용하도록 요청하세요.",
   "da66023072c473d1": [
     "출력을 불러올 수 없습니다: ",
     {
@@ -9055,10 +9055,10 @@
   "9ebced15e0d0b234": "CLAUDE_CONFIG_DIR 경로",
   "178f36194b25e76d": "자동 압축 기준",
   "df5cc2ff88833f21": "유휴 스레드 압축",
-  "b5fa42d9412ab917": "Template Box",
-  "04c91643c3c24bb8": "Template default",
-  "13c467f9d514b497": "Box size",
-  "b2ac3183408cf717": "Medium",
+  "b5fa42d9412ab917": "템플릿 Box",
+  "04c91643c3c24bb8": "템플릿 기본값",
+  "13c467f9d514b497": "Box 크기",
+  "b2ac3183408cf717": "중간",
   "bf26888594faef31": "GCP 프로젝트",
   "14153cce2115641e": "GCP 위치",
   "895bcb7433b4b6d0": "ACP 소스",
