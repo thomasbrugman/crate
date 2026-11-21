@@ -650,6 +650,22 @@ describe("composerDraftStore terminal contexts", () => {
     expect(draft?.terminalContexts.map((context) => context.id)).toEqual(["ctx-2", "ctx-1"]);
   });
 
+  it("persists a size-only draft and clears the override when reset to the provider default", () => {
+    const draftId = DraftId.make("box-size-draft");
+    const otherDraftId = DraftId.make("other-box-size-draft");
+    const store = useComposerDraftStore.getState();
+    store.setBoxSize(draftId, "large");
+    const persisted = partializeComposerDraftStoreState(useComposerDraftStore.getState());
+    const merged = useComposerDraftStore.persist.getOptions().merge!(
+      persisted,
+      useComposerDraftStore.getInitialState(),
+    );
+    expect(merged.draftsByThreadKey[draftId]?.boxSize).toBe("large");
+    expect(merged.draftsByThreadKey[otherDraftId]).toBeUndefined();
+    store.setBoxSize(draftId, undefined);
+    expect(useComposerDraftStore.getState().getComposerDraft(draftId)).toBeNull();
+  });
+
   it("sanitizes malformed persisted drafts during merge", () => {
     const persistApi = useComposerDraftStore.persist as unknown as {
       getOptions: () => {

@@ -11208,6 +11208,7 @@
   "b5fa42d9412ab917": "Box de plantilla",
   "701bc68befe01da1": "Los nuevos Box copian las credenciales de Git y el inicio de sesión de Command Code de este Box.",
   "13c467f9d514b497": "Tamaño de Box",
+  "4f7442cb1f8145a6": "Tamaño de la Box: {size}",
   "832282c673f5f672": "Se aplica a los Box creados para hilos nuevos.",
   "f54364b854a07918": "No hay hubs configurados.",
   "4cf6a373a7535324": "{name} · Deshabilitado",
