@@ -91,9 +91,23 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const setSessionStatus = Effect.fn("UpstashBox.setSessionStatus")(function* (
         status: OrchestrationV2ProviderSession["status"],
       ) {
-        providerSession = { ...providerSession, status, updatedAt: yield* DateTime.now };
+        providerSession = {
+          ...providerSession,
+          status,
+          extensionStatuses: [],
+          updatedAt: yield* DateTime.now,
+        };
         yield* publish([{ type: "provider_session.updated", driver, providerSession }]);
       });
+      // Called from inside the bootstrap promise, so it publishes synchronously.
+      const showSetupStep = (text: string) => {
+        providerSession = {
+          ...providerSession,
+          extensionStatuses: [{ key: "upstash-box.setup", text }],
+          updatedAt: DateTime.nowUnsafe(),
+        };
+        Queue.offerUnsafe(events, { type: "provider_session.updated", driver, providerSession });
+      };
       const saveThread = Effect.fn("UpstashBox.saveThread")(function* (
         thread: OrchestrationV2ProviderThread,
         box: BoxHandle,
@@ -117,7 +131,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           // Hex encoding is injective, shell-safe, and stable across server restarts.
           const name = `t3-${Buffer.from(request.threadId).toString("hex")}`;
           yield* setSessionStatus("starting");
-          const box = yield* ensureBox(config, name, request.runtimePolicy.repositoryUrl).pipe(
+          const box = yield* ensureBox(
+            config,
+            name,
+            request.runtimePolicy.repositoryUrl,
+            showSetupStep,
+          ).pipe(
             Effect.provideService(BoxApi, api),
             Effect.tapError(() => setSessionStatus("error")),
             Effect.mapError(

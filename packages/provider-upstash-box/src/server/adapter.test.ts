@@ -188,8 +188,19 @@ it.effect("publishes setup status and clears it on success or failure", () =>
       assert.deepEqual(
         events
           .filter((event) => event.type === "provider_session.updated")
-          .map((event) => event.providerSession.status),
-        ["starting", "ready", "starting", "error"],
+          .map((event) => [
+            event.providerSession.status,
+            event.providerSession.extensionStatuses?.map((status) => status.text).join(),
+          ]),
+        [
+          ["starting", ""],
+          ["starting", "Connecting to the Box"],
+          ["starting", "Checking the Box setup"],
+          ["ready", ""],
+          ["starting", ""],
+          ["starting", "Connecting to the Box"],
+          ["error", ""],
+        ],
       );
       assert.notInclude(JSON.stringify(events), "private bootstrap failure");
     }),
