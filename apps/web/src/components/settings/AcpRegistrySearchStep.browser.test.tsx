@@ -4,6 +4,11 @@ import { page, userEvent } from "vite-plus/test/browser";
 
 import { render } from "../../../test/render";
 
+vi.mock(import("@t3tools/client-runtime/provider-clients"), async (original) => ({
+  ...(await original()),
+  ...(await import("../../../test/fixtures/legacyProviderClients")),
+}));
+
 const state = vi.hoisted(() => ({
   result: null as { readonly agents: ReadonlyArray<AcpRegistrySearchAgent> } | null,
   error: null as string | null,
