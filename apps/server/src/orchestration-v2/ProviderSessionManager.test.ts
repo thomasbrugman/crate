@@ -471,6 +471,7 @@ const makeProviderAdapter = Effect.fnUntraced(function* (
   options: {
     readonly failEventStream?: boolean;
     readonly normalizeThreadLoadModelSelection?: (selection: ModelSelection) => ModelSelection;
+    readonly revalidateLoadedThreads?: true;
     readonly capabilities?: OrchestrationV2ProviderCapabilities;
     readonly extensionStatuses?: OrchestrationV2ProviderSession["extensionStatuses"];
     readonly mcpConfigs?: Ref.Ref<
@@ -564,6 +565,7 @@ const makeProviderAdapter = Effect.fnUntraced(function* (
           instanceId: ProviderInstanceId.make("codex"),
           driver: CODEX_DRIVER,
           providerSessionId: input.providerSessionId,
+          ...(options.revalidateLoadedThreads ? { revalidateLoadedThreads: true as const } : {}),
           ...(options.normalizeThreadLoadModelSelection === undefined
             ? {}
             : { normalizeThreadLoadModelSelection: options.normalizeThreadLoadModelSelection }),
@@ -651,6 +653,7 @@ function layerTest(input: {
   readonly maxIdlePinMs?: number;
   readonly failEventStream?: boolean;
   readonly normalizeThreadLoadModelSelection?: (selection: ModelSelection) => ModelSelection;
+  readonly revalidateLoadedThreads?: true;
   readonly capabilities?: OrchestrationV2ProviderCapabilities;
   readonly extensionStatuses?: OrchestrationV2ProviderSession["extensionStatuses"];
   readonly mcpConfigs?: Ref.Ref<
@@ -704,6 +707,7 @@ function layerTest(input: {
   const layerRegistry = Layer.unwrap(
     makeProviderAdapter(input.state, {
       failEventStream: input.failEventStream ?? false,
+      ...(input.revalidateLoadedThreads ? { revalidateLoadedThreads: true as const } : {}),
       ...(input.normalizeThreadLoadModelSelection === undefined
         ? {}
         : { normalizeThreadLoadModelSelection: input.normalizeThreadLoadModelSelection }),
@@ -1685,83 +1689,86 @@ it.effect("ProviderSessionManagerV2 gives up on a provider that never confirms a
 );
 
 // A failed start can leave its native thread gone, as when Claude rejects a resume.
-it.effect("ProviderSessionManagerV2 resumes a thread natively again after its start failed", () =>
-  Effect.gen(function* () {
-    const state = yield* Ref.make(emptyState);
-    yield* Effect.gen(function* () {
-      const eventSink = yield* EventSink.EventSinkV2;
-      const idAllocator = yield* IdAllocator.IdAllocatorV2;
-      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
-      const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
-      const now = yield* DateTime.now;
-      const threadId = ThreadId.make("thread-provider-session-manager-failed-start-resume");
-      const providerSessionId = idAllocator.derive.providerSession({
-        providerInstanceId: modelSelection.instanceId,
-      });
-      yield* eventSink.write({
-        events: [yield* makeThreadCreatedEvent({ idAllocator, threadId, now })],
-      });
-      const runtime = yield* manager.open({
-        threadId,
-        providerSessionId,
-        modelSelection,
-        runtimePolicy,
-      });
-      const providerThread = makeProviderThread({
-        idAllocator,
-        threadId,
-        providerSessionId,
-        now,
-        nativeThreadId: `native-${threadId}`,
-      });
-      const resume = runtime.resumeThread({
-        providerThread,
-        threadId,
-        modelSelection,
-        runtimePolicy,
-      });
-      yield* resume;
-      yield* resume;
-      assert.equal((yield* Ref.get(state)).resumeCount, 1);
-      const runId = idAllocator.derive.run({ threadId, ordinal: 1 });
-      yield* runtime
-        .startTurn({
-          appThread: (yield* projectionStore.getThreadProjection(threadId)).thread,
+it.effect.each([false, true])(
+  "ProviderSessionManagerV2 resumes a thread natively again after its start failed (revalidate: %s)",
+  (revalidate) =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState);
+      yield* Effect.gen(function* () {
+        const eventSink = yield* EventSink.EventSinkV2;
+        const idAllocator = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+        const now = yield* DateTime.now;
+        const threadId = ThreadId.make("thread-provider-session-manager-failed-start-resume");
+        const providerSessionId = idAllocator.derive.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+        });
+        yield* eventSink.write({
+          events: [yield* makeThreadCreatedEvent({ idAllocator, threadId, now })],
+        });
+        const runtime = yield* manager.open({
           threadId,
-          runId,
-          runOrdinal: 1,
-          providerTurnOrdinal: 1,
-          attemptId: idAllocator.derive.runAttempt({ runId, attemptOrdinal: 1 }),
-          rootNodeId: idAllocator.derive.rootNode({ runId }),
-          providerThread,
-          message: {
-            createdBy: "user",
-            creationSource: "web",
-            messageId: yield* idAllocator.allocate.message({ threadId, ordinal: 1 }),
-            text: "turn",
-            attachments: [],
-          },
+          providerSessionId,
           modelSelection,
           runtimePolicy,
-        })
-        .pipe(Effect.flip);
-      yield* resume;
-      assert.equal((yield* Ref.get(state)).resumeCount, 2);
-    }).pipe(
-      Effect.provide(
-        layerTest({
-          state,
-          idleTimeoutMs: 60_000,
-          startTurn: Effect.fail(
-            new ProviderAdapter.ProviderAdapterProtocolError({
-              driver: CODEX_DRIVER,
-              detail: "query ended before the turn could start",
-            }),
-          ),
-        }),
-      ),
-    );
-  }),
+        });
+        const providerThread = makeProviderThread({
+          idAllocator,
+          threadId,
+          providerSessionId,
+          now,
+          nativeThreadId: `native-${threadId}`,
+        });
+        const resume = runtime.resumeThread({
+          providerThread,
+          threadId,
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* resume;
+        yield* resume;
+        assert.equal((yield* Ref.get(state)).resumeCount, revalidate ? 2 : 1);
+        const runId = idAllocator.derive.run({ threadId, ordinal: 1 });
+        yield* runtime
+          .startTurn({
+            appThread: (yield* projectionStore.getThreadProjection(threadId)).thread,
+            threadId,
+            runId,
+            runOrdinal: 1,
+            providerTurnOrdinal: 1,
+            attemptId: idAllocator.derive.runAttempt({ runId, attemptOrdinal: 1 }),
+            rootNodeId: idAllocator.derive.rootNode({ runId }),
+            providerThread,
+            message: {
+              createdBy: "user",
+              creationSource: "web",
+              messageId: yield* idAllocator.allocate.message({ threadId, ordinal: 1 }),
+              text: "turn",
+              attachments: [],
+            },
+            modelSelection,
+            runtimePolicy,
+          })
+          .pipe(Effect.flip);
+        yield* resume;
+        assert.equal((yield* Ref.get(state)).resumeCount, revalidate ? 3 : 2);
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60_000,
+            ...(revalidate ? { revalidateLoadedThreads: true as const } : {}),
+            startTurn: Effect.fail(
+              new ProviderAdapter.ProviderAdapterProtocolError({
+                driver: CODEX_DRIVER,
+                detail: "query ended before the turn could start",
+              }),
+            ),
+          }),
+        ),
+      );
+    }),
 );
 
 it.effect("ProviderSessionManagerV2 still idles out a session releaseUnlessBusy kept", () =>

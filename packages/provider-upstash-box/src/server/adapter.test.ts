@@ -227,6 +227,7 @@ it.effect("recreates a deleted Box before a follow-up even when the thread stays
   Effect.scoped(
     Effect.gen(function* () {
       const { runtime, turn, lookup, box } = yield* setup(fakeStream([finish]));
+      assert.isTrue(runtime.revalidateLoadedThreads);
       lookup.streamError = new BoxError("deleted", 404);
       yield* runtime.startTurn(turn);
       const failed = yield* collect(runtime.events);
@@ -242,7 +243,14 @@ it.effect("recreates a deleted Box before a follow-up even when the thread stays
         id: "replacement-box",
         agent: { stream: async () => fakeStream([finish]) },
       };
-      yield* runtime.startTurn(turn);
+      const replacement = yield* runtime.resumeThread({
+        providerThread: turn.providerThread,
+        threadId,
+        modelSelection,
+        runtimePolicy,
+      });
+      assert.equal(replacement.nativeThreadRef?.nativeId, "replacement-box");
+      yield* runtime.startTurn({ ...turn, providerThread: replacement });
       const recovered = yield* collect(runtime.events);
       assert.equal(recovered.find((e) => e.type === "turn.terminal")?.status, "completed");
       const thread = recovered.find(

@@ -100,6 +100,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         instanceId,
         driver,
         providerSessionId: input.providerSessionId,
+        revalidateLoadedThreads: true,
         providerSession,
         events: Stream.fromEffectRepeat(Queue.take(events)),
         ensureThread: Effect.fn("UpstashBox.ensureThread")(function* (request) {

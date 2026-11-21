@@ -2416,7 +2416,7 @@ export const layerWithOptions = (
                 isProviderThreadLoaded({ providerSessionId, threadId, providerThreadKey }),
               ),
               Effect.flatMap((loaded) =>
-                loaded
+                loaded && runtime.revalidateLoadedThreads !== true
                   ? Effect.succeed({
                       loaded: input.providerThread,
                       linkedEnvironments: undefined,
