@@ -206,6 +206,7 @@ import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
 import { GuestPendingMessages } from "./chat/GuestShareControls";
 import { useDeviceState } from "~/state/device";
 import { BranchToolbar, type BranchToolbarHandle } from "./BranchToolbar";
+import { BoxSizePicker } from "./chat/BoxSizePicker";
 import { ComposerContextPermissions } from "./ComposerContextPermissions";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import { isEditableFocused } from "../lib/editableFocus";
@@ -1320,8 +1321,6 @@ export default function ChatView(props: ChatViewProps) {
   const supportsPullRequests = serverConfig !== null;
   const attachmentEnvironmentConfig = environmentById.get(environmentId)?.serverConfig ?? null;
   const attachmentUploadsCapabilityKnown = attachmentEnvironmentConfig !== null;
-  const supportsQuestionAttachments = attachmentEnvironmentConfig !== null;
-  const supportsAttachmentUploads = attachmentEnvironmentConfig !== null;
   const advertisedFileAttachmentBytes =
     attachmentEnvironmentConfig?.environment.capabilities.fileAttachments?.maxUploadBytes ?? null;
   const maxFileAttachmentBytes =
@@ -1392,6 +1391,9 @@ export default function ChatView(props: ChatViewProps) {
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
+  const cloudThread = isUpstashBoxDriver(selectedProvider);
+  const supportsQuestionAttachments = attachmentEnvironmentConfig !== null && !cloudThread;
+  const supportsAttachmentUploads = attachmentEnvironmentConfig !== null && !cloudThread;
   const conversationProviderStatus =
     providerStatuses.find((status) => status.instanceId === activeRuntime?.providerInstanceId) ??
     activeProviderStatus;
@@ -1687,7 +1689,6 @@ export default function ChatView(props: ChatViewProps) {
     turnDiffSummaries.at(-1)?.completedAt ?? null,
   );
 
-  const cloudThread = isUpstashBoxDriver(activeProviderStatus?.driver);
   const projectScriptsAvailable = false;
   const gitStatusCwd = activeThread?.worktreePath ?? gitCwd;
   const gitStatusAtom =
@@ -1821,6 +1822,7 @@ export default function ChatView(props: ChatViewProps) {
           providerSubagentModels,
           reportedModelSelection,
         );
+  const boxSizeDraftId = !embedded && isLocalDraftThread && cloudThread ? draftId : null;
   const showComposerContextStrip =
     !embedded &&
     shouldShowComposerContextStrip({
@@ -3720,6 +3722,7 @@ export default function ChatView(props: ChatViewProps) {
                                 environmentId={environmentId}
                                 attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                                 supportsAttachmentUploads={supportsAttachmentUploads}
+                                cloudThread={cloudThread}
                                 supportsQuestionAttachments={supportsQuestionAttachments}
                                 maxFileAttachmentBytes={maxFileAttachmentBytes}
                                 routeKind={routeKind}
@@ -3868,7 +3871,8 @@ export default function ChatView(props: ChatViewProps) {
                             data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
                             className="relative z-0"
                           >
-                            {showComposerContextStrip && !cloudThread && (
+                            {((showComposerContextStrip && !cloudThread) ||
+                              boxSizeDraftId !== null) && (
                               <div className="pointer-events-auto">
                                 <BranchToolbar
                                   forceNewWorktree={multipleModelSelections !== null}
@@ -3909,7 +3913,16 @@ export default function ChatView(props: ChatViewProps) {
                                       : undefined
                                   }
                                   availableEnvironments={logicalProjectEnvironments}
-                                  {...(isServerThread
+                                  environmentAccessory={
+                                    boxSizeDraftId === null ? null : (
+                                      <BoxSizePicker
+                                        draftId={boxSizeDraftId}
+                                        defaultSize={settings.upstashBox.size}
+                                        disabled={isSendBusy}
+                                      />
+                                    )
+                                  }
+                                  {...(isServerThread || cloudThread
                                     ? {}
                                     : {
                                         trailing: (

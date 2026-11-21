@@ -1649,6 +1649,11 @@ export function AddProjectDestinationScreen(props: {
 
   return (
     <AddProjectShell title={gt("Clone destination")}>
+      <Text className="text-sm text-foreground-muted">
+        {gt(
+          "This path is on the server machine. Cloud threads clone the project's pushed remote; unpushed changes are not copied to the Box.",
+        )}
+      </Text>
       {error ? <ErrorBanner message={error} /> : null}
       {repositoryTitle ? (
         <View className="rounded-[24px] bg-grouped-card px-4 py-3">

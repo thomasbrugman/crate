@@ -1,3 +1,9 @@
+// @effect-diagnostics nodeBuiltinImport:off - exercises cleanup against a disposable Git repository.
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
 import { assert, it } from "@effect/vitest";
 import {
   MessageId,
@@ -16,13 +22,15 @@ import {
   ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
 } from "@t3tools/provider-core/server/ProviderAdapter";
-import { BoxError, type Chunk } from "@upstash/box";
+import { BoxError, type BoxConfig, type Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
-import { BOX_HARNESS_DRIVER_KINDS } from "../harnesses.ts";
+import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import { BoxApi, type BoxHandle, type BoxStream } from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
@@ -45,39 +53,78 @@ const finish: Chunk = {
 const setup = Effect.fn("test.setupBox")(function* (
   stream: BoxStream | (() => Promise<BoxStream>),
   deleteBox?: () => Promise<void>,
+  harness: BoxHarness = "commandCode",
+  command?: BoxHandle["exec"]["command"],
 ) {
+  const commands: string[] = [];
   const prompts: string[] = [];
   const harnesses: string[] = [];
-  const lookup: { error?: unknown } = {};
+  const lookup: {
+    error?: unknown;
+    exec?: BoxHandle["exec"]["command"];
+    statusError?: unknown;
+    streamError?: unknown;
+    resumeError?: unknown;
+    replacement?: BoxHandle;
+    resumes: number;
+  } = { resumes: 0 };
+  const createdSizes: BoxConfig["size"][] = [];
   const box: BoxHandle = {
     id: "box-123",
     agent: {
       stream: async ({ prompt }) => {
         prompts.push(prompt);
+        if (lookup.error) throw lookup.error;
+        if (lookup.streamError) throw lookup.streamError;
         return typeof stream === "function" ? await stream() : stream;
       },
     },
-    exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
+    exec: {
+      command: async (text) => {
+        commands.push(text);
+        return lookup.exec
+          ? lookup.exec(text)
+          : command
+            ? command(text)
+            : { stdout: "", exitCode: 0 };
+      },
+    },
     files: {
       write: async ({ content }) => {
         harnesses.push(content);
       },
     },
     delete: deleteBox ?? (async () => undefined),
+    resume: async () => {
+      lookup.resumes++;
+      if (lookup.resumeError) throw lookup.resumeError;
+      lookup.streamError = undefined;
+    },
+    getStatus: async () => {
+      if (lookup.statusError) throw lookup.statusError;
+      return { status: "idle" };
+    },
   };
   const adapter = yield* makeUpstashBoxAdapter(
     instanceId,
-    { driver: BOX_HARNESS_DRIVER_KINDS.commandCode, harness: "commandCode", agentApiKey: "" },
+    { driver: BOX_HARNESS_DRIVER_KINDS[harness], harness, agentApiKey: "" },
     Effect.succeed({ apiKey: "test-key", templateBoxName: "cc-harness", size: "small" }),
   ).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
-      get: async () => {
+      get: async (id) => {
         if (lookup.error) throw lookup.error;
-        return box;
+        if (id.startsWith("t3-") && lookup.statusError) throw lookup.statusError;
+        return lookup.replacement ?? box;
       },
-      create: async () => box,
+      create: async ({ size }) => {
+        createdSizes.push(size);
+        lookup.error = undefined;
+        lookup.statusError = undefined;
+        return lookup.replacement ?? box;
+      },
       list: async () => [],
+      checkModelKey: async () => 200,
     }),
   );
   const runtime = yield* adapter.openSession({
@@ -129,34 +176,141 @@ const setup = Effect.fn("test.setupBox")(function* (
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn, prompts, adapter, lookup, harnesses };
+  return { runtime, turn, prompts, adapter, lookup, box, commands, harnesses, createdSizes };
 });
 
-it.effect(
-  "deletes native Boxes, tolerates missing identities and Boxes, and sanitizes failures",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        let deleted = 0;
-        const { adapter, turn, lookup } = yield* setup(fakeStream([]), async () => {
+it.effect("uses the saved Box size for provisioning and reprovisioning", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn, lookup, createdSizes } = yield* setup(fakeStream([]));
+      lookup.error = new BoxError("Box not found", 404);
+      yield* runtime.ensureThread({ threadId, modelSelection, runtimePolicy });
+      lookup.error = new BoxError("Box not found", 404);
+      yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy: { ...runtimePolicy, boxSize: "medium" },
+      });
+      lookup.error = new BoxError("Box not found", 404);
+      yield* runtime.resumeThread({
+        providerThread: turn.providerThread,
+        runtimePolicy: { ...runtimePolicy, boxSize: "large" },
+      });
+      assert.deepEqual(createdSizes, ["small", "medium", "large"]);
+    }),
+  ),
+);
+
+it.live("retains idle Boxes containing only gitignored work", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const home = yield* Effect.acquireRelease(
+        Effect.promise(() => NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "box-saved-work-"))),
+        (path) => Effect.promise(() => NodeFSP.rm(path, { recursive: true, force: true })),
+      );
+      const repo = NodePath.join(home, "repo");
+      yield* Effect.promise(() => NodeFSP.mkdir(repo));
+      for (const name of [".claude", ".codex", ".cursor", ".local"]) {
+        const path = NodePath.join(home, name);
+        yield* Effect.promise(() => NodeFSP.mkdir(path));
+        yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(path, "config.json"), "{}"));
+      }
+      yield* Effect.promise(() =>
+        NodeFSP.writeFile(NodePath.join(repo, ".gitignore"), ".env\n*.sqlite\n"),
+      );
+      yield* Effect.sync(() => {
+        const git = (...args: string[]) =>
+          NodeChildProcess.execFileSync("git", args, { cwd: repo, stdio: "pipe" });
+        git("init");
+        git("add", ".gitignore");
+        git(
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.invalid",
+          "commit",
+          "-m",
+          "initial",
+        );
+        git("update-ref", "refs/remotes/origin/main", "HEAD");
+      });
+      let deleted = 0;
+      const { adapter, turn } = yield* setup(
+        fakeStream([]),
+        async () => {
           deleted++;
-        });
-        yield* adapter.deleteThread!(turn.providerThread);
+        },
+        "commandCode",
+        async (command) => {
+          if (!command.includes("git stash")) return { stdout: "", exitCode: 0 };
+          const result = NodeChildProcess.spawnSync(
+            "sh",
+            ["-c", command.replaceAll("/workspace/home", home)],
+            { encoding: "utf8" },
+          );
+          return { stdout: result.stdout, exitCode: result.status ?? 1 };
+        },
+      );
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 1);
+      for (const name of [".env", "local.sqlite"]) {
+        const path = NodePath.join(repo, name);
+        yield* Effect.promise(() => NodeFSP.writeFile(path, "fixture"));
+        assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
         assert.equal(deleted, 1);
-        lookup.error = new BoxError("private upstream body", 404);
-        yield* adapter.deleteThread!(turn.providerThread);
-        assert.equal(deleted, 1);
-        lookup.error = new Error("private upstream body");
-        const error = yield* adapter.deleteThread!(turn.providerThread).pipe(Effect.flip);
-        assert.equal(error._tag, "ProviderAdapterProtocolError");
-        assert.notInclude(JSON.stringify(error), "private upstream body");
-        yield* adapter.deleteThread!({
-          ...turn.providerThread,
-          nativeThreadRef: null,
-          appThreadId: null,
-        });
-      }),
-    ),
+        yield* Effect.promise(() => NodeFSP.unlink(path));
+      }
+      yield* Effect.promise(() => NodeFSP.rm(repo, { recursive: true }));
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(home, "notes.txt"), "fixture"));
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
+    }),
+  ),
+);
+
+it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitizes failures", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      let deleted = 0;
+      let exitCode = 0;
+      const { adapter, turn, lookup, commands } = yield* setup(
+        fakeStream([]),
+        async () => {
+          deleted++;
+        },
+        "commandCode",
+        async (command) => ({ stdout: "", exitCode: command.includes("git stash") ? exitCode : 0 }),
+      );
+      yield* adapter.deleteThread!(turn.providerThread);
+      assert.equal(deleted, 1);
+      lookup.error = new BoxError("private upstream body", 404);
+      yield* adapter.deleteThread!(turn.providerThread);
+      assert.equal(deleted, 1);
+      lookup.error = new Error("private upstream body");
+      const error = yield* adapter.deleteThread!(turn.providerThread).pipe(Effect.flip);
+      assert.equal(error._tag, "ProviderAdapterProtocolError");
+      assert.notInclude(JSON.stringify(error), "private upstream body");
+      yield* adapter.deleteThread!({
+        ...turn.providerThread,
+        nativeThreadRef: null,
+        appThreadId: null,
+      });
+      lookup.error = undefined;
+      exitCode = 1;
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 1);
+      exitCode = 0;
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
+      lookup.error = new BoxError("private upstream body", 404);
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.lengthOf(
+        commands.filter((text) => text.includes("git stash")),
+        2,
+      );
+    }),
+  ),
 );
 
 function fakeStream(chunks: ReadonlyArray<Chunk>, error = false): BoxStream {
@@ -175,13 +329,26 @@ it.effect("cancels a run that finishes starting while its session shuts down", (
     const starting = Promise.withResolvers<void>();
     const ready = Promise.withResolvers<BoxStream>();
     let cancelled = 0;
+    let cleaned = 0;
     yield* Effect.scoped(
       Effect.gen(function* () {
-        const { runtime, turn } = yield* setup(async () => {
+        const { runtime, turn, lookup } = yield* setup(async () => {
           starting.resolve();
           return ready.promise;
         });
-        yield* runtime.startTurn(turn);
+        lookup.exec = async () => {
+          assert.isAbove(cancelled, 0);
+          cleaned++;
+          return { stdout: "", exitCode: 0 };
+        };
+        yield* runtime.events.pipe(
+          Stream.takeUntil((event) => event.type === "provider_thread.updated"),
+          Stream.runDrain,
+        );
+        yield* runtime.startTurn({
+          ...turn,
+          providerThread: { ...turn.providerThread, status: "active" },
+        });
         yield* Effect.promise(() => starting.promise);
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
@@ -193,9 +360,23 @@ it.effect("cancels a run that finishes starting while its session shuts down", (
             }),
           ),
         );
+        const startingEvents = yield* runtime.events.pipe(
+          Stream.takeUntil(
+            (event) => event.type === "node.updated" && event.node.status === "running",
+          ),
+          Stream.runCollect,
+        );
+        assert.isFalse(
+          startingEvents.some(
+            (event) =>
+              event.type === "provider_thread.updated" && event.providerThread.status === "idle",
+          ),
+          "Starting a live turn must not make the thread ineligible for restart continuation",
+        );
       }),
     );
     assert.equal(cancelled, 1);
+    assert.isAbove(cleaned, 0);
   }),
 );
 
@@ -205,6 +386,118 @@ const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>
     Stream.takeUntil((event) => event.type === "turn.terminal"),
     Stream.runCollect,
   );
+
+it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
+  "recreates a deleted Box before a follow-up even when the thread stays loaded (%s)",
+  (harness) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { runtime, turn, lookup, box, createdSizes } = yield* setup(
+          fakeStream([finish]),
+          undefined,
+          harness,
+        );
+        assert.equal(runtime.driver, BOX_HARNESS_DRIVER_KINDS[harness]);
+        assert.isTrue(runtime.revalidateLoadedThreads);
+        lookup.streamError = new BoxError("deleted", 404);
+        yield* runtime.startTurn(turn);
+        const failed = yield* collect(runtime.events);
+        assert.equal(failed.at(-1)?.type, "turn.terminal");
+        assert.equal(failed.find((e) => e.type === "turn.terminal")?.status, "failed");
+        assert.isFalse(
+          failed.some((e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice"),
+        );
+        lookup.streamError = undefined;
+        lookup.statusError = new BoxError("deleted", 404);
+        lookup.replacement = {
+          ...box,
+          id: "replacement-box",
+          agent: { stream: async () => fakeStream([finish]) },
+        };
+        const replacement = yield* runtime.resumeThread({
+          providerThread: turn.providerThread,
+          threadId,
+          modelSelection,
+          runtimePolicy: { ...runtimePolicy, boxSize: "large" },
+        });
+        assert.deepEqual(createdSizes, ["large"]);
+        assert.equal(replacement.nativeThreadRef?.nativeId, "replacement-box");
+        yield* runtime.startTurn({ ...turn, providerThread: replacement });
+        const recovered = yield* collect(runtime.events);
+        assert.equal(runtime.providerSession.status, "ready");
+        assert.equal(recovered.find((e) => e.type === "turn.terminal")?.status, "completed");
+        const thread = recovered.find(
+          (e) =>
+            e.type === "provider_thread.updated" &&
+            e.providerThread.nativeThreadRef?.nativeId === "replacement-box",
+        );
+        assert.isDefined(thread);
+        if (thread?.type !== "provider_thread.updated") return;
+        assert.equal(thread.providerThread.id, turn.providerThread.id);
+        assert.isNull(thread.providerThread.nativeConversationHeadRef);
+        assert.equal(lookup.resumes, 0);
+        const notices = recovered.filter(
+          (e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice",
+        );
+        assert.lengthOf(notices, 1);
+        const notice = notices[0];
+        if (notice?.type !== "turn_item.updated" || notice.turnItem.type !== "system_notice")
+          return;
+        assert.equal(notice.turnItem.level, "warning");
+        assert.equal(
+          notice.turnItem.message,
+          "This thread's Box was gone, so a new one was started. The agent doesn't have the earlier conversation, and uncommitted changes from the old Box are lost.",
+        );
+        assert.equal(notice.turnItem.threadId, turn.threadId);
+        assert.equal(notice.turnItem.runId, turn.runId);
+        for (const event of recovered) yield* decodeEvent(event);
+        yield* runtime.startTurn({ ...turn, providerThread: thread.providerThread });
+        const next = yield* collect(runtime.events);
+        assert.isFalse(
+          next.some((e) => e.type === "turn_item.updated" && e.turnItem.type === "system_notice"),
+        );
+      }),
+    ),
+);
+
+it.effect(
+  "resumes a Box rejecting new runs after shutdown without replaying a started stream",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        for (const [status, resumeFails] of [
+          [409, false],
+          [401, false],
+          [409, true],
+        ] as const) {
+          for (const harness of ["commandCode", "claudeCode", "codex"] as const) {
+            const { adapter, turn, lookup } = yield* setup(
+              fakeStream([finish]),
+              undefined,
+              harness,
+            );
+            const runtime = yield* adapter.openSession({
+              threadId,
+              providerSessionId: ProviderSessionId.make("restarted-session"),
+              modelSelection,
+              runtimePolicy,
+            });
+            yield* runtime.resumeThread({ providerThread: turn.providerThread });
+            lookup.streamError = new BoxError("private upstream error", status);
+            if (resumeFails) lookup.resumeError = new Error("private upstream error");
+            yield* runtime.startTurn(turn);
+            const events = yield* collect(runtime.events);
+            assert.equal(
+              events.find((e) => e.type === "turn.terminal")?.status,
+              status === 409 && !resumeFails ? "completed" : "failed",
+            );
+            assert.equal(lookup.resumes, status === 409 ? 1 : 0);
+            assert.notInclude(JSON.stringify(events), "private upstream error");
+          }
+        }
+      }),
+    ),
+);
 
 it.effect("publishes setup status and clears it on success or failure", () =>
   Effect.scoped(
@@ -430,7 +723,7 @@ it.effect(
           [fakeStream([]), "failed"],
           [fakeStream([{ type: "text-delta", text: "partial" }], true), "failed"],
         ] as const) {
-          const { runtime, turn } = yield* setup(stream);
+          const { runtime, turn, lookup } = yield* setup(stream);
           yield* runtime.startTurn(turn);
           const events = yield* collect(runtime.events);
           for (const event of events) yield* decodeEvent(event);
@@ -438,6 +731,7 @@ it.effect(
           assert.lengthOf(terminals, 1);
           assert.equal(terminals[0]?.status, status);
           assert.notInclude(JSON.stringify(events), "private upstream");
+          assert.equal(lookup.resumes, 0);
           if (status === "failed")
             assert.isFalse(
               events.filter((event) => event.type === "message.updated").at(-1)?.message
@@ -448,44 +742,67 @@ it.effect(
     ),
 );
 
-it.effect("cancels the active stream and emits one interrupted terminal", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const cancelled = Promise.withResolvers<void>();
-      let cancelCount = 0;
-      const { runtime, turn } = yield* setup({
-        id: "native-run",
-        cancel: async () => {
-          cancelCount++;
-          cancelled.resolve();
-        },
-        async *[Symbol.asyncIterator]() {
-          yield { type: "start", runId: "native-run" };
-          await cancelled.promise;
-        },
-      });
-      yield* runtime.startTurn(turn);
-      const started = yield* runtime.events.pipe(
-        Stream.filter(
-          (event) =>
-            event.type === "provider_turn.updated" && event.providerTurn.nativeTurnRef !== null,
-        ),
-        Stream.take(1),
-        Stream.runCollect,
-      );
-      const event = started[0];
-      assert.isDefined(event);
-      if (event?.type !== "provider_turn.updated") return yield* Effect.die("Missing start event");
-      yield* runtime.interruptTurn({
-        providerThread: turn.providerThread,
-        providerTurnId: event.providerTurn.id,
-      });
-      const events = yield* collect(runtime.events);
-      assert.equal(cancelCount, 1);
-      assert.equal(
-        events.filter((entry) => entry.type === "turn.terminal")[0]?.status,
-        "interrupted",
-      );
-    }),
-  ),
+it.effect.each(["ok", "throw", "exit", "hang"] as const)(
+  "cancels the active stream and interrupts despite %s cleanup",
+  (cleanup) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const cancelled = Promise.withResolvers<void>();
+        const releaseCleanup = Promise.withResolvers<{ stdout: string; exitCode: number }>();
+        let cancelCount = 0;
+        const order: string[] = [];
+        const { runtime, turn, lookup } = yield* setup({
+          id: "native-run",
+          cancel: async () => {
+            cancelCount++;
+            order.push("cancel");
+            cancelled.resolve();
+          },
+          async *[Symbol.asyncIterator]() {
+            yield { type: "start", runId: "native-run" };
+            await cancelled.promise;
+          },
+        });
+        lookup.exec = async (command) => {
+          assert.include(command, "t3stash-harness.mjs");
+          order.push("kill");
+          if (cleanup === "throw") throw new Error("private cleanup failure");
+          if (cleanup === "hang") return releaseCleanup.promise;
+          return { stdout: "", exitCode: cleanup === "exit" ? 1 : 0 };
+        };
+        yield* runtime.startTurn(turn);
+        const started = yield* runtime.events.pipe(
+          Stream.filter(
+            (event) =>
+              event.type === "provider_turn.updated" && event.providerTurn.nativeTurnRef !== null,
+          ),
+          Stream.take(1),
+          Stream.runCollect,
+        );
+        const event = started[0];
+        assert.isDefined(event);
+        if (event?.type !== "provider_turn.updated")
+          return yield* Effect.die("Missing start event");
+        const interrupt = yield* runtime
+          .interruptTurn({
+            providerThread: turn.providerThread,
+            providerTurnId: event.providerTurn.id,
+          })
+          .pipe(Effect.forkChild);
+        if (cleanup === "hang") {
+          yield* TestClock.adjust("8 seconds");
+          const finished = interrupt.pollUnsafe();
+          releaseCleanup.resolve({ stdout: "", exitCode: 0 });
+          assert.isDefined(finished);
+        }
+        yield* Fiber.join(interrupt);
+        const events = yield* collect(runtime.events);
+        assert.equal(cancelCount, 1);
+        assert.deepEqual(order, ["cancel", "kill"]);
+        assert.equal(
+          events.filter((entry) => entry.type === "turn.terminal")[0]?.status,
+          "interrupted",
+        );
+      }),
+    ),
 );
