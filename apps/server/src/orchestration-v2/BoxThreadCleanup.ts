@@ -112,7 +112,9 @@ const make = Effect.gen(function* () {
           : yield* readSecret(environmentValue, threadId);
       }).pipe(
         Effect.mapError((cause) =>
-          isBoxThreadCleanupError(cause) ? cause : failure("credentials_unavailable"),
+          isBoxThreadCleanupError(cause) && cause.cause
+            ? cause
+            : failure("credentials_unavailable"),
         ),
       );
       if (!apiKey) return yield* failure("credentials_unavailable");

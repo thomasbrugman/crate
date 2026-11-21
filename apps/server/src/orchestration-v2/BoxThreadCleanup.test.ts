@@ -159,6 +159,7 @@ it.effect.each(scenarios)(
         assert.equal(result._tag, "Failure");
         if (result._tag === "Failure") {
           assert.equal(result.failure.reason, scenario.reason);
+          assert.equal(result.failure.providerThreadId, thread.id);
           assert.equal(
             result.failure.message,
             `Could not delete the thread Box (${scenario.reason}).${scenario.reason === "delete_failed" ? " Box deletion refused for [REDACTED]" : ""}`,
