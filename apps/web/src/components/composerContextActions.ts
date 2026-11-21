@@ -5,6 +5,7 @@ export interface ComposerContextActions {
   environmentId: EnvironmentId | null;
   cwd?: string | undefined;
   projectId?: ProjectId | undefined;
+  filePreviewUnavailableReason?: string | undefined;
   expandImage: (imageId: string) => void;
   expandVideo: (fileId: string) => void;
   openFile: (fileId: string) => void;

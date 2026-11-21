@@ -336,6 +336,12 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                 </span>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              <T>
+                This path is on the server machine. Cloud threads clone the project's pushed remote;
+                unpushed changes are not copied to the Box.
+              </T>
+            </p>
 
             <div className="flex flex-col gap-1.5">
               <Label>

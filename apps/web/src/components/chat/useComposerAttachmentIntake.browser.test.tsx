@@ -128,6 +128,19 @@ it("prepares a repeated paste without a tile, and still keeps a different image"
   expect(visiblePreparing(target)).toHaveLength(0);
   await act(() => different);
   expect(composerImagesRef.current).toHaveLength(2);
+
+  await _screen.rerender(
+    <Harness
+      input={{ ...input, unavailableReason: "Not available in cloud threads." }}
+      ready={(value) => {
+        intake = value;
+      }}
+    />,
+  );
+  expect(await intake.addComposerAttachments([pastedImage(8)])).toBe(false);
+  expect(await intake.addComposerAttachments([])).toBe(false);
+  expect(intake.foldPastedText("large paste".repeat(1000), false)).toBe(false);
+  expect(composerImagesRef.current).toHaveLength(2);
 });
 
 // The thread row's discard runs after the composer left that thread; a draft session's discard

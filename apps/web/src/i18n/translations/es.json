@@ -1576,6 +1576,7 @@
     },
     " y trae los archivos locales que git no rastrea."
   ],
+  "bd5def9c42115de5": "Esta ruta está en el servidor. Los hilos en la nube clonan el remoto del proyecto con los cambios enviados; los cambios sin enviar no se copian al Box.",
   "77494a56d6315a2e": "Clonar por",
   "1c7a3992dd8e38af": "Copiar archivos ignorados",
   "7d4bb884e519b298": "Los archivos se copian cuando termina la clonación. Las carpetas que git ignora por completo, como node_modules, se omiten.",
@@ -2676,6 +2677,7 @@
   "7f6d34983e89a91c": "Eliminar acción",
   "84435bd5cb8cfac0": "Editar acción",
   "2d1f6668f713dca9": "Añadir acción",
+  "73bedbce4c29257a": "Las acciones se guardan para este proyecto, pero no se ejecutan en los hilos en la nube.",
   "da1b3bc9635dcdc8": "Las acciones son comandos del proyecto que puedes ejecutar desde la barra superior o con atajos de teclado.",
   "4614a422f1430cd7": "Nombre",
   "d3502e7db0cdb998": "Atajo de teclado",
@@ -3278,6 +3280,7 @@
       "v": "v"
     }
   ],
+  "eb51025bee426871": "Los adjuntos y las vistas previas de archivos no están disponibles en los hilos en la nube. Las menciones de archivos usan la copia del servidor; solo los archivos enviados al remoto están disponibles en el Box.",
   "3dbc42464b2bfb20": "Fast y Ultrafast no están disponibles con esta conexión de ChatGPT. Usa un inicio de sesión existente de Codex CLI para las opciones de velocidad que admita tu cuenta.",
   "5c0eb4217bb673bd": "Usando el plan de ChatGPT",
   "3e545d70d0c3535c": "Ruta de navegación del hilo",
@@ -4069,7 +4072,6 @@
   "4276743ee60a3c62": "{count, plural, one {{count} comentario} other {{count} comentarios}}",
   "42f634397f3960aa": "Mostrar en los detalles del hilo",
   "e3738ef0423ddfe7": "Restablecer al valor predeterminado",
-  "4b3d3f47606c22e2": "No disponible en los hilos en la nube. Pídele al agente que use sus herramientas de Box.",
   "ae10d34e11064fec": "Control de versiones",
   "8ab1235557b08956": "Elige qué mostrar",
   "e8f045adbbaf328e": "Añadido al cuadro de mensaje",
