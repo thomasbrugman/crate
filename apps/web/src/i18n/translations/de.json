@@ -3253,6 +3253,7 @@
   "e8e73f3ce06abbce": "Prüfe, ob seine Umgebung verbunden und aktuell ist, und versuche es dann erneut.",
   "6b45252b76f5ca2e": "Thread kann nicht hinzugefügt werden",
   "da13069e7a3a8ffd": "Eingabefeld vergrößern",
+  "2242587c6b44cce0": "Starte einen neuen Thread, um fortzufahren",
   "d3356b4524173b25": "Aktiviere einen Anbieter in den Einstellungen",
   "3d3f30f1a1c4fc52": "Frag einfach...",
   "305d6d72f1220d98": "Pull Request wird gesucht...",
@@ -3266,6 +3267,7 @@
   "9a3db19d3e12dea6": "Gib deine Antwort ein",
   "ea8fec0f7052e43e": "Gib deine eigene Antwort ein oder lass das Feld leer, um die ausgewählte Option zu verwenden",
   "56d9080d3ab28e39": "Wähle oben ein Projekt, um einen Thread zu starten",
+  "bbc21d1967578281": "Der Anbieter dieses Threads ist nicht mehr verfügbar. Starte einen neuen Thread, um fortzufahren.",
   "6d66186eedd8009b": "Aktiviere einen Anbieter in den Einstellungen, um eine Nachricht zu senden",
   "977ead973131917d": "Live-Transkription",
   "412187d16dc11adf": [
@@ -3392,6 +3394,7 @@
   "061c0c9f27104d23": "Keine Skills gefunden. Mit / kannst du Anbieterbefehle durchsuchen.",
   "0a6fbecab03f7ef3": "Keine passenden Dateien oder Ordner.",
   "0e7b21ab11721ca7": "Kein passender Befehl.",
+  "754d11d1f210a398": "Neuen Thread starten",
   "2029db2cc30beb6d": "Anbietereinstellungen öffnen",
   "517cfb8f24123f5b": "Kein Anbieter verfügbar",
   "7ff1a0ef1490668d": "Die Zwischenablage-API ist beim Kopieren der Codex-Feedback-Thread-ID nicht verfügbar.",

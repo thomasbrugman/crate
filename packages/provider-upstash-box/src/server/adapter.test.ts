@@ -111,6 +111,7 @@ const setup = Effect.fn("test.setupBox")(function* (
         return lookup.replacement ?? box;
       },
       list: async () => [],
+      checkModelKey: async () => 200,
     }),
   );
   const runtime = yield* adapter.openSession({

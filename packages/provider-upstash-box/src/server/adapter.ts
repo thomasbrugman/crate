@@ -206,12 +206,16 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           ).pipe(
             Effect.provideService(BoxApi, api),
             Effect.tapError(() => setSessionStatus("error")),
-            Effect.mapError(
-              () =>
-                new Adapter.ProviderAdapterEnsureThreadError({
-                  driver,
-                  threadId: request.threadId,
-                }),
+            Effect.mapError((error) =>
+              error.missingStoredKey
+                ? new Adapter.ProviderAdapterProtocolError({
+                    driver,
+                    detail: `Your Upstash account has no stored model key for ${BOX_HARNESS_LABELS[harness]}. Set a model API key in its provider settings`,
+                  })
+                : new Adapter.ProviderAdapterEnsureThreadError({
+                    driver,
+                    threadId: request.threadId,
+                  }),
             ),
           );
           yield* setSessionStatus("ready");
