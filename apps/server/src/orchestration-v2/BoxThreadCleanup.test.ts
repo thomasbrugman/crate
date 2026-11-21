@@ -161,7 +161,7 @@ it.effect.each(scenarios)(
           assert.equal(result.failure.reason, scenario.reason);
           assert.equal(
             result.failure.message,
-            `Could not delete the thread Box (${scenario.reason}).`,
+            `Could not delete the thread Box (${scenario.reason}).${scenario.reason === "delete_failed" ? " Box deletion refused for [REDACTED]" : ""}`,
           );
           assert.notInclude(JSON.stringify(result.failure), "private upstream details");
           assert.notInclude(JSON.stringify(result.failure), "private-key");
@@ -173,7 +173,7 @@ it.effect.each(scenarios)(
               boxId: "persisted-box",
             };
             assert.deepEqual(result.failure.boxError, diagnostic);
-            assert.deepEqual(result.failure.cause, diagnostic);
+            assert.isUndefined(result.failure.cause);
           } else if (key === "settings_failure") {
             assert.deepEqual(result.failure.cause, {
               message: "Server settings read-file failed at test-settings.json.",

@@ -32,7 +32,7 @@ export class BoxThreadCleanupError extends Schema.TaggedError<BoxThreadCleanupEr
   },
 ) {
   override get message(): string {
-    return `Could not delete the thread Box (${this.reason}).`;
+    return `Could not delete the thread Box (${this.reason}).${this.boxError ? ` ${this.boxError.message}` : ""}`;
   }
 }
 
@@ -132,7 +132,6 @@ const make = Effect.gen(function* () {
             providerThreadId: thread.id,
             reason: "delete_failed",
             boxError: diagnostic,
-            cause: diagnostic,
           });
         },
       });
