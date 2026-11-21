@@ -92,6 +92,7 @@ describe("thread execution presentation", () => {
       providerSessions: [
         {
           id: sessionId,
+          driver: ProviderDriverKind.make("pi"),
           providerInstanceId: instanceId,
           status: "ready" as const,
           extensionStatuses: statuses,
@@ -116,6 +117,14 @@ describe("thread execution presentation", () => {
       deriveProviderExtensionStatuses({
         ...projection,
         providerSessions: [{ ...projection.providerSessions[0]!, status: "stopped" }],
+      }),
+    ).toEqual([]);
+    expect(
+      deriveProviderExtensionStatuses({
+        ...projection,
+        providerSessions: [
+          { ...projection.providerSessions[0]!, driver: ProviderDriverKind.make("upstashBox") },
+        ],
       }),
     ).toEqual([]);
     expect(
@@ -274,6 +283,9 @@ describe("thread execution presentation", () => {
   it("counts a wake run's activity from the start of the work it continues", () => {
     const workStartedAt = DateTime.makeUnsafe("2026-07-28T09:20:00.000Z");
     const wake = { ...run("wake", 2, "running"), workStartedAt };
+    expect(deriveLatestThreadRun({ ...v2Projection, runs: [wake] })?.startedAt).toBe(
+      "2026-07-28T09:20:00.000Z",
+    );
     expect(
       deriveThreadRuntime({ ...v2Projection, runs: [run("prompt", 1, "completed"), wake] })
         ?.activityStartedAt,
@@ -282,6 +294,22 @@ describe("thread execution presentation", () => {
       deriveThreadRuntime({ ...v2Projection, runs: [run("prompt", 1, "running")] })
         ?.activityStartedAt,
     ).toBe("2026-07-28T10:00:00.000Z");
+  });
+
+  it("keeps the Box setup clock through starting, thinking and completion", () => {
+    for (const status of ["starting", "running", "completed"] as const) {
+      const boxRun = {
+        ...run("box", 1, status),
+        workStartedAt: now,
+        startedAt: status === "starting" ? null : DateTime.add(now, { seconds: 36 }),
+        completedAt: status === "completed" ? DateTime.add(now, { milliseconds: 42_600 }) : null,
+      };
+      const projection = { ...v2Projection, runs: [boxRun] };
+      expect(deriveLatestThreadRun(projection)?.startedAt).toBe(DateTime.formatIso(now));
+      if (status !== "completed") {
+        expect(deriveThreadRuntime(projection)?.activityStartedAt).toBe(DateTime.formatIso(now));
+      }
+    }
   });
 
   it("keeps a subscription limit visible while later messages stay queued", () => {
@@ -413,6 +441,24 @@ describe("thread execution presentation", () => {
     const starting = { ...v2Projection, runs: [openRun], providerSessions: [session] };
 
     expect(deriveThreadActivityRun(starting)?.providerStartingLabel).toBe("Starting Claude");
+    const boxSession = { ...session, driver: ProviderDriverKind.make("upstashBox") };
+    expect(
+      deriveThreadActivityRun({ ...starting, providerSessions: [boxSession] })
+        ?.providerStartingLabel,
+    ).toBe("Setting up Box");
+    const cloning = {
+      ...boxSession,
+      extensionStatuses: [{ key: "upstash-box.setup.clone", text: "Cloning the repository" }],
+    };
+    expect(
+      deriveThreadActivityRun({ ...starting, providerSessions: [cloning] })?.providerStartingLabel,
+    ).toBe("Cloning the repository");
+    expect(
+      deriveThreadActivityRun({
+        ...starting,
+        providerSessions: [{ ...boxSession, status: "ready" }],
+      })?.providerStartingLabel,
+    ).not.toBe("Setting up Box");
     expect(
       deriveThreadActivityRun({ ...starting, providerSessions: [] })?.providerStartingLabel,
     ).toBe("Starting");
