@@ -1,8 +1,13 @@
 import { ServerSettings } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { expect, it } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
 
 import { secretProviderUses } from "./SecretsSettings.logic";
+
+vi.mock(import("@t3tools/client-runtime/provider-clients"), async (original) => ({
+  ...(await original()),
+  ...(await import("../../../test/fixtures/legacyProviderClients")),
+}));
 
 const personal = (reference: string) => ({ provider: "personal", reference });
 const work = { provider: "work", reference: "op://Work/token" };
