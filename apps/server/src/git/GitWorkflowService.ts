@@ -33,6 +33,8 @@ import * as GitManager from "./GitManager.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
+import * as BoxGitHost from "../vcs/BoxGitHost.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
 
 export class GitWorkflowService extends Context.Service<
   GitWorkflowService,
@@ -192,13 +194,18 @@ export const make = Effect.gen(function* () {
   const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const gitManager = yield* GitManager.GitManager;
-  const fileSystem = yield* FileSystem.FileSystem;
+  const fileSystem = BoxGitHost.fileSystem(yield* FileSystem.FileSystem);
 
   // Nested projects and path aliases must share the checkout's branch-mutation lease.
   const withCheckoutLease = <A, E, R>(rootPath: string, effect: Effect.Effect<A, E, R>) =>
     fileSystem.realPath(rootPath).pipe(
       Effect.orElseSucceed(() => rootPath),
-      Effect.flatMap((cwd) => withWorkspaceLease(cwd, effect)),
+      Effect.flatMap((cwd) =>
+        Effect.gen(function* () {
+          const target = yield* VcsThreadTarget.VcsThreadTarget;
+          return yield* withWorkspaceLease(target ? `${target.threadId}\0${cwd}` : cwd, effect);
+        }),
+      ),
     );
 
   const ensureGit = Effect.fn("GitWorkflowService.ensureGit")(function* (

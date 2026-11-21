@@ -34,6 +34,7 @@ import { ChildProcess, ChildProcessSpawner, CommandLine } from "effect/process";
 
 import {
   GitCommandError,
+  ThreadId,
   ReviewDiffPreviewInput,
   VcsRef,
   VcsListRefsResult,
@@ -53,6 +54,10 @@ import {
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 import { VcsAutomaticFetchInterval } from "./VcsAutomaticFetchInterval.ts";
 import { gitConfigEnv } from "./VcsProcess.ts";
+import * as VcsProcess from "./VcsProcess.ts";
+import * as VcsThreadTarget from "./VcsThreadTarget.ts";
+import * as BoxGitHost from "./BoxGitHost.ts";
+import { BoxExec } from "@t3tools/provider-upstash-box/server";
 
 const encodeGitCommandError = Schema.encodeEffect(Schema.fromJsonString(GitCommandError));
 const decodeVcsRef = Schema.decodeUnknownSync(VcsRef);
@@ -64,6 +69,69 @@ const layerServerConfig = ServerConfig.layerTest(process.cwd(), {
 const layerTest = GitVcsDriver.layer.pipe(
   Layer.provideMerge(layerServerConfig),
   Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+);
+
+it.effect("prepares and partially commits in Box without host filesystem or process access", () =>
+  Effect.gen(function* () {
+    const cwd = yield* makeTmpDir();
+    yield* initRepoWithCommit(cwd);
+    yield* writeTextFile(cwd, "selected.txt", "selected content\n");
+    yield* writeTextFile(cwd, "other.txt", "leave uncommitted\n");
+    const commands: string[] = [];
+    const hostReads: string[] = [];
+    const hostFileSystem = new Proxy(FileSystem.makeNoop({}), {
+      get(object, key) {
+        const value: unknown = Reflect.get(object, key);
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) => {
+          hostReads.push(String(key));
+          return Reflect.apply(value, object, args);
+        };
+      },
+    });
+    const fake = BoxExec.BoxExec.of({
+      run: (input) =>
+        Effect.sync(() => {
+          const command = [input.command, ...(input.args ?? []).map(BoxGitHost.quote)].join(" ");
+          commands.push(command);
+          const result = NodeChildProcess.spawnSync("sh", ["-c", command], {
+            cwd: input.cwd ?? cwd,
+            encoding: "utf8",
+          });
+          return { exitCode: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
+        }),
+    });
+    yield* Effect.gen(function* () {
+      const shape = yield* GitVcsDriver.makeVcsDriverShape();
+      assert.equal((yield* shape.detectRepository("/host/shared"))?.rootPath, cwd);
+      const driver = yield* makeGitVcsDriverCore();
+      const prepared = yield* driver.prepareCommitContext("/host/shared", ["selected.txt"]);
+      assert.include(prepared?.stagedPatch ?? "", "+selected content");
+      assert.notInclude(prepared?.stagedPatch ?? "", "leave uncommitted");
+      yield* driver.commit("/host/shared", "Selected ' safely", "", {
+        stage: { filePaths: ["selected.txt"] },
+      });
+      const status = yield* driver.statusDetailsLocal("/host/shared");
+      assert.isTrue(status.hasWorkingTreeChanges);
+    }).pipe(
+      Effect.provideService(VcsThreadTarget.VcsThreadTarget, {
+        threadId: ThreadId.make("box-partial"),
+        projectRoot: "/host/shared",
+        checkoutRoot: cwd,
+      }),
+      Effect.provideService(BoxExec.BoxExec, fake),
+      Effect.provideService(FileSystem.FileSystem, hostFileSystem),
+      Effect.provideService(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make(() => Effect.die("Host process must not run")),
+      ),
+      Effect.provide(VcsProcess.cloudLayer),
+    );
+    assert.include(yield* git(cwd, ["show", "--format=", "--name-only", "HEAD"]), "selected.txt");
+    assert.equal(yield* git(cwd, ["diff", "--cached"]), "");
+    assert.isTrue(commands.some((command) => command.includes("makeTempDirectoryScoped")));
+    assert.deepEqual(hostReads, []);
+  }).pipe(Effect.provide(layerTest)),
 );
 
 const makeNonRepositoryHandle = () =>

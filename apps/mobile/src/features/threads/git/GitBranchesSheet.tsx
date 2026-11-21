@@ -34,7 +34,7 @@ export function GitBranchesSheet(_props: GitBranchesSheetProps) {
     selectedThread !== null && selectedThreadCwd !== null
       ? vcsEnvironment.branch({
           environmentId: selectedThread.environmentId,
-          input: { cwd: selectedThreadCwd },
+          input: { cwd: selectedThreadCwd, threadId: selectedThread.id },
         })
       : null,
   );

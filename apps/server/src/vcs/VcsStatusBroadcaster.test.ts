@@ -1,4 +1,5 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlProviderKind, ThreadId } from "@t3tools/contracts";
+import * as VcsThreadTarget from "./VcsThreadTarget.ts";
 import { assert, it, describe } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Deferred from "effect/Deferred";
@@ -634,6 +635,37 @@ describe("VcsStatusBroadcaster", () => {
         yield* Fiber.join(detailsFiber),
         Option.some({ _tag: "snapshot" as const, local: state.currentLocalStatus, remote: null }),
       );
+    }).pipe(Effect.provide(layerTestFor(state)));
+  });
+
+  it.effect("separates cached status for Box threads sharing a host cwd", () => {
+    const state: Parameters<typeof layerTestFor>[0] = {
+      currentLocalStatus: baseLocalStatus,
+      currentRemoteStatus: baseRemoteStatus,
+      localStatusCalls: 0,
+      remoteStatusCalls: 0,
+      localInvalidationCalls: 0,
+      remoteInvalidationCalls: 0,
+      branchRead: () =>
+        Effect.map(VcsThreadTarget.VcsThreadTarget, (target) =>
+          target?.threadId === "one" ? baseLocalStatus.refName : "box-two",
+        ),
+    };
+    return Effect.gen(function* () {
+      const service = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
+      const read = (id: string) =>
+        service.getStatus({ cwd: "/repo" }).pipe(
+          Effect.provideService(VcsThreadTarget.VcsThreadTarget, {
+            threadId: ThreadId.make(id),
+            projectRoot: "/repo",
+            checkoutRoot: "/workspace/home/repo",
+          }),
+        );
+      assert.equal((yield* read("one")).refName, baseLocalStatus.refName);
+      state.currentLocalStatus = { ...baseLocalStatus, refName: "box-two" };
+      assert.equal((yield* read("two")).refName, "box-two");
+      assert.equal((yield* read("one")).refName, baseLocalStatus.refName);
+      assert.equal(state.localStatusCalls, 2);
     }).pipe(Effect.provide(layerTestFor(state)));
   });
 

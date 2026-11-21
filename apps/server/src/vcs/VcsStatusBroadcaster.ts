@@ -33,6 +33,8 @@ import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as VcsThreadTarget from "./VcsThreadTarget.ts";
+import * as BoxGitHost from "./BoxGitHost.ts";
 import { VcsAutomaticFetchInterval } from "./VcsAutomaticFetchInterval.ts";
 
 const VCS_STATUS_REFRESH_FAILURE_BASE_DELAY = Duration.seconds(30);
@@ -252,12 +254,12 @@ const normalizeCwd = (cwd: string) =>
   );
 
 /** @public */
-export const make = Effect.gen(function* () {
+const makeInstance = Effect.gen(function* () {
   const automaticFetchInterval = yield* VcsAutomaticFetchInterval;
   const autoPullPolicy = yield* VcsAutoPullPolicy;
   const workflow = yield* GitWorkflowService.GitWorkflowService;
   const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
-  const fs = yield* FileSystem.FileSystem;
+  const fs = BoxGitHost.fileSystem(yield* FileSystem.FileSystem);
   const path = yield* Path.Path;
   const changesPubSub = yield* Effect.acquireRelease(
     PubSub.unbounded<VcsStatusChange>(),
@@ -1243,4 +1245,6 @@ export const make = Effect.gen(function* () {
   });
 });
 
+/** @public */
+export const make = VcsThreadTarget.partition(makeInstance);
 export const layer = Layer.effect(VcsStatusBroadcaster, make);

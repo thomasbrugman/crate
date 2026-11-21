@@ -9,7 +9,7 @@ import {
   type GitRunStackedActionInput,
   type GitRunStackedActionResult,
   GitStackedAction,
-  type ThreadId,
+  ThreadId,
   type ProjectId,
   WS_METHODS,
 } from "@t3tools/contracts";
@@ -61,11 +61,13 @@ export interface VcsActionState {
 }
 
 export interface VcsActionTarget {
+  readonly threadId?: ThreadId;
   readonly environmentId: EnvironmentIdType | null;
   readonly cwd: string | null;
 }
 
 export interface ResolvedVcsActionTarget {
+  readonly threadId?: ThreadId;
   readonly environmentId: EnvironmentIdType;
   readonly cwd: string;
 }
@@ -196,7 +198,10 @@ export const EMPTY_VCS_ACTION_STATE = Object.freeze<VcsActionState>({
 const nowMs = (): number => DateTime.toEpochMillis(DateTime.nowUnsafe());
 let nextLocalActionId = 0;
 const decodeVcsActionTargetKey = Schema.decodeUnknownSync(
-  Schema.Tuple([EnvironmentId, Schema.String]),
+  Schema.Union([
+    Schema.Tuple([EnvironmentId, Schema.String]),
+    Schema.Tuple([EnvironmentId, Schema.String, ThreadId]),
+  ]),
 );
 
 const vcsActionStateAtom = Atom.family((key: string) => {
@@ -215,13 +220,17 @@ function getVcsActionTargetKey(target: VcsActionTarget): string | null {
   if (target.environmentId === null || target.cwd === null) {
     return null;
   }
-  return JSON.stringify([target.environmentId, target.cwd]);
+  return JSON.stringify([
+    target.environmentId,
+    target.cwd,
+    ...(target.threadId ? [target.threadId] : []),
+  ]);
 }
 
 export function parseVcsActionTargetKey(key: string): ResolvedVcsActionTarget {
   try {
-    const [environmentId, cwd] = decodeVcsActionTargetKey(JSON.parse(key));
-    return { environmentId, cwd };
+    const [environmentId, cwd, threadId] = decodeVcsActionTargetKey(JSON.parse(key));
+    return { environmentId, cwd, ...(threadId ? { threadId } : {}) };
   } catch (cause) {
     throw new VcsActionTargetKeyParseError({ keyLength: key.length, cause });
   }
@@ -302,7 +311,11 @@ export function createVcsActionTransportId(
   target: ResolvedVcsActionTarget,
   actionId: string,
 ): string {
-  const targetKey = JSON.stringify([target.environmentId, target.cwd]);
+  const targetKey = JSON.stringify([
+    target.environmentId,
+    target.cwd,
+    ...(target.threadId ? [target.threadId] : []),
+  ]);
   return `${targetKey.length}:${targetKey}${actionId}`;
 }
 
@@ -535,7 +548,9 @@ export function createVcsActionManager<R, E>(
           ...(input.commitMessage ? { commitMessage: input.commitMessage } : {}),
           ...(input.featureBranch ? { featureBranch: true } : {}),
           ...(input.filePaths?.length ? { filePaths: [...input.filePaths] } : {}),
-          ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
+          ...((input.threadId ?? target.threadId) !== undefined
+            ? { threadId: input.threadId ?? target.threadId }
+            : {}),
           ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
         };
         const clearOwnedState = Effect.sync(() => {

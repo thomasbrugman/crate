@@ -1,10 +1,11 @@
 // @effect-diagnostics globalTimers:off - The wake debounce runs in an atom subscription, outside an Effect runtime.
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Atom, type AtomRegistry } from "effect/reactivity";
 
 import { type AtomCommand, type AtomCommandResult, runAtomCommand } from "./runtime.ts";
 
 export interface VcsStatusRevalidationTarget {
+  readonly threadId?: ThreadId;
   readonly environmentId: EnvironmentId;
   readonly cwd: string;
 }
@@ -16,7 +17,10 @@ export interface VcsStatusRevalidationTarget {
  */
 export function createVcsStatusRevalidationAtomFamily<R>(input: {
   readonly refreshStatus: AtomCommand<
-    { readonly environmentId: EnvironmentId; readonly input: { readonly cwd: string } },
+    {
+      readonly environmentId: EnvironmentId;
+      readonly input: { readonly cwd: string; readonly threadId?: ThreadId };
+    },
     R,
     unknown
   >;
@@ -26,14 +30,14 @@ export function createVcsStatusRevalidationAtomFamily<R>(input: {
   readonly onRefreshed?: (result: AtomCommandResult<R, unknown>) => void;
 }) {
   const family = Atom.family((target: VcsStatusRevalidationTarget) => {
-    const { environmentId, cwd } = target;
-    const key = `${environmentId}:${cwd}`;
+    const { environmentId, cwd, threadId } = target;
+    const key = JSON.stringify([environmentId, cwd, threadId]);
 
     const refresh = async (registry: AtomRegistry.AtomRegistry) => {
       const result = await runAtomCommand(
         registry,
         input.refreshStatus,
-        { environmentId, input: { cwd } },
+        { environmentId, input: { cwd, ...(threadId ? { threadId } : {}) } },
         { reportFailure: false },
       );
       input.onRefreshed?.(result);
@@ -68,5 +72,11 @@ export function createVcsStatusRevalidationAtomFamily<R>(input: {
   });
   const idle = Atom.make<void>(undefined).pipe(Atom.withLabel("vcs-status-revalidation:idle"));
   return (target: VcsStatusRevalidationTarget | null): Atom.Atom<void> =>
-    target === null ? idle : family({ environmentId: target.environmentId, cwd: target.cwd });
+    target === null
+      ? idle
+      : family({
+          environmentId: target.environmentId,
+          cwd: target.cwd,
+          ...(target.threadId ? { threadId: target.threadId } : {}),
+        });
 }

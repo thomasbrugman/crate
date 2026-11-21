@@ -53,6 +53,7 @@ const VCS_REFS_RETRY_SCHEDULE = Schedule.exponential("1 second").pipe(
 
 function canUseVcsRefsCache(input: VcsListRefsInput): boolean {
   return (
+    input.threadId === undefined &&
     input.query === undefined &&
     input.cursor === undefined &&
     input.includeMatchingRemoteRefs === undefined &&
@@ -153,7 +154,7 @@ export const makeCachedVcsRefsChanges = Effect.fn("CachedVcsRefsState.makeChange
       : Option.none<VcsListRefsResult>();
   const refresh = Effect.fn("CachedVcsRefsState.refresh")(function* () {
     const revisionAtom = serverRefsRevisionAtom(
-      `${environmentId.length}:${environmentId}${input.cwd}`,
+      `${environmentId.length}:${environmentId}${input.cwd}\0${input.threadId ?? ""}`,
     );
     const bypassServerSnapshot =
       expectedRevision !== undefined &&

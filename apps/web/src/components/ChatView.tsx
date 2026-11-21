@@ -1689,13 +1689,13 @@ export default function ChatView(props: ChatViewProps) {
 
   const cloudThread = isUpstashBoxDriver(activeProviderStatus?.driver);
   const projectScriptsAvailable = false;
-  const gitStatusCwd = cloudThread ? null : (activeThread?.worktreePath ?? gitCwd);
+  const gitStatusCwd = activeThread?.worktreePath ?? gitCwd;
   const gitStatusAtom =
     gitStatusCwd === null
       ? null
       : vcsEnvironment.status({
           environmentId,
-          input: { cwd: gitStatusCwd },
+          input: { cwd: gitStatusCwd, ...(activeThread ? { threadId: activeThread.id } : {}) },
         });
   const gitStatusQuery = {
     data: useAtomValue(gitStatusAtom ? chatGitStatusAtom(gitStatusAtom) : NO_CHAT_GIT_STATUS_ATOM),

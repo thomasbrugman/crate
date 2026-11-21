@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlProviderKind, ThreadId } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as DateTime from "effect/DateTime";
@@ -30,6 +30,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as ServerConfig from "../config.ts";
 import type * as VcsDriver from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
 import * as SourceControlProviderRegistry from "./SourceControlProviderRegistry.ts";
 
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
@@ -164,6 +165,25 @@ function makeRegistry(input: {
 
 const signedIn = (host: string) => () =>
   Effect.succeed(TestSourceControlHost.processOutput(`  ✓ Logged in to ${host} as user\n`));
+
+it.effect("isolates provider detection for Box threads sharing a project", () =>
+  Effect.gen(function* () {
+    const remotes = [{ name: "origin", url: "git@github.com:team/project.git" }];
+    const registry = yield* makeRegistry({ remotes });
+    const resolve = (id: string) =>
+      registry.resolveHandle({ cwd: "/repo" }).pipe(
+        Effect.provideService(VcsThreadTarget.VcsThreadTarget, {
+          threadId: ThreadId.make(id),
+          projectRoot: "/repo",
+          checkoutRoot: "/workspace/home/repo",
+        }),
+      );
+    assert.equal((yield* resolve("one")).provider.kind, "github");
+    remotes[0]!.url = "git@gitlab.com:team/project.git";
+    assert.equal((yield* resolve("two")).provider.kind, "gitlab");
+    assert.equal((yield* resolve("one")).provider.kind, "github");
+  }),
+);
 
 it.effect("routes an unknown remote to the integration that claims its server", () =>
   Effect.gen(function* () {

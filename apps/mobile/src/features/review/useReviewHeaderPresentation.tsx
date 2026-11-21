@@ -34,7 +34,7 @@ export function useReviewHeaderPresentation(props: {
     selectedThread !== null && props.selectedThreadCwd !== null
       ? vcsEnvironment.status({
           environmentId: selectedThread.environmentId,
-          input: { cwd: props.selectedThreadCwd },
+          input: { cwd: props.selectedThreadCwd, threadId: selectedThread.id },
         })
       : null,
   );

@@ -35,7 +35,7 @@ export function GitCommitSheet(_props: GitCommitSheetProps) {
     selectedThread !== null && selectedThreadCwd !== null
       ? vcsEnvironment.status({
           environmentId: selectedThread.environmentId,
-          input: { cwd: selectedThreadCwd },
+          input: { cwd: selectedThreadCwd, threadId: selectedThread.id },
         })
       : null,
   );
