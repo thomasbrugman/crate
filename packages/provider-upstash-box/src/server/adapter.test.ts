@@ -747,6 +747,23 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
             undefined,
           ],
           [
+            fakeStream([], Object.assign(new BoxError("harness exited"), {
+              request: { headers: { Authorization: "private upstream credential" } },
+              apiKey: "private upstream credential",
+            })),
+            "failed",
+            connection,
+            undefined,
+          ],
+          [
+            fakeStream([], new BoxError(JSON.stringify({
+              headers: { Authorization: "private upstream credential" }, apiKey: "private upstream credential",
+            }))),
+            "failed",
+            connection,
+            undefined,
+          ],
+          [
             fakeStream([], new BoxError("")),
             "failed",
             "The Box agent reported an error. Send a message to retry.",
