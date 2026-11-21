@@ -4,6 +4,11 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { act, render } from "../../../test/render";
 
+vi.mock(import("@t3tools/client-runtime/provider-clients"), async (original) => ({
+  ...(await original()),
+  ...(await import("../../../test/fixtures/legacyProviderClients")),
+}));
+
 const actions = vi.hoisted(() => ({
   toast: vi.fn(),
   onOpenChange: vi.fn(),

@@ -40,41 +40,10 @@ const state = vi.hoisted(() => ({
   confirm: vi.fn<() => Promise<boolean>>(),
 }));
 
-vi.mock(import("@t3tools/client-runtime/provider-clients"), async (original) => {
-  const actual = await original();
-  const { makeProviderClientRegistry } = await import("@t3tools/provider-core/client");
-  const {
-    CodexSettings,
-    ClaudeSettings,
-    AntigravitySettings,
-    ProviderDriverKind,
-    isProviderDriverKind,
-  } = await import("@t3tools/contracts");
-  const providerClients = makeProviderClientRegistry([
-    ...actual.providerClients.definitions,
-    {
-      driverKind: ProviderDriverKind.make("codex"),
-      label: "Codex",
-      settingsSchema: CodexSettings,
-    },
-    {
-      driverKind: ProviderDriverKind.make("claudeAgent"),
-      label: "Claude",
-      settingsSchema: ClaudeSettings,
-    },
-    {
-      driverKind: ProviderDriverKind.make("antigravity"),
-      label: "Antigravity",
-      settingsSchema: AntigravitySettings,
-    },
-  ]);
-  return {
-    ...actual,
-    providerClients,
-    getProviderClient: (driver: string | null | undefined) =>
-      isProviderDriverKind(driver) ? providerClients.get(driver) : undefined,
-  };
-});
+vi.mock(import("@t3tools/client-runtime/provider-clients"), async (original) => ({
+  ...(await original()),
+  ...(await import("../../../test/fixtures/legacyProviderClients")),
+}));
 
 vi.mock(import("../../state/server"), async (original) => {
   const actual = await original();
