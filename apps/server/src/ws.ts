@@ -2211,6 +2211,7 @@ export const layerWsRpc = (
                             ? {}
                             : { generateTitle: input.generateTitle }),
                           modelSelection: input.modelSelection,
+                          ...(input.boxSize === undefined ? {} : { boxSize: input.boxSize }),
                           runtimeMode: input.runtimeMode,
                           interactionMode: input.interactionMode,
                           workspaceStrategy: input.workspaceStrategy,

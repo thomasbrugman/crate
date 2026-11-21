@@ -16,7 +16,7 @@ import {
   ProviderAdapterV2Event,
   type ProviderAdapterV2TurnInput,
 } from "@t3tools/provider-core/server/ProviderAdapter";
-import { BoxError, type Chunk } from "@upstash/box";
+import { BoxError, type BoxConfig, type Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -57,6 +57,7 @@ const setup = Effect.fn("test.setupBox")(function* (
     replacement?: BoxHandle;
     resumes: number;
   } = { resumes: 0 };
+  const createdSizes: BoxConfig["size"][] = [];
   const box: BoxHandle = {
     id: "box-123",
     agent: {
@@ -96,7 +97,8 @@ const setup = Effect.fn("test.setupBox")(function* (
         if (id.startsWith("t3-") && lookup.statusError) throw lookup.statusError;
         return lookup.replacement ?? box;
       },
-      create: async () => {
+      create: async ({ size }) => {
+        createdSizes.push(size);
         lookup.error = undefined;
         lookup.statusError = undefined;
         return lookup.replacement ?? box;
@@ -153,8 +155,30 @@ const setup = Effect.fn("test.setupBox")(function* (
     modelSelection,
     runtimePolicy,
   };
-  return { runtime, turn, prompts, adapter, lookup, box, harnesses };
+  return { runtime, turn, prompts, adapter, lookup, box, harnesses, createdSizes };
 });
+
+it.effect("uses the saved Box size for provisioning and reprovisioning", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn, lookup, createdSizes } = yield* setup(fakeStream([]));
+      lookup.error = new BoxError("Box not found", 404);
+      yield* runtime.ensureThread({ threadId, modelSelection, runtimePolicy });
+      lookup.error = new BoxError("Box not found", 404);
+      yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy: { ...runtimePolicy, boxSize: "medium" },
+      });
+      lookup.error = new BoxError("Box not found", 404);
+      yield* runtime.resumeThread({
+        providerThread: turn.providerThread,
+        runtimePolicy: { ...runtimePolicy, boxSize: "large" },
+      });
+      assert.deepEqual(createdSizes, ["small", "medium", "large"]);
+    }),
+  ),
+);
 
 it.effect(
   "deletes native Boxes, tolerates missing identities and Boxes, and sanitizes failures",
@@ -255,7 +279,7 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
   (harness) =>
     Effect.scoped(
       Effect.gen(function* () {
-        const { runtime, turn, lookup, box } = yield* setup(
+        const { runtime, turn, lookup, box, createdSizes } = yield* setup(
           fakeStream([finish]),
           undefined,
           harness,
@@ -281,8 +305,9 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
           providerThread: turn.providerThread,
           threadId,
           modelSelection,
-          runtimePolicy,
+          runtimePolicy: { ...runtimePolicy, boxSize: "large" },
         });
+        assert.deepEqual(createdSizes, ["large"]);
         assert.equal(replacement.nativeThreadRef?.nativeId, "replacement-box");
         yield* runtime.startTurn({ ...turn, providerThread: replacement });
         const recovered = yield* collect(runtime.events);

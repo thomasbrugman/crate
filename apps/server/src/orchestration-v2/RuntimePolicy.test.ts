@@ -17,6 +17,7 @@ import * as Stream from "effect/Stream";
 
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import { acpPermissionDisposition } from "@t3tools/provider-acp/server/clientPolicy";
+import { BOX_HARNESS_DRIVER_KINDS } from "@t3tools/provider-upstash-box/harnesses";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProjectStore from "./ProjectStore.ts";
@@ -119,15 +120,18 @@ const layerWithPolicy = (policy?: ManagedPolicySummary) =>
 const layerTest = layerWithPolicy();
 
 it.layer(layerTest)("RuntimePolicyV2", (it) => {
-  it.effect("uses the Box workspace instead of a host worktree", () =>
+  it.effect("uses the Box workspace and saved size instead of a host worktree", () =>
     Effect.gen(function* () {
       const policy = yield* RuntimePolicy.RuntimePolicyV2;
       const now = yield* DateTime.now;
-      const resolved = yield* policy.resolve({
-        thread: makeThread({ now, worktreePath: "/host/worktree" }),
-        modelSelection: { instanceId: ProviderInstanceId.make("boxCommandCode"), model: "default" },
-      });
-      assert.equal(resolved.cwd, "/workspace/home");
+      for (const driver of Object.values(BOX_HARNESS_DRIVER_KINDS)) {
+        const resolved = yield* policy.resolve({
+          thread: { ...makeThread({ now, worktreePath: "/host/worktree" }), boxSize: "large" },
+          modelSelection: { instanceId: ProviderInstanceId.make(driver), model: "default" },
+        });
+        assert.equal(resolved.cwd, "/workspace/home");
+        assert.equal(resolved.boxSize, "large", driver);
+      }
     }),
   );
   it.effect("asks for Antigravity command approval when a stored Auto thread falls back", () =>

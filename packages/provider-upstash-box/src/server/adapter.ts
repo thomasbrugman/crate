@@ -165,7 +165,10 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         events: Stream.fromEffectRepeat(Queue.take(events)),
         ensureThread: Effect.fn("UpstashBox.ensureThread")(function* (request) {
           if (request.existingProviderThread?.nativeThreadRef?.nativeId)
-            return yield* runtime.resumeThread({ providerThread: request.existingProviderThread });
+            return yield* runtime.resumeThread({
+              providerThread: request.existingProviderThread,
+              runtimePolicy: request.runtimePolicy,
+            });
           // Hex encoding is injective, shell-safe, and stable across server restarts.
           const name = `t3-${Buffer.from(request.threadId).toString("hex")}`;
           const config: BoxRuntimeConfig = {
@@ -176,7 +179,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           };
           yield* setSessionStatus("starting");
           const box = yield* ensureBox(
-            config,
+            { ...config, size: request.runtimePolicy.boxSize ?? config.size },
             name,
             request.runtimePolicy.repositoryUrl,
             showSetupStep,
@@ -220,6 +223,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const previous = request.providerThread;
           const nativeId = previous.nativeThreadRef?.nativeId;
           if (!nativeId) return yield* unsupported("Resuming a thread without a Box identity");
+          const runtimePolicy = request.runtimePolicy ?? input.runtimePolicy;
           const config: BoxRuntimeConfig = {
             ...(yield* environment),
             harness,
@@ -257,9 +261,9 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               return yield* unsupported("Recreating a Box without an app thread identity");
             yield* setSessionStatus("starting");
             const replacement = yield* ensureBox(
-              config,
+              { ...config, size: runtimePolicy.boxSize ?? config.size },
               `t3-${Buffer.from(threadId).toString("hex")}`,
-              input.runtimePolicy.repositoryUrl,
+              runtimePolicy.repositoryUrl,
               showSetupStep,
             ).pipe(
               Effect.provideService(BoxApi, api),
