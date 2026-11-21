@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import {
   MessageId,
+  ContextHandoffId,
   NodeId,
   ProjectId,
   ProviderInstanceId,
@@ -281,6 +282,21 @@ it.effect(
           events.filter((event) => event.type === "turn.terminal")[0]?.status,
           "completed",
         );
+        const current = {
+          ...turn.providerThread,
+          firstRunOrdinal: 1,
+          lastRunOrdinal: 2,
+          handoffIds: [ContextHandoffId.make("follow-up-handoff")],
+        };
+        yield* runtime.startTurn({ ...turn, providerThread: current, providerTurnOrdinal: 2 });
+        const followUp = yield* collect(runtime.events);
+        const saved = followUp
+          .filter((event) => event.type === "provider_thread.updated")
+          .at(-1)?.providerThread;
+        assert.equal(saved?.firstRunOrdinal, current.firstRunOrdinal);
+        assert.equal(saved?.lastRunOrdinal, current.lastRunOrdinal);
+        assert.deepEqual(saved?.handoffIds, current.handoffIds);
+        assert.equal(saved?.nativeConversationHeadRef?.nativeId, "cc-session");
       }),
     ),
 );

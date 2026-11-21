@@ -69,7 +69,6 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const scope = yield* Effect.scope;
       const events = yield* Queue.unbounded<Adapter.ProviderAdapterV2Event>();
       const boxes = new Map<string, BoxHandle>();
-      const threads = new Map<ProviderThreadId, OrchestrationV2ProviderThread>();
       let active: ActiveTurn | undefined;
       const now = yield* DateTime.now;
       const providerSession = {
@@ -92,7 +91,6 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         box: BoxHandle,
       ) {
         boxes.set(box.id, box);
-        threads.set(thread.id, thread);
         yield* publish([{ type: "provider_thread.updated", driver, providerThread: thread }]);
         return thread;
       });
@@ -234,7 +232,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             Effect.flatMap(
               Effect.fn("UpstashBox.finishTurn")(function* (failed) {
                 if (translation.sessionId) {
-                  const thread = threads.get(request.providerThread.id) ?? request.providerThread;
+                  const thread = request.providerThread;
                   yield* saveThread(
                     {
                       ...thread,
