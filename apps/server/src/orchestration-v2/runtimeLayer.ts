@@ -1,4 +1,5 @@
 import * as WorktreeBranchSync from "./WorktreeBranchSync.ts";
+import { BoxApi } from "@t3tools/provider-upstash-box/server";
 import * as GuestShareService from "../guest/GuestShareService.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
@@ -52,6 +53,7 @@ import { layerThreadWorktreeRestore } from "../workspace/restoreMissingWorktree.
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RunFinalizationService from "./RunFinalizationService.ts";
 import * as ResourceCleanupService from "./ResourceCleanupService.ts";
+import * as BoxThreadCleanup from "./BoxThreadCleanup.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
 import * as RuntimeRequestService from "./RuntimeRequestService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
@@ -433,7 +435,7 @@ export const layerProduction = Layer.mergeAll(
       Layer.provide(
         ResourceCleanupService.layerBoxCleanup.pipe(
           Layer.provide(ProjectionStore.layer),
-          Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
+          Layer.provide(BoxThreadCleanup.layer.pipe(Layer.provide(BoxApi.layer))),
         ),
       ),
     ),
