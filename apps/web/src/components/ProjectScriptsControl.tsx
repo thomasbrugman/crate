@@ -216,11 +216,14 @@ export default function ProjectScriptsControl({
             density={presentation === "menu" ? "touch" : "default"}
             key={script.id}
             className="group"
-            disabled={!onRunScript}
             onClick={() => onRunScript?.(script)}
           >
             <ScriptIcon icon={script.icon} className="size-4" />
-            <MenuItemLabel>{projectScriptMenuLabel(script, messages)}</MenuItemLabel>
+            <MenuItemLabel>
+              <span aria-disabled={!onRunScript} className="aria-disabled:opacity-64">
+                {projectScriptMenuLabel(script, messages)}
+              </span>
+            </MenuItemLabel>
             <span className="relative ms-auto flex h-6 min-w-6 items-center justify-end">
               {shortcutLabel &&
                 (presentation === "menu" ? (
