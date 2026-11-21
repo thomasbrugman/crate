@@ -137,6 +137,7 @@ it.effect.each(cases)("resolves persisted Box identity and project context: %j",
         Layer.mock(BoxApi.BoxApi)({
           create: unexpected,
           list: unexpected,
+          checkModelKey: unexpected,
           get: async (id, apiKey) => {
             calls.push(id);
             assert.equal(id, "persisted-box");
@@ -153,6 +154,8 @@ it.effect.each(cases)("resolves persisted Box identity and project context: %j",
               agent: { stream: unexpected },
               files: { write: unexpected },
               delete: unexpected,
+              resume: unexpected,
+              getStatus: unexpected,
             };
           },
         }),
