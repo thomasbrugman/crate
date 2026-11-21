@@ -157,6 +157,11 @@
       // These workspace packages are private to this monorepo.
       "includeEntryExports": true,
     },
+    // Local drivers remain vendored but are intentionally not registered in this fork.
+    "packages/provider-{acp-registry,cursor,fx,grok,kiro,muse,opencode,pi}": {
+      "includeEntryExports": true,
+      "ignoreIssues": { "src/server.ts": ["exports"] },
+    },
     "packages/effect-acp": {
       "includeEntryExports": true,
       "entry": ["test/fixtures/*.ts"],
