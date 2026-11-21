@@ -1,5 +1,6 @@
 import {
   ProviderThreadId,
+  ProviderSetupError,
   type OrchestrationV2ProviderSession,
   type OrchestrationV2ProviderThread,
   type ProviderDriverKind,
@@ -79,6 +80,16 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   const { driver, harness } = agent;
   const ids = yield* IdAllocator.IdAllocatorV2;
   const api = yield* BoxApi;
+  const authenticationCause = (error: BoxRuntimeError, apiKey: string) => {
+    const detail = !apiKey.trim()
+      ? "Upstash Box API key is missing. Add it in Settings → Providers."
+      : error.statusCode === 401 || error.statusCode === 403
+        ? "Upstash Box rejected the API key. Check it in Settings → Providers."
+        : undefined;
+    return detail === undefined
+      ? undefined
+      : new ProviderSetupError({ instanceId, operation: "authenticate", detail });
+  };
   const unsupported = (operation: string) =>
     Effect.fail(
       new Adapter.ProviderAdapterProtocolError({
@@ -222,6 +233,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 : new Adapter.ProviderAdapterEnsureThreadError({
                     driver,
                     threadId: request.threadId,
+                    cause: authenticationCause(error, config.apiKey),
                   }),
             ),
           );
@@ -264,6 +276,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const box = yield* Effect.tryPromise({
             try: async () => {
               try {
+                if (!config.apiKey.trim()) throw new BoxRuntimeError({ operation: "get" });
                 const existing = await api.get(nativeId, config.apiKey);
                 // Lookup by ID also returns deleted Box tombstones; status does not.
                 await existing.getStatus();
@@ -275,15 +288,24 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 }
                 return existing;
               } catch (error) {
-                if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
+                if (!isMissingBox(error)) throw error;
                 return null;
               }
             },
-            catch: () =>
+            catch: (error) =>
               new Adapter.ProviderAdapterResumeThreadError({
                 driver,
                 providerSessionId: input.providerSessionId,
                 providerThreadId: previous.id,
+                cause: authenticationCause(
+                  new BoxRuntimeError({
+                    operation: "get",
+                    ...(error instanceof BoxError && error.statusCode !== undefined
+                      ? { statusCode: error.statusCode }
+                      : {}),
+                  }),
+                  config.apiKey,
+                ),
               }),
           });
           if (!box) {
@@ -300,7 +322,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               Effect.provideService(BoxApi, api),
               Effect.tapError(() => setSessionStatus("error")),
               Effect.mapError(
-                () => new Adapter.ProviderAdapterEnsureThreadError({ driver, threadId }),
+                (error) =>
+                  new Adapter.ProviderAdapterEnsureThreadError({
+                    driver,
+                    threadId,
+                    cause: authenticationCause(error, config.apiKey),
+                  }),
               ),
             );
             yield* setSessionStatus("ready");

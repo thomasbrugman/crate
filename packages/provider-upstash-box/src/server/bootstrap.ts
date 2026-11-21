@@ -1,4 +1,4 @@
-import type { BoxConfig } from "@upstash/box";
+import { BoxError, type BoxConfig } from "@upstash/box";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -36,6 +36,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
   onProgress: (step: BoxSetupStep) => void = () => {},
 ) {
   const api = yield* BoxApi;
+  if (!config.apiKey.trim()) return yield* new BoxRuntimeError({ operation: "authenticate" });
   return yield* Effect.tryPromise({
     try: async () => {
       let box: BoxHandle;
@@ -43,7 +44,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
       try {
         box = await api.get(name, config.apiKey);
       } catch (error) {
-        if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
+        if (!isMissingBox(error)) throw error;
         onProgress("create");
         box = await api
           .create(boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) }))
@@ -116,7 +117,12 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
     catch: (error) =>
       isBoxRuntimeError(error) && error.missingStoredKey
         ? error
-        : new BoxRuntimeError({ operation: "bootstrap" }),
+        : new BoxRuntimeError({
+            operation: "bootstrap",
+            ...(error instanceof BoxError && error.statusCode !== undefined
+              ? { statusCode: error.statusCode }
+              : {}),
+          }),
   });
 });
 
