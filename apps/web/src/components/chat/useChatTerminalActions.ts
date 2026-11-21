@@ -65,6 +65,7 @@ export interface TerminalLaunchContext {
 }
 
 interface ChatTerminalActionsInput {
+  readonly projectScriptsAvailable: boolean;
   readonly environmentId: EnvironmentId;
   readonly composerRef: ComposerHandleRef;
   readonly terminalUiState: ReturnType<typeof selectThreadTerminalUiState>;
@@ -215,7 +216,14 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
       shellHistory?: "preserve" | "suppress";
     },
   ) => {
-    if (!hasTerminalWriteAccess() || !activeThreadId || !activeProject || !activeThread) return;
+    if (
+      !input.projectScriptsAvailable ||
+      !hasTerminalWriteAccess() ||
+      !activeThreadId ||
+      !activeProject ||
+      !activeThread
+    )
+      return;
     if (options?.rememberAsLastInvoked !== false) {
       setLastInvokedScriptByProjectId((current) => {
         if (current[activeProject.id] === script.id) return current;
