@@ -492,7 +492,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   );
   const contextImports = useAtomValue(composerContextImportsAtom);
   const sendBlockedReason =
-    (cloudThread && hasEditingAttachments
+    (cloudThread &&
+    (draftAttachments.length > 0 || (queuedEdit?.existingAttachments.length ?? 0) > 0)
       ? gt("Not available in cloud threads. Ask the agent to use its Box tools.")
       : null) ??
     (queuedEdit?.saving === true ? gt("Saving…") : null) ??

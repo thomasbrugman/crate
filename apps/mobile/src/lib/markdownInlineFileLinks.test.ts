@@ -15,6 +15,15 @@ const rewrite = (markdown: string) =>
   markdownWithInlineFileLinks(markdown, ENRICHED_INLINE_FILE_LINK_REGEX);
 
 describe("plain file paths for cloud replies", () => {
+  it.each([
+    ["https://example.com", "src/wrong.ts", "[source][s]"],
+    ["src/first.ts", "src/wrong.ts", "` src/first.ts `"],
+    ["src/first.ts", "https://example.com", "` src/first.ts `"],
+  ])("uses the first reference definition (%s before %s)", (first, second, expected) => {
+    const definitions = `\n\n[s]: ${first}\n[s]: ${second}`;
+    expect(markdownWithPlainFilePaths(`[source][s]${definitions}`)).toBe(`${expected}${definitions}`);
+  });
+
   it("keeps inline code and converts file links without changing external links or code blocks", () => {
     expect(
       markdownWithPlainFilePaths("`src/a.ts` [source](src/a.ts#L2) [web](https://example.com)"),
