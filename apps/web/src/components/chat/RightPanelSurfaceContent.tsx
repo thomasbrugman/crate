@@ -14,6 +14,7 @@ import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { lazy, Suspense } from "react";
 import SideChatPane from "./SideChatPane";
 import { CloudUnavailable } from "./CloudUnavailable";
+import { isCloudSurfaceUnavailable } from "./RightPanelSurfaceContent.logic";
 import type { ComposerImageAttachment, DraftId } from "../../composerDraftStore";
 import type { ShortcutMatchContext } from "../../keybindings";
 import type { SideChatParentPanel } from "../../lib/sideChatPane";
@@ -64,6 +65,7 @@ interface RightPanelFileProps {
 }
 
 export function RightPanelSurfaceContent(props: {
+  readonly cloudThread: boolean;
   readonly surface: RightPanelSurface | null;
   readonly activeSurfaceId: string | null;
   readonly threadRef: ScopedThreadRef;
@@ -88,8 +90,7 @@ export function RightPanelSurfaceContent(props: {
   const { surface, threadRef, visible, onCloseSurface } = props;
   const gt = useGT();
   if (surface === null) return null;
-  if (["terminal", "diff", "file", "file-preview", "preview", "device"].includes(surface.kind))
-    return <CloudUnavailable />;
+  if (isCloudSurfaceUnavailable(props.cloudThread, surface.kind)) return <CloudUnavailable />;
   switch (surface.kind) {
     case "preview":
       return (
