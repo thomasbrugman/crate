@@ -198,7 +198,11 @@ it.effect("cancels a run that finishes starting while its session shuts down", (
           starting.resolve();
           return ready.promise;
         });
-        yield* runtime.startTurn(turn);
+        yield* runtime.events.pipe(Stream.take(1), Stream.runDrain);
+        yield* runtime.startTurn({
+          ...turn,
+          providerThread: { ...turn.providerThread, status: "active" },
+        });
         yield* Effect.promise(() => starting.promise);
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
@@ -209,6 +213,19 @@ it.effect("cancels a run that finishes starting while its session shuts down", (
               },
             }),
           ),
+        );
+        const startingEvents = yield* runtime.events.pipe(
+          Stream.takeUntil(
+            (event) => event.type === "node.updated" && event.node.status === "running",
+          ),
+          Stream.runCollect,
+        );
+        assert.isFalse(
+          startingEvents.some(
+            (event) =>
+              event.type === "provider_thread.updated" && event.providerThread.status === "idle",
+          ),
+          "Starting a live turn must not make the thread ineligible for restart continuation",
         );
       }),
     );

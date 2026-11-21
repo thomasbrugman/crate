@@ -218,10 +218,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             return yield* unsupported("Attachments, native resume, and application context");
           if (request.runtimePolicy.runtimeMode !== "full-access")
             return yield* unsupported("Restricted runtime policies");
-          const providerThread = yield* runtime.resumeThread({
-            providerThread: request.providerThread,
-            threadId: request.threadId,
-          });
+          const providerThread = request.providerThread;
           const box = boxes.get(providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
           const translation = new BoxTurnTranslation(
