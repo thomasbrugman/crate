@@ -1,3 +1,9 @@
+// @effect-diagnostics nodeBuiltinImport:off - exercises cleanup against a disposable Git repository.
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+
 import { assert, it } from "@effect/vitest";
 import {
   MessageId,
@@ -184,6 +190,73 @@ it.effect("uses the saved Box size for provisioning and reprovisioning", () =>
         runtimePolicy: { ...runtimePolicy, boxSize: "large" },
       });
       assert.deepEqual(createdSizes, ["small", "medium", "large"]);
+    }),
+  ),
+);
+
+it.live("retains idle Boxes containing only gitignored work", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const home = yield* Effect.acquireRelease(
+        Effect.promise(() => NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "box-saved-work-"))),
+        (path) => Effect.promise(() => NodeFSP.rm(path, { recursive: true, force: true })),
+      );
+      const repo = NodePath.join(home, "repo");
+      yield* Effect.promise(() => NodeFSP.mkdir(repo));
+      for (const name of [".claude", ".codex", ".cursor", ".local"]) {
+        const path = NodePath.join(home, name);
+        yield* Effect.promise(() => NodeFSP.mkdir(path));
+        yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(path, "config.json"), "{}"));
+      }
+      yield* Effect.promise(() =>
+        NodeFSP.writeFile(NodePath.join(repo, ".gitignore"), ".env\n*.sqlite\n"),
+      );
+      yield* Effect.sync(() => {
+        const git = (...args: string[]) =>
+          NodeChildProcess.execFileSync("git", args, { cwd: repo, stdio: "pipe" });
+        git("init");
+        git("add", ".gitignore");
+        git(
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.invalid",
+          "commit",
+          "-m",
+          "initial",
+        );
+        git("update-ref", "refs/remotes/origin/main", "HEAD");
+      });
+      let deleted = 0;
+      const { adapter, turn } = yield* setup(
+        fakeStream([]),
+        async () => {
+          deleted++;
+        },
+        async (command) => {
+          if (!command.includes("git stash")) return { stdout: "", exitCode: 0 };
+          const result = NodeChildProcess.spawnSync(
+            "sh",
+            ["-c", command.replaceAll("/workspace/home", home)],
+            { encoding: "utf8" },
+          );
+          return { stdout: result.stdout, exitCode: result.status ?? 1 };
+        },
+      );
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 1);
+      for (const name of [".env", "local.sqlite"]) {
+        const path = NodePath.join(repo, name);
+        yield* Effect.promise(() => NodeFSP.writeFile(path, "fixture"));
+        assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+        assert.equal(deleted, 1);
+        yield* Effect.promise(() => NodeFSP.unlink(path));
+      }
+      yield* Effect.promise(() => NodeFSP.rm(repo, { recursive: true }));
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(home, "notes.txt"), "fixture"));
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
     }),
   ),
 );

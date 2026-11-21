@@ -424,6 +424,7 @@ export const layerProduction = Layer.mergeAll(
   ResourceCleanupService.layerSettledBoxCleanup.pipe(
     Layer.provide(ProjectionStore.layer),
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
+    Layer.provide(ThreadCommandExecutor.layer),
   ),
 ).pipe(
   Layer.provide(
