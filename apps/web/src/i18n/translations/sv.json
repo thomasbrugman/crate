@@ -2888,6 +2888,7 @@
   "cde84b45d4aebd17": "Den uppladdade bilagan kunde inte verifieras. Försök igen när servern återansluter.",
   "3a69567de3069c41": "Bilagan laddas fortfarande upp",
   "475fcc23da6c9997": "Bilagorna laddas fortfarande upp",
+  "b2e7398bcfb15350": "Om du tar bort en molntråd raderas även dess Box och alla ändringar i den som inte har pushats permanent.",
   "8a716fa4339878b4": "L{start} (före)",
   "bb4924538fda7405": "L{start} till L{end} (före)",
   "b0c4ffd6931493e9": "L{start} till L{end}",

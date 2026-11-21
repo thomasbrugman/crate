@@ -3,6 +3,7 @@ import {
   AuthSourceControlWriteScope,
   EnvironmentId,
   ProjectId,
+  ProviderInstanceId,
   ThreadId,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -52,6 +53,7 @@ const state = vi.hoisted(() => ({
   toasts: [] as string[],
   afterRequest: undefined as ((action: string) => void) | undefined,
   sessionLookupFails: false,
+  boxEnvironment: null as string | null,
 }));
 
 vi.mock("react", () => ({
@@ -70,6 +72,10 @@ vi.mock("../state/session", () => ({
   environmentSession: { sessionStateAtom: "session" },
   readEnvironmentScope: (environmentId: string, scope: string) =>
     state.scopes.get(environmentId)?.has(scope) === true,
+}));
+vi.mock("../state/environments", () => ({
+  readEnvironmentProviders: (environmentId: string) =>
+    environmentId === state.boxEnvironment ? [{ instanceId: "box", driver: "upstashBox" }] : [],
 }));
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand:
@@ -286,6 +292,7 @@ beforeEach(() => {
   state.toasts = [];
   state.afterRequest = undefined;
   state.sessionLookupFails = false;
+  state.boxEnvironment = null;
   useRightPanelStore.setState(useRightPanelStore.getInitialState(), true);
   useDiffPanelStore.setState(useDiffPanelStore.getInitialState(), true);
   usePreviewMiniPlayerStore.setState(usePreviewMiniPlayerStore.getInitialState(), true);
@@ -349,9 +356,20 @@ describe("thread action permissions", () => {
     state.threads = [];
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     state.confirm.mockResolvedValue(false);
-    await useThreadActions().confirmAndDeleteThread(target, "Archived release notes");
+    state.boxEnvironment = secondary;
+    await useThreadActions().confirmAndDeleteThread(target, {
+      environmentId: secondary,
+      title: "Archived release notes",
+      runtime: null,
+      modelSelection: { instanceId: ProviderInstanceId.make("box"), model: "default" },
+      providerInstanceHistory: [],
+    });
     expect(state.confirm).toHaveBeenCalledWith(
       expect.stringContaining('Delete thread "Archived release notes"?'),
+      { variant: "destructive" },
+    );
+    expect(state.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("permanently deletes its Box and any unpushed changes"),
       { variant: "destructive" },
     );
     expect(state.requests).toEqual([]);

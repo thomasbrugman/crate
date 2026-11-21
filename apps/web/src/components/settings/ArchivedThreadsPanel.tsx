@@ -179,7 +179,7 @@ export function ArchivedThreadsPanel() {
     const result = await settlePromise(async () => {
       const result = await (action === "unarchive"
         ? unarchiveThread(target)
-        : confirmAndDeleteThread(target, thread.title));
+        : confirmAndDeleteThread(target, thread));
       if (result._tag === "Success") refreshArchivedThreads();
       return result;
     }).finally(() => {

@@ -2888,6 +2888,7 @@
   "cde84b45d4aebd17": "No se pudo verificar el adjunto subido. Vuelve a intentarlo cuando el servidor se reconecte.",
   "3a69567de3069c41": "El adjunto aún se está subiendo",
   "475fcc23da6c9997": "Los adjuntos aún se están subiendo",
+  "b2e7398bcfb15350": "Al eliminar un hilo en la nube, también se eliminan permanentemente su Box y todos los cambios que contenga y que no se hayan enviado al remoto.",
   "8a716fa4339878b4": "L{start} (antes)",
   "bb4924538fda7405": "L{start} a L{end} (antes)",
   "b0c4ffd6931493e9": "L{start} a L{end}",
