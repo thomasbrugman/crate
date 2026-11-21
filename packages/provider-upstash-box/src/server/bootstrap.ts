@@ -16,24 +16,30 @@ export interface BoxRuntimeConfig {
 
 const BOOTSTRAPPED_MARKER = "/home/boxuser/.t3stash-bootstrapped";
 
+export type BoxSetupStep = "connect" | "create" | "check" | "install" | "credentials" | "clone";
+
 export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
   config: BoxRuntimeConfig,
   name: string,
   repositoryUrl?: string,
+  onProgress: (step: BoxSetupStep) => void = () => {},
 ) {
   const api = yield* BoxApi;
   return yield* Effect.tryPromise({
     try: async () => {
       let box: BoxHandle;
+      onProgress("connect");
       try {
         box = await api.get(name, config.apiKey);
       } catch (error) {
         if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
+        onProgress("create");
         box = await api.create(
           boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) }),
         );
       }
       try {
+        onProgress("check");
         const commandCode = config.harness === "commandCode";
         const checks = [
           `test -f ${BOOTSTRAPPED_MARKER}`,
@@ -49,7 +55,11 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
         const ready = await box.exec.command(checks.join(" && "));
         if (ready.exitCode === 0) return box;
         const template = await api.get(config.templateBoxName, config.apiKey);
-        if (commandCode) await installCommandCode(box, template);
+        if (commandCode) {
+          onProgress("install");
+          await installCommandCode(box, template);
+        }
+        onProgress("credentials");
         for (const file of [".git-credentials", ".gitconfig"]) {
           const result = await template.exec.command(`test ! -f ~/${file} || cat ~/${file}`);
           if (result.exitCode !== 0) throw new Error("Template Git configuration is unavailable.");
@@ -61,6 +71,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
           }
         }
         if (repositoryUrl) {
+          onProgress("clone");
           const quoted = `'${repositoryUrl.replaceAll("'", "'\\''")}'`;
           const clone = await box.exec.command(
             `test -d /workspace/home/repo/.git || git clone -- ${quoted} /workspace/home/repo`,

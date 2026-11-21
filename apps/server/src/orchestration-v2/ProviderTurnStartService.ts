@@ -520,13 +520,25 @@ export const layer: Layer.Layer<
     ) {
       const { runId } = input;
       const projection = yield* projectionStore.getTurnStartContext(input.threadId, runId);
-      const run = projection.runs.find((candidate) => candidate.id === runId);
-      if (run === undefined) {
+      const storedRun = projection.runs.find((candidate) => candidate.id === runId);
+      if (storedRun === undefined) {
         return yield* new ProviderTurnStartError({ runId, cause: `Run ${runId} was not found.` });
       }
-      if (run.status !== "starting") {
+      if (storedRun.status !== "starting") {
         return;
       }
+      const boxSetupStartedAt =
+        storedRun.workStartedAt === undefined &&
+        storedRun.startedAt === null &&
+        projection.providerThreads.some(
+          (thread) => thread.id === storedRun.providerThreadId && isUpstashBoxDriver(thread.driver),
+        )
+          ? yield* DateTime.now
+          : undefined;
+      const run =
+        boxSetupStartedAt === undefined
+          ? storedRun
+          : { ...storedRun, workStartedAt: boxSetupStartedAt };
       captureStartingRun(run);
       const rootNode = projection.nodes.find((candidate) => candidate.id === run.rootNodeId);
       const attempt = projection.attempts.find((candidate) => candidate.id === run.activeAttemptId);
@@ -805,6 +817,27 @@ export const layer: Layer.Layer<
         }
       }
       const cloud = isUpstashBoxDriver(providerThread.driver);
+      if (boxSetupStartedAt !== undefined) {
+        const written = yield* eventSink.writeIfRunCurrent({
+          threadId: run.threadId,
+          runId,
+          activeAttemptId: attempt.id,
+          expectedStatus: "starting",
+          events: [
+            {
+              id: yield* idAllocator.allocate.event({ threadId: run.threadId }),
+              type: "run.updated",
+              threadId: run.threadId,
+              runId,
+              nodeId: rootNode.id,
+              providerInstanceId: run.providerInstanceId,
+              occurredAt: boxSetupStartedAt,
+              payload: run,
+            },
+          ],
+        });
+        if (!written.committed) return;
+      }
       const recreateResult = yield* Effect.result(
         cloud ? Effect.void : restoreMissingWorktree(projection.thread),
       );

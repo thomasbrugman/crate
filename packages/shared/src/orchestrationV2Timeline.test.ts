@@ -1,4 +1,5 @@
 import { NodeId, RunId } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -30,6 +31,31 @@ describe.each([
       createOrchestrationV2TurnItemVisibility(input)(input.item),
   ],
 ] as const)("%s timeline visibility", (_, isVisible) => {
+  it.each([
+    { status: "cancelled", started: true, visible: true },
+    { status: "cancelled", started: false, visible: false },
+    { status: "queued", started: true, visible: false },
+    { status: "rolled_back", started: true, visible: false },
+  ] as const)(
+    "keeps delivered queued prompts for $status runs (started: $started)",
+    ({ status, started, visible }) => {
+      const item = { type: "user_message", inputIntent: "queued_turn", runId, nodeId } as const;
+      const run = {
+        id: runId,
+        status,
+        startedAt: started ? DateTime.makeUnsafe("2026-11-21T09:37:47.622Z") : null,
+      };
+      expect(
+        isVisible({
+          item,
+          runs: [run, { id: otherRunId, status: "failed" }],
+          attempts: [],
+          items: [item],
+        }),
+      ).toBe(visible);
+    },
+  );
+
   it("hides unpaired interruption results from superseded attempts", () => {
     expect(
       isVisible({

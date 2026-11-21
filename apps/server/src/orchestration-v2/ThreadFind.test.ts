@@ -651,7 +651,8 @@ describe("V2 thread find", () => {
       Effect.gen(function* () {
         const projection = yield* setup;
         const queuedRunId = RunId.make("queued:cancelled");
-        yield* commit([run(threadId, queuedRunId, 2, "cancelled")]);
+        const cancelledRun = run(threadId, queuedRunId, 2, "cancelled");
+        yield* commit([{ ...cancelledRun, payload: { ...cancelledRun.payload, startedAt: null } }]);
         const queued = item("cancelled", 1, "needle", "user_message");
         if (queued.type !== "user_message") return;
         const answer = item("async-answer:question", 2, "needle", "user_message");

@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import {
   latestExecutedRun,
   latestRootProviderFailure,
@@ -75,7 +76,7 @@ export function deriveProviderExtensionStatuses(
         readonly providerSessions: ReadonlyArray<
           Pick<
             OrchestrationV2ProviderSession,
-            "id" | "providerInstanceId" | "status" | "extensionStatuses"
+            "id" | "driver" | "providerInstanceId" | "status" | "extensionStatuses"
           >
         >;
       })
@@ -93,7 +94,8 @@ export function deriveProviderExtensionStatuses(
       session.providerInstanceId === instanceId &&
       (activeThread === undefined || session.id === activeThread.providerSessionId),
   );
-  return session === undefined || session.status === "stopped"
+  // Box setup steps are shown as the run's starting label instead.
+  return session === undefined || session.status === "stopped" || isUpstashBoxDriver(session.driver)
     ? EMPTY_EXTENSION_STATUSES
     : (session.extensionStatuses ?? EMPTY_EXTENSION_STATUSES);
 }
@@ -111,18 +113,40 @@ function latestMatchingRun(
   );
 }
 
+function boxSetupLabel(key: string | undefined) {
+  switch (key) {
+    case "upstash-box.setup.connect":
+      return msg("Connecting to the Box");
+    case "upstash-box.setup.create":
+      return msg("Creating the Box");
+    case "upstash-box.setup.check":
+      return msg("Checking the Box setup");
+    case "upstash-box.setup.install":
+      return msg("Installing Command Code");
+    case "upstash-box.setup.credentials":
+      return msg("Copying credentials from the template Box");
+    case "upstash-box.setup.clone":
+      return msg("Cloning the repository");
+    default:
+      return msg("Setting up Box");
+  }
+}
+
 function providerStarting(
   projection: ThreadStructure,
   run: OrchestrationV2ThreadProjection["runs"][number],
 ): Pick<ThreadRunSummary, "providerStartingLabel" | "providerStartingLabelMsg"> {
-  const driver = projection.providerSessions.findLast(
+  const session = projection.providerSessions.findLast(
     (session) => session.providerInstanceId === run.providerInstanceId,
-  )?.driver;
+  );
+  const driver = session?.driver;
   const name = driver === undefined ? undefined : PROVIDER_DISPLAY_NAMES[driver];
   const label =
-    name === undefined
-      ? msg("Starting", { $context: "a provider is launching" })
-      : msg("Starting {provider}", { provider: name });
+    isUpstashBoxDriver(driver) && session?.status === "starting"
+      ? boxSetupLabel(session.extensionStatuses?.[0]?.key)
+      : name === undefined
+        ? msg("Starting", { $context: "a provider is launching" })
+        : msg("Starting {provider}", { provider: name });
   return { providerStartingLabel: markedTextEnglish([label]), providerStartingLabelMsg: label };
 }
 
@@ -137,7 +161,12 @@ function summarizeThreadRun(
     runId: run.id,
     status: run.status,
     requestedAt: DateTime.formatIso(run.requestedAt),
-    startedAt: run.startedAt === null ? null : DateTime.formatIso(run.startedAt),
+    startedAt:
+      run.workStartedAt !== undefined
+        ? DateTime.formatIso(run.workStartedAt)
+        : run.startedAt === null
+          ? null
+          : DateTime.formatIso(run.startedAt),
     completedAt: run.completedAt === null ? null : DateTime.formatIso(run.completedAt),
     assistantMessageId:
       projection.messages.findLast(
