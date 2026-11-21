@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 
 import type { BoxHarness } from "../harnesses.ts";
 import { BoxApi, BoxRuntimeError, boxConfig, isMissingBox, type BoxHandle } from "./BoxApi.ts";
+import { commandCodeHarness } from "./harness.ts";
 
 /** The thread's Box environment plus the agent that runs inside it. */
 export interface BoxRuntimeConfig {
@@ -39,6 +40,11 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
         );
       }
       try {
+        const installHarness = () =>
+          box.files.write({
+            path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
+            content: commandCodeHarness,
+          });
         onProgress("check");
         const commandCode = config.harness === "commandCode";
         const checks = [
@@ -53,11 +59,15 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
           ...(repositoryUrl ? ["test -d /workspace/home/repo/.git"] : []),
         ];
         const ready = await box.exec.command(checks.join(" && "));
-        if (ready.exitCode === 0) return box;
+        if (ready.exitCode === 0) {
+          if (commandCode) await installHarness();
+          return box;
+        }
         const template = await api.get(config.templateBoxName, config.apiKey);
         if (commandCode) {
           onProgress("install");
           await installCommandCode(box, template);
+          await installHarness();
         }
         onProgress("credentials");
         for (const file of [".git-credentials", ".gitconfig"]) {
@@ -102,7 +112,6 @@ async function installCommandCode(box: BoxHandle, template: BoxHandle) {
   for (const [source, destination] of [
     ["~/.commandcode/auth.json", "/home/boxuser/.commandcode/auth.json"],
     ["~/.commandcode/config.json", "/home/boxuser/.commandcode/config.json"],
-    ["~/.local/bin/boxjob-cc-harness.mjs", "/home/boxuser/.local/bin/t3stash-harness.mjs"],
   ] as const) {
     const result = await template.exec.command(`cat ${source}`);
     if (result.exitCode !== 0 || !result.stdout)

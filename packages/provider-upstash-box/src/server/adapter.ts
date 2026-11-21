@@ -24,6 +24,7 @@ import {
 } from "./BoxApi.ts";
 import { ensureBox, type BoxRuntimeConfig, type BoxSetupStep } from "./bootstrap.ts";
 import { capabilities } from "./capabilities.ts";
+import { commandCodeHarness } from "./harness.ts";
 import { BoxTurnTranslation } from "./translation.ts";
 
 /** Where a thread runs, read from the environment's settings each time a Box is reached. */
@@ -220,7 +221,14 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const box = yield* Effect.tryPromise({
             try: async () => {
               try {
-                return await api.get(nativeId, apiKey);
+                const box = await api.get(nativeId, apiKey);
+                if (harness === "commandCode") {
+                  await box.files.write({
+                    path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
+                    content: commandCodeHarness,
+                  });
+                }
+                return box;
               } catch (error) {
                 if (!isMissingBox(error)) throw new BoxRuntimeError({ operation: "get" });
                 return null;
