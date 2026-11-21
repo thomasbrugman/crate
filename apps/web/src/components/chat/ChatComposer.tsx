@@ -92,7 +92,11 @@ import {
   replaceTextRange,
 } from "../../composer-logic";
 import { DEFAULT_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
-import { deriveComposerSendState, getAntigravitySendBlockReason } from "../ChatView.logic";
+import {
+  deriveComposerSendState,
+  deriveLockedProvider,
+  getAntigravitySendBlockReason,
+} from "../ChatView.logic";
 import { threadHasStarted } from "../../lib/chatThreadActions";
 import {
   dataTransferHasComposerMention,
@@ -932,9 +936,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         : undefined))
     : undefined;
   // A started thread on a driver this build doesn't have only goes on in a new thread. A locked
-  // secret or a disabled instance keeps the settings path, since those recover in place.
+  // secret or a disabled instance keeps the settings path, since those recover in place. The
+  // picker lock is cleared for threads that support handoff, so read the thread's own driver.
+  const threadDriver = deriveLockedProvider({
+    thread: activeThread,
+    selectedProvider: null,
+    threadProvider: activeThreadModelSelection?.instanceId ?? null,
+    providers: providerStatuses,
+  });
   const threadProviderRetired =
-    showProviderUnavailable && lockedProvider !== null && !getProviderClient(lockedProvider);
+    showProviderUnavailable && threadDriver !== null && !getProviderClient(threadDriver);
   const handleNewThread = useNewThreadHandler();
   const startNewThread = useStableCallback(() => {
     if (activeProjectId) void handleNewThread(scopeProjectRef(environmentId, activeProjectId));
