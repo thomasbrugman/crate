@@ -120,6 +120,10 @@ it.effect("fails closed without creating Boxes or exposing SDK errors", () =>
         "resolve_failed",
       ],
       [
+        () => Effect.fail(new BoxExecError({ threadId, reason: "not_box_thread" })),
+        "not_box_thread",
+      ],
+      [
         () =>
           Effect.succeed({
             ...thread,
