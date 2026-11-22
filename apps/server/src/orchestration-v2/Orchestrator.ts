@@ -9864,19 +9864,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.title === undefined ? {} : { title: command.title }),
         ordinal: (yield* subagentCount(command.parentThreadId)) + 1,
       });
+      const child = makeSubagentChildThread({
+        parentThread: parentProjection.thread,
+        childThreadId,
+        parentNodeId: taskNodeId,
+        activeProviderThreadId: null,
+        providerInstanceId: command.modelSelection.instanceId,
+        modelSelection: command.modelSelection,
+        title: taskTitle,
+        now,
+        createdBy: command.createdBy,
+        creationSource: command.creationSource,
+      });
       const childThread: OrchestrationV2AppThread = {
-        ...makeSubagentChildThread({
-          parentThread: parentProjection.thread,
-          childThreadId,
-          parentNodeId: taskNodeId,
-          activeProviderThreadId: null,
-          providerInstanceId: command.modelSelection.instanceId,
-          modelSelection: command.modelSelection,
-          title: taskTitle,
-          now,
-          createdBy: command.createdBy,
-          creationSource: command.creationSource,
-        }),
+        ...child,
+        ...(command.boxBaseCommit === undefined
+          ? {}
+          : { lineage: { ...child.lineage, boxBaseCommit: command.boxBaseCommit } }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
         ...(command.workspaceStrategy === undefined ? {} : { branch: null, worktreePath: null }),

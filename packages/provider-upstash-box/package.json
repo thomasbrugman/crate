@@ -15,6 +15,7 @@
   "dependencies": {
     "@t3tools/contracts": "workspace:*",
     "@t3tools/provider-core": "workspace:*",
+    "@t3tools/shared": "workspace:*",
     "@upstash/box": "0.8.1",
     "effect": "catalog:"
   },

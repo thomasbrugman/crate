@@ -7,6 +7,7 @@ import {
   type ProviderThreadId,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import type { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
 import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
@@ -110,10 +111,14 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
 
 const boxStoppedMessage = "This thread's Box stopped mid-turn. Send a message to start a new one.";
 
-async function ensureWorktree(box: BoxHandle, threadId: string): Promise<string> {
+async function ensureWorktree(
+  box: BoxHandle,
+  threadId: string,
+  baseCommit = "HEAD",
+): Promise<string> {
   const path = boxWorktreePath(threadId);
   const { exitCode } = await box.exec.command(
-    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} HEAD; }`,
+    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} ${quoteShell(baseCommit)}; }`,
   );
   if (exitCode !== 0) throw new Error("The Box worktree could not be prepared.");
   return path;
@@ -123,20 +128,22 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   instanceId: ProviderInstanceId,
   agent: BoxAgentConfig,
   environment: Effect.Effect<BoxEnvironmentConfig>,
+  mcpSessions?: McpProviderSessions["Service"],
 ) {
   const { driver, harness } = agent;
-  const capabilities =
-    harness === "claudeCode"
-      ? {
-          ...baseCapabilities,
-          subagents: {
+  const capabilities = {
+    ...baseCapabilities,
+    tools: { ...baseCapabilities.tools, supportsMcpTools: mcpSessions !== undefined },
+    subagents:
+      harness === "claudeCode"
+        ? {
             ...baseCapabilities.subagents,
             supportsSubagents: true,
             exposesSubagentThreadIds: true,
             emitsSubagentLifecycle: true,
-          },
-        }
-      : baseCapabilities;
+          }
+        : baseCapabilities.subagents,
+  };
   const ids = yield* IdAllocator.IdAllocatorV2;
   const api = yield* BoxApi;
   const authenticationCause = (error: BoxRuntimeError, apiKey: string) => {
@@ -460,6 +467,11 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               driver,
               detail: "Connect this harness in Settings → Providers.",
             });
+          const mcp =
+            credentials && box.exec.session && mcpSessions
+              ? yield* mcpSessions.read(request.threadId)
+              : undefined;
+          const mcpSession = mcp?.providerInstanceId === instanceId ? mcp : undefined;
           // Managed agents start in the Box workspace, so they are told where the clone is.
           const prompt = [
             ...(request.appContext ?? []).map(({ text }) => text),
@@ -538,7 +550,11 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   if (!credentials) return box.agent.stream({ prompt: streamPrompt });
                   const cwd = request.runtimePolicy.repositoryUrl
                     ? providerThread.nativeMetadata?.boxOwnerThreadId
-                      ? await ensureWorktree(box, request.threadId)
+                      ? await ensureWorktree(
+                          box,
+                          request.threadId,
+                          request.appThread.lineage.boxBaseCommit,
+                        )
                       : BOX_REPOSITORY_PATH
                     : BOX_WORKSPACE_PATH;
                   const model = request.modelSelection.model.replace(
@@ -556,6 +572,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                           "--explicit-session",
                           ...(model === "default" ? [] : ["--model", model]),
                           ...(session ? ["--session", session] : []),
+                          ...(mcpSession === undefined ? [] : ["--t3-mcp-relay"]),
                         ]
                       : [
                           BOX_MANAGED_HARNESS_PATH,
@@ -564,10 +581,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                           model,
                           session,
                           credentialKind ?? "",
+                          ...(mcpSession === undefined ? [] : ["relay"]),
                         ];
                   return execHarness(
                     box,
                     `cd ${cwd} && PATH=${BOX_HOME}/.local/bin:$PATH BOXJOB_CC_CWD=${cwd} exec node ${args.map(quoteShell).join(" ")}`,
+                    mcpSession,
                   );
                 };
                 try {

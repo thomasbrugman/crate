@@ -6,6 +6,7 @@ import {
   type BoxConfig,
   type Chunk,
   type ExecStreamChunk,
+  type ExecSessionOptions,
   type ClaudeCode,
   type OpenAICodex,
   type StreamOptions,
@@ -85,6 +86,7 @@ export type BoxSubagentChunk =
 export interface BoxStream extends AsyncIterable<Chunk | BoxSubagentChunk> {
   readonly id: string;
   readonly cancel: () => Promise<void>;
+  readonly ownsProcess?: true;
 }
 
 export interface BoxHandle {
@@ -101,6 +103,12 @@ export interface BoxHandle {
       readonly stdout: string;
       readonly stderr?: string;
       readonly exitCode: number | null;
+    }>;
+    readonly session?: (options: Pick<ExecSessionOptions, "cmd" | "onStdout">) => Promise<{
+      readonly id: string;
+      readonly write: (data: string) => void;
+      readonly wait: () => Promise<number>;
+      readonly close: () => void;
     }>;
   };
   readonly files: {
@@ -144,6 +152,15 @@ function projectBox(box: Box): BoxHandle {
       },
     },
     exec: {
+      session: async (options) => {
+        const session = await box.exec.session(options);
+        return {
+          id: session.execId,
+          write: (data) => session.write(data),
+          wait: () => session.wait(),
+          close: () => session.close(),
+        };
+      },
       stream: async (command) => {
         const run = await box.exec.stream(command);
         return {

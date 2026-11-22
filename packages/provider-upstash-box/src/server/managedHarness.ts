@@ -1,11 +1,15 @@
+import { boxMcpStdio } from "./boxMcpStdio.ts";
 import { BOX_CREDENTIALS_DIR } from "./credentials.ts";
 
 export const managedHarness = String.raw`import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
+${boxMcpStdio}
 
-const [harness, markedPrompt, model, session, kind] = process.argv.slice(2);
+const [harness, markedPrompt, model, session, kind, relay] = process.argv.slice(2);
 const prompt = markedPrompt.replace(/^t3stash-run:[0-9a-f]+\n/, '');
+const emit = (type, data) => process.stdout.write('event: ' + type + '\ndata: ' + JSON.stringify(data) + '\n\n');
+const bridge = relay === 'relay' ? await startBoxMcp(emit) : null;
 const binName = harness === 'claudeCode' ? 'claude' : 'codex';
 const localBin = '/home/boxuser/.local/bin/' + binName;
 const isolateSubagent = 'node -e ' + JSON.stringify(
@@ -17,16 +21,25 @@ const claudeSettings = existsSync('.git')
       { matcher: 'Agent|Task', hooks: [{ type: 'command', command: isolateSubagent }] },
     ] } })]
   : [];
+const mcpArgs = !bridge ? []
+  : harness === 'claudeCode'
+    ? ['--mcp-config', JSON.stringify({ mcpServers: {
+        't3-code': { command: bridge.command, args: bridge.args },
+      } })]
+    : ['-c', 'mcp_servers.t3-code.command=' + JSON.stringify(bridge.command),
+       '-c', 'mcp_servers.t3-code.args=' + JSON.stringify(bridge.args),
+       '-c', 'mcp_servers.t3-code.tool_timeout_sec=3900'];
 const args = harness === 'claudeCode'
   ? ['--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages',
-     '--permission-mode', 'bypassPermissions', ...claudeSettings, '--model', model,
+     '--permission-mode', 'bypassPermissions', ...claudeSettings, ...mcpArgs, '--model', model,
      ...(session ? ['--resume', session] : []), '--', prompt]
-  : ['exec', ...(session ? ['resume'] : []), '--json',
+  : [...mcpArgs, 'exec', ...(session ? ['resume'] : []), '--json',
      '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--model', model,
      '--', ...(session ? [session] : []), prompt];
 const env = { ...process.env };
 env.HOME = '/home/boxuser';
 if (harness === 'claudeCode') {
+  if (bridge) env.MCP_TOOL_TIMEOUT = '3900000';
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDE_CODE_OAUTH_TOKEN;
   env.CLAUDE_CONFIG_DIR = '${BOX_CREDENTIALS_DIR}/claude';
@@ -46,7 +59,6 @@ const exited = new Promise(resolve => {
   child.once('error', () => resolve(-1));
   child.once('close', resolve);
 });
-const emit = (type, data) => process.stdout.write('event: ' + type + '\ndata: ' + JSON.stringify(data) + '\n\n');
 let sessionId = session;
 let sawText = false;
 let completed = false;
@@ -65,11 +77,16 @@ const done = (usage, output) => {
     output_tokens: usage?.output_tokens ?? 0,
   });
 };
-const tool = (item) => emit('tool', {
+const secretTools = new Set();
+const tool = (item) => {
+  const secret = item.name?.endsWith('__request_secret');
+  if (secret) secretTools.add(item.id);
+  emit('tool', {
   tool_call_id: item.id,
   name: item.name ?? item.type,
-  input: item.input ?? (typeof item.command === 'string' ? { command: item.command } : {}),
-});
+  input: secret ? {} : item.input ?? (typeof item.command === 'string' ? { command: item.command } : {}),
+  });
+};
 const toolResult = (id, output) => emit('tool_result', { tool_call_id: id, output });
 const subagentCalls = new Map();
 const subagentTasks = new Set();
@@ -118,7 +135,9 @@ for await (const line of createInterface({ input: child.stdout })) {
       }
     } else if (frame.type === 'user') {
       for (const block of frame.message?.content ?? []) {
-        if (block.type === 'tool_result') toolResult(block.tool_use_id, block.content);
+        if (block.type === 'tool_result') {
+          toolResult(block.tool_use_id, secretTools.delete(block.tool_use_id) ? null : block.content);
+        }
       }
     } else if (frame.type === 'result') {
       if (typeof frame.session_id === 'string') sessionId = frame.session_id;
@@ -140,5 +159,6 @@ for await (const line of createInterface({ input: child.stdout })) {
   }
 }
 const code = await exited;
+bridge?.close();
 if (!completed || reportedError || code !== 0) process.exitCode = 1;
 `;

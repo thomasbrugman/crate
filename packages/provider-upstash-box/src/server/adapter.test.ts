@@ -623,6 +623,7 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
       );
       assert.notEqual(switched.loaded.id, main.loaded.id);
       assert.notEqual(linked.loaded.id, switched.loaded.id);
+      const dispatchCommit = "1234567890abcdef1234567890abcdef12345678";
       const { turn } = yield* setup(fakeStream([]));
       for (const [thread, target] of [
         [threadId, switched],
@@ -634,6 +635,13 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
           providerThread: target.loaded,
           modelSelection: target.selected,
           runtimePolicy: target.turnPolicy,
+          appThread: {
+            ...turn.appThread,
+            lineage: {
+              ...turn.appThread.lineage,
+              ...(thread === child ? { boxBaseCommit: dispatchCommit } : {}),
+            },
+          },
           appContext: [{ key: "handoff", text: "Earlier conversation" }],
         });
         yield* collect(target.session.events);
@@ -643,7 +651,9 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
       const worktree = `/workspace/home/.t3stash-worktrees/${Buffer.from(child).toString("hex")}`;
       assert.include(streams[1], `cd ${worktree}`);
       assert.isTrue(
-        commands.some((command) => command.includes(`worktree add --detach -- ${worktree} HEAD`)),
+        commands.some((command) =>
+          command.includes(`worktree add --detach -- ${worktree} '${dispatchCommit}'`),
+        ),
       );
     }),
   ),

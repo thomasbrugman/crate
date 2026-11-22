@@ -12,6 +12,7 @@ import {
 import { ProviderDriverError } from "@t3tools/provider-core/server/errors";
 import type { IdAllocatorV2 } from "@t3tools/provider-core/server/IdAllocator";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import { ProviderHost } from "@t3tools/provider-core/server/ProviderHost";
 import { providerModelsFromSettings } from "@t3tools/provider-core/server/snapshotProbe";
 import { BoxError } from "@upstash/box";
@@ -122,7 +123,7 @@ export const probe = Effect.fn("UpstashBox.probe")(function* (
   return yield* probeModelKey(agent.harness, agent.agentApiKey);
 });
 
-export type UpstashBoxDriverEnv = IdAllocatorV2 | ProviderHost;
+export type UpstashBoxDriverEnv = IdAllocatorV2 | McpProviderSessions | ProviderHost;
 
 type HarnessSettings = BoxCommandCodeSettings | BoxManagedAgentSettings;
 
@@ -181,6 +182,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         instanceId,
         agent,
         environment,
+        yield* McpProviderSessions,
       ).pipe(Effect.provide(boxApiLayer));
       const auth = host.settings.update
         ? yield* makeBoxHarnessAuth(instanceId, harness, environment, host.settings.update).pipe(

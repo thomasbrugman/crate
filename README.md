@@ -67,7 +67,9 @@ end up in a snapshot.
 - **One Box per thread.** The Box belongs to the thread, not to the agent. You can switch from Claude
   Code to Codex halfway through and keep the same checkout.
 - **Subagents share the parent's Box.** Claude Code's subagents show up as child threads, but they
-  run in the parent's Box, in their own Git worktree when they write code.
+  run in the parent's Box. All three Box harnesses can also delegate through Orchestration V2.
+  Delegated Box tasks appear as linked child threads and, in Git projects, get a worktree from the
+  parent's commit when the task was delegated. Commit work you want the child to see first.
 - **Sizes and snapshots.** Pick small, medium or large per thread. To skip slow installs, set up a
   Box once, snapshot it, and put the snapshot ID in your project defaults. New threads start from
   it. Use a snapshot that has never had agent credentials in it.
@@ -82,6 +84,8 @@ aren't built yet:
   show you a diff.
 - No rollback, approvals, steering an agent mid-turn, file attachments or reasoning streams.
 - Project setup scripts don't run in Boxes. Use a snapshot instead.
+- Box threads cannot hand off to a host worktree. Files saved by the MCP secret tool stay on the
+  server, not in the Box.
 - The phone flow hasn't been tested much yet.
 
 If something breaks, [open an issue](https://github.com/thomasbrugman/t3stash/issues).
