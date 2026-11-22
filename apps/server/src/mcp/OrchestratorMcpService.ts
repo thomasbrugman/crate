@@ -95,6 +95,7 @@ import {
   delegatedTaskProgress,
   delegatedTaskReportRuns,
 } from "@t3tools/provider-core/server/subagentProjection";
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import {
   DispatchModeLimit,
   type DispatchModeRefusal,
@@ -2860,8 +2861,17 @@ const make = Effect.gen(function* () {
         parent.thread.interactionMode,
         input.interactionMode,
       );
+      const usesParentBox =
+        isUpstashBoxDriver(
+          providers.find((provider) => provider.instanceId === parentRun.providerInstanceId)
+            ?.driver,
+        ) &&
+        isUpstashBoxDriver(
+          providers.find((provider) => provider.instanceId === target.modelSelection.instanceId)
+            ?.driver,
+        );
       let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
-      if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
+      if (input.isolation === "worktree" && !usesParentBox && !isRetryOfAcceptedDelegation) {
         const project = yield* requireProject(parent.thread.projectId);
         const base = yield* gitDriver
           .resolveCommit({

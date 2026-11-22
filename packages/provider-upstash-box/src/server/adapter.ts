@@ -7,6 +7,7 @@ import {
   type ProviderThreadId,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import type { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
 import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
@@ -14,7 +15,7 @@ import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
-import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
+import { BOX_HARNESS_DRIVER_KINDS, BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
 import {
   BOX_REPOSITORY_PATH,
   BOX_WORKSPACE_PATH,
@@ -123,12 +124,14 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   instanceId: ProviderInstanceId,
   agent: BoxAgentConfig,
   environment: Effect.Effect<BoxEnvironmentConfig>,
+  mcpSessions?: McpProviderSessions["Service"],
 ) {
   const { driver, harness } = agent;
   const capabilities =
     harness === "claudeCode"
       ? {
           ...baseCapabilities,
+          tools: { ...baseCapabilities.tools, supportsMcpTools: mcpSessions !== undefined },
           subagents: {
             ...baseCapabilities.subagents,
             supportsSubagents: true,
@@ -460,6 +463,22 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               driver,
               detail: "Connect this harness in Settings → Providers.",
             });
+          const connected = (Object.keys(BOX_HARNESS_DRIVER_KINDS) as BoxHarness[]).filter(
+            (candidate) => harnessCredentialKind(candidate, credentials?.[candidate] ?? ""),
+          );
+          const mcp =
+            harness === "claudeCode" &&
+            box.exec.session &&
+            request.runtimePolicy.repositoryUrl &&
+            request.appThread.lineage.relationshipToParent !== "subagent" &&
+            connected.some((candidate) => candidate !== harness) &&
+            mcpSessions !== undefined
+              ? yield* mcpSessions.read(request.threadId)
+              : undefined;
+          const delegation =
+            mcp?.providerInstanceId === instanceId
+              ? { config: mcp, harnesses: connected }
+              : undefined;
           // Managed agents start in the Box workspace, so they are told where the clone is.
           const prompt = [
             ...(request.appContext ?? []).map(({ text }) => text),
@@ -564,10 +583,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                           model,
                           session,
                           credentialKind ?? "",
+                          ...(delegation === undefined ? [] : ["delegate"]),
                         ];
                   return execHarness(
                     box,
                     `cd ${cwd} && PATH=${BOX_HOME}/.local/bin:$PATH BOXJOB_CC_CWD=${cwd} exec node ${args.map(quoteShell).join(" ")}`,
+                    delegation,
                   );
                 };
                 try {

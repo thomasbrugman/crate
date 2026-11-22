@@ -46,6 +46,11 @@ their credentials after restoring the snapshot.
 - **Worktrees and setup:** cloud launches do not create host worktrees or run project
   setup scripts. App-started subagent turns get a worktree inside the parent Box when
   it contains a Git repository. Local checkpoint capture and restoration are skipped.
+- **Cross-harness delegation:** a parent Claude Code thread in a repository-backed Box
+  can use `t3_box` to delegate to another connected harness, such as Codex. The task
+  appears in a linked child thread with its own worktree in the same Box. The worktree
+  starts at the parent's committed HEAD; commit changes the child needs to see first.
+  The parent can read the result or cancel the task.
 - **Terminal and diff:** disabled, not proxied. Server-side terminal and host process/Git
   boundaries reject execution; web terminal/diff/file/preview/device surfaces show
   “Not available in cloud threads.” Use the agent's Box tools to run commands, inspect
@@ -53,8 +58,8 @@ their credentials after restoring the snapshot.
   unrelated local files. The vendored local-provider packages remain unregistered.
   The host sleep inhibitor is also unregistered; cloud work does not need to keep the
   host's agent process awake.
-- **Other limits:** no rollback, active steering, approvals, cross-harness agent
-  delegation, MCP callbacks, file attachments, or reasoning stream support yet. Desktop shares
+- **Other limits:** no rollback, active steering, approvals, general MCP callbacks,
+  file attachments, or reasoning stream support yet. Desktop shares
   the web UI; mobile uses the shared provider registry but has not been visually tested.
   The control-plane server must stay running for orchestration; laptop-off operation
   needs a separately hosted server.

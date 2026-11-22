@@ -2922,10 +2922,14 @@ describe("OrchestratorMcpService provider resolution", () => {
     }),
   );
 
-  it.effect("driver-only delegation skips an instance the project turned off", () =>
+  it.effect.each([
+    { name: "skips an instance the project turned off", inBox: false },
+    { name: "delegates from Claude to a Box Codex worktree without host Git", inBox: true },
+  ])("driver-only delegation $name", ({ inBox }) =>
     Effect.gen(function* () {
       const altInstanceId = ProviderInstanceId.make("codex-alt");
       const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const targetDriver = ProviderDriverKind.make(inBox ? "boxCodex" : "codex");
       const task = {
         id: taskId,
         threadId: parentThreadId,
@@ -2933,7 +2937,7 @@ describe("OrchestratorMcpService provider resolution", () => {
         parentNodeId,
         origin: "app_owned",
         createdBy: "agent",
-        driver: ProviderDriverKind.make("codex"),
+        driver: targetDriver,
         providerInstanceId: altInstanceId,
         providerThreadId: null,
         childThreadId,
@@ -2991,12 +2995,12 @@ describe("OrchestratorMcpService provider resolution", () => {
         providerRegistryLayer([
           providerSnapshot({
             instanceId: codexInstanceId,
-            driver: ProviderDriverKind.make("codex"),
+            driver: ProviderDriverKind.make(inBox ? "boxClaudeCode" : "codex"),
             model: "gpt-5.4",
           }),
           providerSnapshot({
             instanceId: altInstanceId,
-            driver: ProviderDriverKind.make("codex"),
+            driver: targetDriver,
             model: "gpt-5.4",
           }),
         ]),
@@ -3012,17 +3016,21 @@ describe("OrchestratorMcpService provider resolution", () => {
         const service = yield* OrchestratorMcpService.OrchestratorMcpService;
         const result = yield* service.delegateTask(scope, {
           task: "Summarize the diff.",
-          target: { driverKind: ProviderDriverKind.make("codex") },
+          target: { driverKind: targetDriver },
+          ...(inBox ? { isolation: "worktree" as const } : {}),
           mode: "async",
           clientRequestId: "delegate-driver-skip-disabled-1",
         });
         assert.equal(result.status, "running");
+        assert.equal(result.childThreadId, childThreadId);
         const commands = yield* Ref.get(dispatched);
         assert.equal(commands.length, 1);
         const request = commands[0] as {
           modelSelection: { instanceId: string; model: string };
+          workspaceStrategy?: unknown;
         };
         assert.equal(request.modelSelection.instanceId, altInstanceId);
+        assert.isUndefined(request.workspaceStrategy);
       }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(layerDependencies))));
     }),
   );
