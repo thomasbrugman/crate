@@ -16,6 +16,7 @@ import { Input } from "../ui/input";
 import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { m, type MessageResolver } from "../../i18n/messages";
+import { parsePairingCredential } from "./PairingRouteSurface.logic";
 
 export function PairingPendingSurface() {
   const gt = useGT();
@@ -69,7 +70,7 @@ export function PairingRouteSurface({
 
   const handleSubmit = async (event?: React.SubmitEvent<HTMLFormElement>) => {
     event?.preventDefault();
-    await submitCredential(credential);
+    await submitCredential(parsePairingCredential(credential));
   };
 
   const autoSubmit = useEffectEvent((token: string) => {

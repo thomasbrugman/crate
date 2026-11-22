@@ -1,68 +1,109 @@
 # t3stash
 
-T3 Code with its agent runtime in [Upstash Box](https://upstash.com/box).
-Upstream documentation is retained in [UPSTREAM.md](./UPSTREAM.md).
+[T3 Code](https://github.com/pingdotgg/t3code), except your coding agents run in the cloud.
 
-## Status
+Every thread gets its own [Upstash Box](https://upstash.com/box): a small Linux machine with your
+repository cloned into it and your agent (Command Code, Claude Code or Codex) installed. The agent
+works there, not on your laptop. Your Mac runs the app and keeps track of the threads. You can check
+in from your phone.
 
-An experimental cloud-only fork of T3 Code v0.1.11. Upstash Box is the only registered
-environment for coding agents. Agent replies and tool activity stream through T3's
-existing orchestration and chat UI.
+This is a fork of T3 Code v0.1.11. It's experimental, and it is not affiliated with T3 Code or Upstash.
 
-Run `vp i`, then `vp run dev --no-seed`. Worktree development uses its own
-gitignored `.t3` state; read the printed web/server ports and pairing URL. Configure
-Upstash Box during onboarding or in Settings → Providers, or supply
-`UPSTASH_BOX_API_KEY` to the server. Connect Command Code, Claude Code, or Codex by
-pasting a credential or signing in from the temporary Box terminal. Harness credentials
-are encrypted on the server; template Boxes are optional and only provide Git
-configuration for new thread Boxes.
+## Why
 
-New threads can start from an Upstash snapshot configured in project defaults. Use
-snapshots of setup Boxes that have never contained harness credentials, not snapshots
-of active thread Boxes. The app installs the currently connected harnesses and injects
-their credentials after restoring the snapshot.
+Local agents are great until you have four of them going. They fight over the same checkout, they
+install things globally, and every `rm -rf` is a little scary. Worktrees help, but the agents still
+share your disk, your ports and your shell history.
 
-## Choices
+A Box per thread fixes that. Each agent gets a clean machine with full internet access, so it can
+install packages and reach its model API. Nothing it does touches your files. When you're done, the
+work lives in Git, where it would have ended up anyway.
 
-- **Stack:** keep upstream's TypeScript, Effect, React, WebSocket contracts, SQLite
-  persistence, and event-sourced orchestration. The app server remains the control plane;
-  a Box does not run another T3 server.
-- **Provider:** `@upstash/box@0.8.1`, with the connected harnesses installed inside the Box. No local
-  agent CLI, Replay provider, or local model probing is registered.
-- **Lifecycle:** a Box belongs to its thread, not to its selected harness. Switching
-  harnesses keeps the checkout and hands off conversation context. Claude's native
-  subagents appear in linked child threads and use the parent Box. A missing Box is
-  recreated. Deleting the owning thread deletes its Box best-effort; deleting a
-  provider-created child does not. Archiving keeps the Box.
-- **Workspace:** the server reads the project label's Git metadata (including worktree
-  pointers) to find its origin, or first remote. A repository URL label also works.
-  Bootstrap copies `.git-credentials` and `.gitconfig` from the template when present
-  and clones the remote into `/workspace/home/repo`. GitHub SSH-style URLs become HTTPS
-  so template credentials work.
-  Embedded URL credentials are discarded. No host files or uncommitted changes are
-  uploaded. Without a remote, the agent starts in `/workspace/home`. Existing Boxes
-  are not recloned. The project picker still uses existing folders; URL import retains
-  upstream's project creation flow rather than adding a new cloud project UI.
-- **Worktrees and setup:** cloud launches do not create host worktrees or run project
-  setup scripts. App-started subagent turns get a worktree inside the parent Box when
-  it contains a Git repository. Local checkpoint capture and restoration are skipped.
-- **Terminal:** open the terminal drawer or a terminal tab after the first agent turn
-  provisions the thread's Box. Each terminal is an independent interactive shell in
-  the Box, never on the server host. If the Box connection drops and the terminal
-  reconnects, it marks the start of a fresh shell; the old process does not survive.
-- **Diff, files, preview, and device:** disabled, not proxied. Use the agent's Box
-  tools to inspect files or produce a diff. Host process/Git boundaries still reject
-  execution. The vendored local-provider packages remain unregistered.
-  The host sleep inhibitor is also unregistered; cloud work does not need to keep the
-  host's agent process awake.
-- **Other limits:** no rollback, active steering, approvals, cross-harness agent
-  delegation, MCP callbacks, file attachments, or reasoning stream support yet. Desktop shares
-  the web UI; mobile uses the shared provider registry but has not been visually tested.
-  The control-plane server must stay running for orchestration; laptop-off operation
-  needs a separately hosted server.
-  Cloud thread titles retain their prompt-derived names without calling a separate
-  text-generation provider; automatic AI title generation is disabled for Box threads.
+## Install
+
+### Mac
+
+1. Download the latest `.dmg` from [Releases](https://github.com/thomasbrugman/t3stash/releases).
+   Pick `arm64` for Apple silicon or `x64` for Intel.
+2. Drag the app to Applications. It still carries the T3 Code name and icon.
+3. The app isn't signed, so macOS will refuse to open it the first time. Right-click it and choose
+   **Open**. On newer macOS versions you may need **System Settings → Privacy & Security → Open
+   Anyway** instead. If you'd rather use the terminal:
+
+   ```sh
+   xattr -dr com.apple.quarantine "/Applications/T3 Code.app"
+   ```
+
+### Phone (iPhone and Android)
+
+There's no app store build. Your phone uses the web app served by the Mac:
+
+1. On the Mac, open **Settings → Sharing & access** and turn on **Network access**. The app restarts.
+2. Create a pairing link and scan its QR code with your phone, or open the link in the phone's
+   browser. The phone needs to reach the Mac, so use the same Wi-Fi or [Tailscale](https://tailscale.com).
+3. Add it to your home screen if you want it to feel like an app.
+
+Each pairing link works once. Make a new one for each device.
+
+The Mac has to stay awake with the app open. It's the control plane: if it goes to sleep, your
+phone loses the connection, even though the Boxes themselves are in the cloud.
+
+## First run
+
+1. Paste your Upstash Box API key. You can get one from the [Upstash console](https://console.upstash.com).
+2. Connect at least one agent. Paste an API key or token, or sign in through the temporary Box
+   terminal the app opens for you:
+   - **Command Code:** an API key, or the contents of `~/.commandcode/auth.json`
+   - **Claude Code:** an Anthropic API key, or a token from `claude setup-token`
+   - **Codex:** an OpenAI API key, or the contents of `~/.codex/auth.json`
+3. Add a project. t3stash reads the project's Git remote and clones it into each new Box.
+   Uncommitted changes on your Mac are not uploaded, so push first.
+
+Agent credentials are encrypted on your Mac and injected into each Box when it starts. They never
+end up in a snapshot.
+
+## How it works
+
+- **One Box per thread.** The Box belongs to the thread, not to the agent. You can switch from Claude
+  Code to Codex halfway through and keep the same checkout.
+- **Subagents share the parent's Box.** Claude Code's subagents show up as child threads, but they
+  run in the parent's Box, in their own Git worktree when they write code.
+- **Sizes and snapshots.** Pick small, medium or large per thread. To skip slow installs, set up a
+  Box once, snapshot it, and put the snapshot ID in your project defaults. New threads start from
+  it. Use a snapshot that has never had agent credentials in it.
+- **Boxes stick around.** Archiving a thread keeps its Box. Deleting the thread deletes it.
+- **Live terminal.** Once the first agent turn creates the Box, open the terminal drawer or a
+  terminal tab. Each terminal runs its own shell in the Box, not on your Mac. If the Box connection
+  drops and reconnects, the terminal marks the start of a fresh shell; the old process does not
+  survive.
+
+## What's missing
+
+Some T3 Code features don't make sense when the agent isn't on your machine, and some just
+aren't built yet:
+
+- No diff view, file browser, preview or device panel for cloud threads. Ask the agent to inspect
+  files or show you a diff.
+- No rollback, approvals, steering an agent mid-turn, file attachments or reasoning streams.
+- Project setup scripts don't run in Boxes. Use a snapshot instead.
+- The phone flow hasn't been tested much yet.
+
+If something breaks, [open an issue](https://github.com/thomasbrugman/t3stash/issues).
+
+## Run from source
+
+You need Node 24 and [Vite+](https://viteplus.dev) (`vp`).
+
+```sh
+vp i
+vp run dev --no-seed
+```
+
+Open the pairing URL it prints. You can also give the server your key with `UPSTASH_BOX_API_KEY`
+instead of pasting it during setup.
+
+The original T3 Code docs are in [UPSTREAM.md](./UPSTREAM.md) and [docs/](./docs).
 
 ## License
 
-MIT. See [LICENSE](./LICENSE). Not affiliated with T3 Code or Upstash.
+MIT. See [LICENSE](./LICENSE).
