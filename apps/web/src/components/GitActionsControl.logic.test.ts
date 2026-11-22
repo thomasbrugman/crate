@@ -64,7 +64,7 @@ it("counts untracked contents without changing selectable status paths", () => {
       {
         path: "renamed-to.ts",
         previousPath: "renamed-from.ts",
-        changeType: "rename",
+        changeType: "rename-changed",
         additions: 1,
         deletions: 1,
       },
