@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
-import { ProjectId } from "@t3tools/contracts";
+import { ProjectId, ThreadId } from "@t3tools/contracts";
 
 import * as ServerConfig from "../config.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
@@ -12,6 +12,7 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
 import * as KnownWorkspaces from "../workspace/KnownWorkspaces.ts";
 import * as ReviewService from "./ReviewService.ts";
 
@@ -96,6 +97,30 @@ function layer(input: {
 }
 
 describe("ReviewService", () => {
+  it.effect("reviews only the resolved Box project without consulting host workspace roots", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-workspace-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-base-" });
+      const detectCalls: Array<{ readonly cwd: string }> = [];
+      yield* Effect.gen(function* () {
+        const review = yield* ReviewService.ReviewService;
+        const result = yield* review.getDiffPreview({ cwd: "/project/repository" });
+        assert.deepStrictEqual(result.sources, []);
+        const error = yield* review.getDiffPreview({ cwd: "/project/other" }).pipe(Effect.flip);
+        assert.strictEqual(error._tag, "VcsRepositoryDetectionError");
+        assert.deepStrictEqual(detectCalls, [{ cwd: "/project/repository" }]);
+      }).pipe(
+        Effect.provide(layer({ workspaceRoot, baseDir, detectCalls })),
+        Effect.provideService(VcsThreadTarget.VcsThreadTarget, {
+          threadId: ThreadId.make("box-review"),
+          projectRoot: "/project/repository",
+          checkoutRoot: "/workspace/home/repository",
+        }),
+      );
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("rejects diff preview cwd outside the configured workspace roots", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

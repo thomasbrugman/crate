@@ -19,6 +19,8 @@ import {
 
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
+import * as BoxGitHost from "../vcs/BoxGitHost.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as KnownWorkspaces from "../workspace/KnownWorkspaces.ts";
 
@@ -75,6 +77,17 @@ export const make = Effect.gen(function* () {
     operation: keyof typeof WORKSPACE_BOUND_SUBJECTS,
     cwd: string,
   ) {
+    // BoxThreadResolver has resolved the thread and bound its project. Never validate that
+    // logical cwd against the host filesystem, which may have a different checkout or symlink.
+    const target = yield* VcsThreadTarget.VcsThreadTarget;
+    if (target) {
+      if (BoxGitHost.mapPath(target, cwd) !== undefined) return;
+      return yield* new VcsRepositoryDetectionError({
+        operation,
+        cwd,
+        detail: "Review cwd must stay within the thread's project root.",
+      });
+    }
     const [candidate, workspaceRoot] = yield* Effect.all([
       canonicalizePath(cwd),
       canonicalizePath(config.cwd),
@@ -152,19 +165,3 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(ReviewService, make);
-
-const cloudUnavailable = () =>
-  Effect.fail(
-    new VcsUnsupportedOperationError({
-      operation: "ReviewService",
-      kind: "unknown",
-      detail:
-        "Diff is not available in cloud threads. Ask the agent to inspect changes in its Box.",
-    }),
-  );
-
-export const cloudLayer = Layer.succeed(ReviewService, {
-  getBranchCommits: cloudUnavailable,
-  getDiffPreview: cloudUnavailable,
-  getDiffFileContents: cloudUnavailable,
-});
