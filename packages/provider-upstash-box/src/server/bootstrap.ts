@@ -16,6 +16,7 @@ import {
   requireCommand,
   type BoxHandle,
 } from "./BoxApi.ts";
+import { installDevServerKeeper } from "./BoxServers.ts";
 import { commandCodeHarness } from "./harness.ts";
 import { managedHarness } from "./managedHarness.ts";
 import {
@@ -47,7 +48,13 @@ const pendingSetups = new Map<string, Promise<BoxHandle>>();
 function shareSetup(key: string, setup: () => Promise<BoxHandle>): Promise<BoxHandle> {
   const pending = pendingSetups.get(key);
   if (pending) return pending;
-  const promise = setup().finally(() => pendingSetups.delete(key));
+  const promise = setup()
+    .then(async (box) => {
+      // Restarting dev servers on wake is a convenience; a failure must not block the thread.
+      await installDevServerKeeper(box).catch(() => undefined);
+      return box;
+    })
+    .finally(() => pendingSetups.delete(key));
   pendingSetups.set(key, promise);
   return promise;
 }

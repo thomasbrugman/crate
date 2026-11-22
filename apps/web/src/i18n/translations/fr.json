@@ -12234,5 +12234,8 @@
   "7d49aae75c90c5c6": "Collez une clé API OpenAI ou le contenu de ~/.codex/auth.json après vous être connecté.",
   "7317ccaec18e412a": "Sert à configurer les anciennes Boxes {harness}, pas les identifiants Git.",
   "3924cab20604eb29": "Connectez vos agents",
-  "c291bdeadbb22b96": "Déconnecter"
+  "c291bdeadbb22b96": "Déconnecter",
+  "e8b8d88e81f256e3": "Localhost uniquement",
+  "091a80ec142d96ab": "Écoutez sur 0.0.0.0 pour ouvrir ce serveur depuis l'extérieur de la Box",
+  "eaa1803222a89c7f": "Ouvrir dans votre navigateur avec son mot de passe. Il redémarre au réveil de la Box."
 }

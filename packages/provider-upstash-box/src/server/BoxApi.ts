@@ -119,6 +119,23 @@ export interface BoxHandle {
   readonly delete: () => Promise<unknown>;
   readonly resume: () => Promise<void>;
   readonly getStatus: () => Promise<{ readonly status: string }>;
+  /** Password-protected public URLs. Credentials come back only when a URL is created. */
+  readonly publicUrls?: {
+    readonly create: (port: number) => Promise<BoxPublicUrl>;
+    readonly list: () => Promise<ReadonlyArray<{ readonly port: number }>>;
+    readonly delete: (port: number) => Promise<void>;
+  };
+  /** Runs on every container start: create, resume, and snapshot restore. */
+  readonly initCommand?: {
+    readonly get: () => Promise<string>;
+    readonly set: (command: string) => Promise<void>;
+  };
+}
+
+export interface BoxPublicUrl {
+  readonly url: string;
+  readonly username: string;
+  readonly password: string;
 }
 
 export const quoteShell = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -225,6 +242,23 @@ function projectBox(box: Box): BoxHandle {
       await box.resume();
     },
     getStatus: async () => ({ status: (await box.getStatus()).status }),
+    publicUrls: {
+      create: async (port) => {
+        const created = await box.getPublicURL(port, { basicAuth: true });
+        if (!created.username || !created.password)
+          throw new Error("Box public URL has no credentials.");
+        return { url: created.url, username: created.username, password: created.password };
+      },
+      list: async () =>
+        (await box.listPublicURLs()).publicURLs.map((entry) => ({ port: entry.port })),
+      delete: async (port) => {
+        await box.deletePublicURL(port);
+      },
+    },
+    initCommand: {
+      get: () => box.getInitCommand(),
+      set: (command) => box.setInitCommand(command),
+    },
   };
 }
 

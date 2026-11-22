@@ -327,6 +327,38 @@ export const PreviewStopLocalServerInput = Schema.Struct({
 });
 export type PreviewStopLocalServerInput = typeof PreviewStopLocalServerInput.Type;
 
+/** A server listening inside a thread's Box, with its password-protected public URL. */
+export const BoxDevServer = Schema.Struct({
+  port: LocalServerPort,
+  processName: Schema.NullOr(TrimmedNonEmptyString),
+  /** Null while the server listens on loopback only, which the public URL cannot reach. */
+  url: Schema.NullOr(Url),
+  auth: Schema.NullOr(Schema.Struct({ username: Schema.String, password: Schema.String })),
+});
+export type BoxDevServer = typeof BoxDevServer.Type;
+
+export const PreviewListBoxServersInput = Schema.Struct({ threadId: ThreadId });
+export type PreviewListBoxServersInput = typeof PreviewListBoxServersInput.Type;
+
+export const BoxDevServerList = Schema.Struct({ servers: Schema.Array(BoxDevServer) });
+export type BoxDevServerList = typeof BoxDevServerList.Type;
+
+export class PreviewBoxServersError extends Schema.TaggedError<PreviewBoxServersError>()(
+  "PreviewBoxServersError",
+  { reason: Schema.Literals(["not-box-thread", "box-unavailable", "scan-failed"]) },
+) {
+  override get message() {
+    switch (this.reason) {
+      case "not-box-thread":
+        return "This thread does not run in a Box.";
+      case "box-unavailable":
+        return "The thread's Box is unavailable.";
+      case "scan-failed":
+        return "Could not list the Box's servers.";
+    }
+  }
+}
+
 export class PreviewStopLocalServerError extends Schema.TaggedError<PreviewStopLocalServerError>()(
   "PreviewStopLocalServerError",
   {

@@ -72,6 +72,10 @@ export function createPreviewEnvironmentAtoms<R, E>(
       tag: WS_METHODS.previewReportProfiles,
       concurrency: { mode: "latest", key: ({ environmentId }) => environmentId },
     }),
+    listBoxServers: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:preview:list-box-servers",
+      tag: WS_METHODS.previewListBoxServers,
+    }),
     stopLocalServer: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:preview:stop-local-server",
       tag: WS_METHODS.previewStopLocalServer,

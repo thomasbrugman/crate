@@ -106,7 +106,7 @@ import * as DesktopBrowserChannel from "./preview/DesktopBrowserChannel.ts";
 import * as ServerBrowserStream from "./preview/ServerBrowserStream.ts";
 import * as PreviewBrowser from "./preview/PreviewBrowser.ts";
 import * as ProcessRunner from "./processRunner.ts";
-import { BoxExec } from "@t3tools/provider-upstash-box/server";
+import { BoxExec, BoxServers } from "@t3tools/provider-upstash-box/server";
 import * as BoxThreadResolver from "./vcs/BoxThreadResolver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
@@ -495,7 +495,7 @@ const layerReview = ReviewService.cloudLayer.pipe(
   Layer.provideMerge(layerVcsDriverRegistry),
 );
 
-const layerBoxGit = BoxExec.layer.pipe(
+const layerBoxGit = Layer.merge(BoxExec.layer, BoxServers.layer).pipe(
   Layer.provideMerge(
     BoxThreadResolver.layer.pipe(
       Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
