@@ -1,4 +1,10 @@
-# t3stash
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/t3stash/wordmark-white.png" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/t3stash/wordmark-black.png" />
+    <img src="assets/t3stash/wordmark-black.png" alt="t3stash" width="360" />
+  </picture>
+</h1>
 
 [T3 Code](https://github.com/pingdotgg/t3code), except your coding agents run in the cloud.
 
