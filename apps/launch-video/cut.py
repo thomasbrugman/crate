@@ -16,7 +16,8 @@ WIDTH, HEIGHT, FPS = 1920, 1080, 30
 REPO = "github.com/thomasbrugman/t3stash"
 REVEAL_AT = 7
 REVEAL_LENGTH = 1.6
-CAMERA_LENGTH = 103 / FPS
+PHONE_LENGTH = 103 / FPS
+MOBILE_README = "mobile-readme.mp4"
 CTA_LENGTH = 3.6
 SCREEN = (1656, 896)
 PAPER = "#f2f1ee"
@@ -146,18 +147,6 @@ def center(draw, text, y, size, color=INK, kind="sans"):
 def title_card(kind, wordmark=None, music_credit=None):
     card = canvas()
     draw = ImageDraw.Draw(card)
-    if kind == "camera":
-        center(draw, "PHONE INSERT PENDING", 360, 24, MUTED, "mono")
-        center(draw, "Same thread. Now on your phone.", 475, 70, kind="bold")
-        center(
-            draw,
-            "Phone access needs an awake, reachable t3stash host.",
-            620,
-            32,
-            MUTED,
-        )
-        return card
-
     if kind == "intro":
         center(draw, "t3stash", 488, 154, kind="bold")
         center(draw, "T3 Code threads in their own cloud Boxes.", 662, 47)
@@ -306,6 +295,59 @@ def parallel(inputs, plate, output):
     )
 
 
+def phone_handoff(inputs, plate, output):
+    x, y, width, height = 1090, 99, 480, 882
+    card = canvas()
+    draw = ImageDraw.Draw(card)
+    draw.multiline_text(
+        (250, 405), "Same thread.\nNow on your phone.", font=font(67, "bold"), fill=INK
+    )
+    draw.multiline_text(
+        (250, 632),
+        "Phone access needs an awake,\nreachable t3stash host.",
+        font=font(32),
+        fill=MUTED,
+    )
+    draw.rounded_rectangle(
+        (x - 14, y - 14, x + width + 13, y + height + 13), radius=40, fill="#252525"
+    )
+    card.save(plate)
+    mask = Image.new("L", (width, height))
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, width - 1, height - 1), radius=28, fill=255
+    )
+    mask_path = plate.with_name("phone-mask.png")
+    mask.save(mask_path)
+    ffmpeg(
+        "-i",
+        inputs / MOBILE_README,
+        "-loop",
+        "1",
+        "-framerate",
+        FPS,
+        "-i",
+        plate,
+        "-loop",
+        "1",
+        "-framerate",
+        FPS,
+        "-i",
+        mask_path,
+        "-filter_complex_threads",
+        1,
+        "-filter_complex",
+        f"[0:v]scale={width}:{height},setsar=1,fps={FPS},"
+        f"tpad=stop_mode=clone:stop_duration={PHONE_LENGTH}[capture];"
+        f"[capture][2:v]alphamerge[phone];[1:v][phone]overlay={x}:{y}[out]",
+        "-map",
+        "[out]",
+        "-frames:v",
+        round(PHONE_LENGTH * FPS),
+        *ENCODE,
+        output,
+    )
+
+
 def sound(output, length, title_at, diff_at, cta_at, taps):
     rate = 24000
     rng = random.Random(24)
@@ -387,6 +429,7 @@ def main():
     clips_needed = dict.fromkeys(
         [
             "opener.mp4",
+            MOBILE_README,
             *(shot.file for shot in SHOTS + RESULT),
             *(row[0] for row in PARALLEL),
         ]
@@ -428,8 +471,7 @@ def main():
         shots(SHOTS)
         parallel(args.footage, plate, clip_path())
         shots(RESULT)
-        title_card("camera").save(plate)
-        still(plate, clip_path(), CAMERA_LENGTH)
+        phone_handoff(args.footage, plate, clip_path())
         title_card("cta", args.wordmark, args.music_credit).save(plate)
         still(
             plate,
@@ -451,9 +493,9 @@ def main():
             taps.extend(elapsed + offset for offset in shot.taps)
             elapsed += shot.length
         cta_at = (
-            elapsed + PARALLEL_LENGTH + sum(s.length for s in RESULT) + CAMERA_LENGTH
+            elapsed + PARALLEL_LENGTH + sum(s.length for s in RESULT) + PHONE_LENGTH
         )
-        diff_at = cta_at - CAMERA_LENGTH - RESULT[-1].length
+        diff_at = cta_at - PHONE_LENGTH - RESULT[-1].length
         length = cta_at + CTA_LENGTH
         audio = temp / "sound.wav"
         sound(audio, length, REVEAL_AT, diff_at, cta_at, taps)

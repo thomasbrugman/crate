@@ -35,6 +35,7 @@ one directory; the script uses these filenames:
 | `install.mp4`          | Second thread reviewing install instructions              |
 | `phone.mp4`            | Third thread reviewing phone pairing                      |
 | `recut-workspace.mp4`  | Switch between the three threads and show the README diff |
+| `mobile-readme.mp4`    | Open the same completed README thread in the phone layout |
 
 From the repository root:
 
@@ -45,10 +46,11 @@ python3 apps/launch-video/cut.py /path/to/clips /path/to/launch-cut.mp4
 Pass `--wordmark /path/to/compact-black.png` to use the approved transparent wordmark on the light
 end card. Without it, the card typesets the product name.
 
-The crop coordinates and timing are for 1440×810 captures. Use the numbered setup screen for
-onboarding and record after saving the credentials, not during entry. The three-thread montage
-uses separate recordings of real threads. The phone shot is a placeholder: phone access requires
-an awake, reachable t3stash host. Remove credentials and pairing links before sharing the footage.
+Use 1440×810 for desktop captures and 430×790 for the phone layout. Record the numbered onboarding
+screen after saving credentials, not during entry. The montage uses separate recordings of real
+threads. For the phone shot, open the same README thread from the mobile sidebar and scroll to the
+diff. Phone access requires an awake, reachable t3stash host. Remove credentials and pairing links
+before sharing footage.
 
 Without a music file the render includes only sound cues. To audition a licensed track from its
 first beat at the reveal, pass `--music /path/to/track.mp3 --music-start SECONDS`; the offset skips
