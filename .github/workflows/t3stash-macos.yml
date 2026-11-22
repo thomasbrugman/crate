@@ -53,7 +53,7 @@ jobs:
           plist="$app/Contents/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = com.thomasbrugman.t3stash
           plutil -extract CFBundleURLTypes json -o - "$plist" |
-            node -e 'const types = JSON.parse(require("node:fs").readFileSync(0, "utf8")); require("node:assert/strict").deepEqual(types.flatMap(type => type.CFBundleURLSchemes), ["t3stash"])'
+            node -e 'const types = JSON.parse(require("node:fs").readFileSync(0, "utf8")); require("node:assert/strict").deepEqual(types.flatMap(type => type.CFBundleURLSchemes).sort(), ["http", "https", "t3stash"])'
           executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")"
           binary="$app/Contents/MacOS/$executable"
           lipo -info "$binary"

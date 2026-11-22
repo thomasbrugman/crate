@@ -2892,6 +2892,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           name: MAC_APP_NAME,
           schemes: [T3STASH_APP_SCHEME],
         },
+        {
+          name: "Web site URL",
+          schemes: ["http", "https"],
+          role: "Viewer",
+        },
       ],
       ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
       ...(macPasskeySigning

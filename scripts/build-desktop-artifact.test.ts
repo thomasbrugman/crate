@@ -607,7 +607,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         x64ArchFiles: string;
         protocols: unknown;
       };
-      assert.deepEqual(protocols, [{ name: "t3stash", schemes: ["t3stash"] }]);
+      assert.deepEqual(protocols, [
+        { name: "t3stash", schemes: ["t3stash"] },
+        { name: "Web site URL", schemes: ["http", "https"], role: "Viewer" },
+      ]);
       const modules = "Contents/Resources/app.asar.unpacked/node_modules";
       assert.isTrue(
         NodePath.matchesGlob(
