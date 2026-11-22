@@ -44,6 +44,7 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "rea
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { MOBILE_APP_URL } from "../../branding";
+import { openCommandPalette } from "../../commandPaletteBus";
 import { isElectron } from "../../env";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { usePersistEnvironmentProviderInstanceMutation } from "../../hooks/useSettings";
@@ -119,6 +120,7 @@ import { toastManager } from "../ui/toast";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
+import { SetupSection } from "./SetupSection";
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
 const SCAN_LIMIT_MESSAGE = msg(
@@ -141,7 +143,14 @@ export function WelcomePage({
   const label =
     environments.find((environment) => environment.environmentId === environmentId)?.label ??
     gt("this computer");
-  const agentReady = useWelcomeAgents(environmentId).readyCount > 0;
+  const agents = useWelcomeAgents(environmentId);
+  const agentReady = agents.readyCount > 0;
+  const availableProviders = agents.providers ?? [];
+  const showOtherAgents =
+    !availableProviders.some((provider) => isUpstashBoxDriver(provider.driver)) ||
+    availableProviders.some(
+      (provider) => !isUpstashBoxDriver(provider.driver) && provider.driver !== "devReplay",
+    );
   const canConfigureBox = useEnvironmentScope(environmentId, AuthSettingsWriteScope);
   // The phone and `t3` on PATH belong to the primary computer, so only it offers them.
   const isPrimary = usePrimaryEnvironmentId() === environmentId;
@@ -282,7 +291,7 @@ export function WelcomePage({
         {/* The desktop window only moves where CSS opts in, so keep a titlebar strip. */}
         {isElectron ? <WorkspacePageHeader electron /> : null}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both">
-          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-6 pt-12 pb-8 sm:pt-20">
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 pt-8 pb-8 sm:px-6 sm:pt-12">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               <T>Welcome to T3 Code</T>
             </h1>
@@ -295,21 +304,29 @@ export function WelcomePage({
                 .
               </T>
             </p>
-            <div className="mt-10 border-t border-border/60">
+            <div className="mt-7 space-y-4">
               {canConfigureBox ? (
                 <UpstashBoxEnvironmentSettings environmentId={environmentId} onboarding />
               ) : null}
-              <AgentsSection
-                environmentId={environmentId}
-                label={label}
-                isPrimary={isPrimary}
-                showBoxAgents={!canConfigureBox}
-                onImportSourceEnabled={() => scans[0]?.refresh()}
-              />
+              {!canConfigureBox || showOtherAgents ? (
+                <AgentsSection
+                  environmentId={environmentId}
+                  label={label}
+                  isPrimary={isPrimary}
+                  showBoxAgents={!canConfigureBox}
+                  onImportSourceEnabled={() => scans[0]?.refresh()}
+                />
+              ) : null}
               <ProjectsSection
                 scan={scans[0]}
                 projectImport={projectImport}
                 isImporting={isImporting}
+                step={canConfigureBox ? 3 : undefined}
+                onAddProject={() => {
+                  void finish().then((completed) => {
+                    if (completed) openCommandPalette({ open: "add-project" });
+                  });
+                }}
               />
               {showPhone ? <PhoneSection environmentId={environmentId} /> : null}
             </div>
@@ -321,7 +338,7 @@ export function WelcomePage({
                   <T>Start without an agent</T>
                 </Button>
               )}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 {agentReady ? null : (
                   <span className="text-xs text-muted-foreground">
                     <T>Set up one agent to start.</T>
@@ -390,19 +407,19 @@ function TelemetryNotice({ environmentId }: { readonly environmentId: Environmen
   );
 }
 
-// Each part of the page is one band: its label on the left, its rows on the right.
 function WelcomeSection({
   title,
+  step,
   children,
 }: {
   readonly title: string;
+  readonly step?: number | undefined;
   readonly children: ReactNode;
 }) {
   return (
-    <section className="grid gap-x-10 border-b border-border/60 py-4 sm:grid-cols-[6rem_minmax(0,1fr)]">
-      <h2 className="text-sm leading-10 text-muted-foreground">{title}</h2>
+    <SetupSection title={title} step={step}>
       <div className="min-w-0">{children}</div>
-    </section>
+    </SetupSection>
   );
 }
 
@@ -817,10 +834,14 @@ function ProjectsSection({
   scan,
   projectImport,
   isImporting,
+  step,
+  onAddProject,
 }: {
   readonly scan: ReturnType<typeof useProjectScans>[number] | undefined;
   readonly projectImport: ReturnType<typeof useProjectImport>;
   readonly isImporting: boolean;
+  readonly step?: number | undefined;
+  readonly onAddProject: () => void;
 }) {
   const gt = useGT();
   const m = useMessages();
@@ -839,7 +860,7 @@ function ProjectsSection({
   if (scan === undefined) return null;
   if (scan.isPending && candidates.length === 0) {
     return (
-      <WelcomeSection title={gt("Projects")}>
+      <WelcomeSection title={gt("Projects")} step={step}>
         <p className="text-sm leading-10 text-muted-foreground">
           <T>
             Looking for projects in your <Var>{importSourcesLabel}</Var> history…
@@ -855,7 +876,7 @@ function ProjectsSection({
   );
   if (scan.error !== null && candidates.length === 0) {
     return (
-      <WelcomeSection title={gt("Projects")}>
+      <WelcomeSection title={gt("Projects")} step={step}>
         <div
           role="alert"
           className="flex min-h-10 items-center justify-between gap-3 text-sm text-muted-foreground"
@@ -867,13 +888,23 @@ function ProjectsSection({
     );
   }
   if (candidates.length === 0) {
-    return scan.data?.truncated ? (
-      <WelcomeSection title={gt("Projects")}>
-        <p className="text-xs leading-10 text-muted-foreground" role="status">
-          {m(SCAN_LIMIT_MESSAGE)}
-        </p>
+    return (
+      <WelcomeSection title={gt("Projects")} step={step}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+            {scan.data?.truncated
+              ? m(SCAN_LIMIT_MESSAGE)
+              : gt(
+                  "No previous projects found. Add a local folder or clone a repository to begin.",
+                )}
+          </p>
+          <Button size="sm" variant="outline" disabled={isImporting} onClick={onAddProject}>
+            <PlusIcon className="size-3.5" />
+            <T>Add project</T>
+          </Button>
+        </div>
       </WelcomeSection>
-    ) : null;
+    );
   }
 
   const allKeys = candidates.map((candidate) => candidate.key);
@@ -887,7 +918,7 @@ function ProjectsSection({
     selected.length < candidates.length &&
     !(selected.length === defaultKeys.length && defaultKeys.every((key) => selectedKeys.has(key)));
   return (
-    <WelcomeSection title={gt("Projects")}>
+    <WelcomeSection title={gt("Projects")} step={step}>
       <div className="flex min-h-10 items-center gap-3 py-1">
         <label className="flex min-w-0 flex-1 items-center gap-3">
           <RowIcon>

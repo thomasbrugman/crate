@@ -3151,7 +3151,6 @@
   "cbcae4b40060acdb": "Pareando com este ambiente",
   "664b42ae92488743": "Validando o link de pareamento e preparando sua sessão.",
   "eb3a33756e51cba8": "Parear com este ambiente",
-  "55c59743f7fdd7fa": "Cole um token de uso único ou um segredo de pareamento",
   "ca6a0c94398d763d": "Pareando...",
   "989f56b8297dd684": "Este token de pareamento de uso único já foi enviado. Solicite um novo link de pareamento.",
   "db3dcafc90d10405": "{environment} está salvo neste navegador.",
@@ -12236,5 +12235,17 @@
   "c291bdeadbb22b96": "Desconectar",
   "e8b8d88e81f256e3": "Somente localhost",
   "091a80ec142d96ab": "Escute em 0.0.0.0 para abrir este servidor fora da Box",
-  "eaa1803222a89c7f": "Abra no navegador com a senha. Ele reinicia quando a Box acorda."
+  "eaa1803222a89c7f": "Abra no navegador com a senha. Ele reinicia quando a Box acorda.",
+  "3191e0587dbf0ef6": "Cole um link ou token de pareamento",
+  "801953ffd2f798dc": "Use o link de pareamento exibido ao iniciar seu servidor ou peça um novo link ao proprietário.",
+  "d124de267e018b32": "Nenhum projeto anterior encontrado. Adicione uma pasta local ou clone um repositório para começar.",
+  "7116a71118d36e60": "Conectar Upstash Box",
+  "bcc9784feace8d81": "Cada conversa roda em seu próprio ambiente isolado na nuvem. Adicione sua chave de API do Box para começar.",
+  "902e9588633eb6e8": "Obter uma chave de API do Box",
+  "e6eac98bbbedcf8a": "Escolha seu agente de programação",
+  "4c408e98d79c9128": "Conecte um para começar. Você pode adicionar outros depois nas Configurações.",
+  "3477da670fcbde1b": "Insira uma chave de substituição",
+  "58f6b6525044d4c8": "Cole sua chave ou token",
+  "96115054865561aa": "Salvo com segurança. Você pode substituir a qualquer momento.",
+  "e49f33e233fe5610": "Sua chave permanece privada. Ela nunca é incluída nos snapshots do projeto."
 }
