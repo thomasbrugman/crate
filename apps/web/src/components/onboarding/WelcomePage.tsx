@@ -11,6 +11,7 @@ import type {
 } from "@t3tools/contracts";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveProviderInstanceDisplayName as agentName } from "@t3tools/client-runtime/state/provider-instance-display";
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -302,6 +303,7 @@ export function WelcomePage({
                 environmentId={environmentId}
                 label={label}
                 isPrimary={isPrimary}
+                showBoxAgents={!canConfigureBox}
                 onImportSourceEnabled={() => scans[0]?.refresh()}
               />
               <ProjectsSection
@@ -428,15 +430,20 @@ interface AgentTerminalSession {
 }
 
 // Shared by the page (to enable Start) and the agents section, so both agree on what is ready.
-function useWelcomeAgents(environmentId: EnvironmentId) {
+function useWelcomeAgents(environmentId: EnvironmentId, showBoxAgents = true) {
   const providers = useAtomValue(serverEnvironment.providersValueAtom(environmentId));
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const managedPolicy = serverConfig?.managedPolicy;
   return {
     providers,
     serverConfig,
-    ...groupWelcomeAgents(providers, serverConfig?.settings, agentName, (provider) =>
-      isManagedDriverAllowed(managedPolicy, provider.driver),
+    ...groupWelcomeAgents(
+      showBoxAgents
+        ? providers
+        : providers?.filter((provider) => !isUpstashBoxDriver(provider.driver)),
+      serverConfig?.settings,
+      agentName,
+      (provider) => isManagedDriverAllowed(managedPolicy, provider.driver),
     ),
   };
 }
@@ -452,15 +459,20 @@ function AgentsSection({
   environmentId,
   label,
   isPrimary,
+  showBoxAgents,
   onImportSourceEnabled,
 }: {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly isPrimary: boolean;
+  readonly showBoxAgents: boolean;
   // The project scan only reads agents that are on, so turning one on can find more history.
   readonly onImportSourceEnabled: () => void;
 }) {
-  const { providers, serverConfig, checking, found, available } = useWelcomeAgents(environmentId);
+  const { providers, serverConfig, checking, found, available } = useWelcomeAgents(
+    environmentId,
+    showBoxAgents,
+  );
   const gt = useGT();
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
