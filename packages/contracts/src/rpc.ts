@@ -312,6 +312,9 @@ import {
   PreviewReportProfilesInput,
   PreviewStopLocalServerError,
   PreviewStopLocalServerInput,
+  BoxDevServerList,
+  PreviewBoxServersError,
+  PreviewListBoxServersInput,
   PreviewOpenInput,
   PreviewReportStatusInput,
   PreviewResizeInput,
@@ -519,6 +522,7 @@ export const WS_METHODS = {
   previewReportProfiles: "preview.reportProfiles",
   previewReportStatus: "preview.reportStatus",
   previewStopLocalServer: "preview.stopLocalServer",
+  previewListBoxServers: "preview.listBoxServers",
 
   deviceConfigure: "device.configure",
   deviceList: "device.list",
@@ -1878,6 +1882,12 @@ const WsPreviewStopLocalServerRpc = Rpc.make(WS_METHODS.previewStopLocalServer, 
   error: Schema.Union([PreviewStopLocalServerError, EnvironmentAuthorizationError]),
 });
 
+const WsPreviewListBoxServersRpc = Rpc.make(WS_METHODS.previewListBoxServers, {
+  payload: PreviewListBoxServersInput,
+  success: BoxDevServerList,
+  error: Schema.Union([PreviewBoxServersError, EnvironmentAuthorizationError]),
+});
+
 const WsSubscribeDiscoveredLocalServersRpc = Rpc.make(WS_METHODS.subscribeDiscoveredLocalServers, {
   payload: Schema.Struct({
     configuredUrls: Schema.optional(ConfiguredLocalServerUrls),
@@ -2451,6 +2461,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewReportStatusRpc,
   WsSubscribePreviewEventsRpc,
   WsPreviewStopLocalServerRpc,
+  WsPreviewListBoxServersRpc,
   WsSubscribeDiscoveredLocalServersRpc,
   WsDeviceConfigureRpc,
   WsDeviceListRpc,
