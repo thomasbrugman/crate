@@ -65,7 +65,7 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
   connect: "Connecting to the Box",
   create: "Creating the Box",
   check: "Checking the Box setup",
-  install: "Installing Command Code",
+  install: "Installing the agent",
   credentials: "Copying credentials from the template Box",
   clone: "Cloning the repository",
 };
