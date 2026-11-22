@@ -61,10 +61,12 @@ function listeners() {
 
 // Harness credentials reach agent-started servers through the environment; they must not be
 // persisted where they outlive the harness or end up in a snapshot.
+// Client-bundled prefixes are public by definition, so they are kept.
 const secretName = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTH/i;
+const publicName = /^(NEXT_PUBLIC_|VITE_|PUBLIC_|EXPO_PUBLIC_|REACT_APP_|NUXT_PUBLIC_)/;
 const parseEnv = (raw) => Object.fromEntries(raw.split('\0').filter(Boolean)
   .map((pair) => [pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)])
-  .filter(([name]) => !secretName.test(name)));
+  .filter(([name]) => publicName.test(name) || !secretName.test(name)));
 
 function loadState() {
   try { return JSON.parse(read(statePath) ?? '[]'); } catch { return []; }
