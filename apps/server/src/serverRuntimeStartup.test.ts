@@ -7,6 +7,7 @@ import {
   ProviderDriverKind,
   CommandId,
   EnvironmentId,
+  ThreadId,
   type ServerLifecycleStreamEvent,
 } from "@t3tools/contracts";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
@@ -48,14 +49,16 @@ import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 
 it.effect.each([
+  "fresh-workspace",
   "disabled-codex",
   "disabled-default",
   "launch-failure",
   "project-failure",
   "project-refused",
-] as const)("keeps bootstrap launch failures separate from project failures: %s", (scenario) =>
+] as const)("reports bootstrap workspace provenance: %s", (scenario) =>
   Effect.gen(function* () {
     const projectId = ProjectId.make("bootstrap-project");
+    const threadId = ThreadId.make("bootstrap-thread");
     const instanceId = ProviderInstanceId.make(
       scenario === "disabled-default" ? "custom" : "codex",
     );
@@ -186,6 +189,9 @@ it.effect.each([
       Layer.mock(ThreadLaunch.ThreadLaunchService)({
         launch: (input) => {
           assert.equal(input.modelSelection.instanceId, instanceId);
+          if (scenario === "fresh-workspace") {
+            return Effect.succeed({ threadId, resumed: false, projection: undefined as never });
+          }
           return scenario === "launch-failure"
             ? Effect.fail(
                 new ThreadLaunch.ThreadLaunchError({
@@ -234,7 +240,18 @@ it.effect.each([
             welcome.payload.bootstrapProjectId,
             scenario === "project-refused" ? undefined : projectId,
           );
-          assert.isUndefined(welcome.payload.bootstrapThreadId);
+          assert.equal(
+            welcome.payload.bootstrapThreadId,
+            scenario === "fresh-workspace" ? threadId : undefined,
+          );
+          assert.equal(
+            welcome.payload.bootstrapProjectCreated,
+            scenario === "project-refused" ? undefined : true,
+          );
+          assert.equal(
+            welcome.payload.bootstrapThreadCreated,
+            scenario === "fresh-workspace" ? true : undefined,
+          );
         }
       }
     }).pipe(
