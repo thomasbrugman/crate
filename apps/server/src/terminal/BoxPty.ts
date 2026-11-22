@@ -10,6 +10,7 @@ import { BoxThreadResolver } from "../vcs/BoxThreadResolver.ts";
 
 class BoxPtyError extends Schema.TaggedError<BoxPtyError>()("BoxPtyError", {
   message: Schema.String,
+  cause: Schema.optional(Schema.Defect()),
 }) {}
 
 export class BoxPty extends Context.Service<
@@ -23,7 +24,28 @@ export class BoxPty extends Context.Service<
   }
 >()("t3/terminal/BoxPty") {}
 
-const openError = () => new BoxPtyError({ message: "Could not open the thread’s Box terminal." });
+function openError(cause: unknown, apiKey?: string): BoxPtyError {
+  const redact = (text: string) => (apiKey ? text.replaceAll(apiKey, "[redacted]") : text);
+  const plainError =
+    cause instanceof Error &&
+    Object.getPrototypeOf(cause) === Error.prototype &&
+    Reflect.ownKeys(cause).every((key) => key === "message" || key === "stack") &&
+    (!apiKey || !cause.stack?.includes(apiKey)) &&
+    (!apiKey || !cause.message.includes(apiKey));
+  const statusCode = cause instanceof Error ? BoxApi.boxErrorDetails(cause).statusCode : undefined;
+  return new BoxPtyError({
+    message: "Could not open the thread’s Box terminal.",
+    cause: plainError
+      ? cause
+      : {
+          name: cause instanceof Error ? redact(cause.name) : "Error",
+          message: redact(
+            cause instanceof Error ? cause.message : "Unknown Box terminal startup failure.",
+          ),
+          ...(statusCode === undefined ? {} : { statusCode }),
+        },
+  });
+}
 
 export const layer = Layer.effect(
   BoxPty,
@@ -33,7 +55,9 @@ export const layer = Layer.effect(
     return BoxPty.of({
       spawn: Effect.fn("BoxPty.spawn")(function* (input) {
         const threadId = ThreadId.make(input.threadId);
-        const target = yield* resolver.resolveTerminal(threadId).pipe(Effect.mapError(openError));
+        const target = yield* resolver
+          .resolveTerminal(threadId)
+          .pipe(Effect.mapError((cause) => openError(cause)));
         if (!target) {
           return yield* new BoxPtyError({
             message: "No Box is available for this thread. Start an agent turn first.",
@@ -42,9 +66,9 @@ export const layer = Layer.effect(
         return yield* Effect.tryPromise({
           try: async (signal) => {
             const box = await api.get(target.nativeId, target.apiKey);
-            if (!box.exec.session) throw openError();
+            if (!box.exec.session) throw new Error("The Box does not support terminal sessions.");
             if ((await box.getStatus()).status === "paused") await box.resume();
-            if (signal.aborted) throw openError();
+            if (signal.aborted) throw signal.reason;
             const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
             let initialOutput = "";
             let onData: ((data: string) => void) | undefined;
@@ -74,7 +98,7 @@ export const layer = Layer.effect(
             });
             if (signal.aborted) {
               handle.close();
-              throw openError();
+              throw signal.reason;
             }
             const exited = handle
               .wait()
@@ -119,7 +143,7 @@ export const layer = Layer.effect(
               },
             } satisfies PtyAdapter.PtyProcess;
           },
-          catch: openError,
+          catch: (cause) => openError(cause, target.apiKey),
         });
       }),
     });

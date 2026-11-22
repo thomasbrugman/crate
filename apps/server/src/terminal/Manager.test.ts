@@ -613,6 +613,7 @@ it.layer(
       const unexpected = async (): Promise<never> => {
         throw new Error("Unexpected Box operation");
       };
+      let startupFailure: Error | undefined;
       const boxPty = yield* BoxPty.BoxPty.pipe(
         Effect.provide(
           BoxPty.layer.pipe(
@@ -633,6 +634,7 @@ it.layer(
                 checkModelKey: unexpected,
                 get: async (id, apiKey) => {
                   expect([id, apiKey]).toEqual(["thread-box", "test-key"]);
+                  if (startupFailure) throw startupFailure;
                   return {
                     id,
                     agent: { stream: unexpected },
@@ -681,6 +683,23 @@ it.layer(
         worktreePath: "/also-not-a-host-directory",
         env: { INJECTED_FROM_CLIENT: "not forwarded" },
       });
+      const plainError = new Error("connection unavailable");
+      startupFailure = plainError;
+      const plainFailure = yield* boxPty.spawn({ ...input, cols: 100, rows: 24 }).pipe(Effect.flip);
+      expect(plainFailure.cause).toBe(plainError);
+      startupFailure = Object.assign(new TypeError("request failed: test-key"), {
+        statusCode: 409,
+        response: { headers: { authorization: "test-key" } },
+      });
+      const wrappedFailure = yield* boxPty
+        .spawn({ ...input, cols: 100, rows: 24 })
+        .pipe(Effect.flip);
+      expect(wrappedFailure.cause).toEqual({
+        name: "TypeError",
+        message: "request failed: [redacted]",
+        statusCode: 409,
+      });
+      startupFailure = undefined;
       const rejected = yield* manager.open({ ...input, threadId: "no-box" });
       expect(rejected).toMatchObject({ status: "error", error: expect.stringContaining("No Box") });
 
