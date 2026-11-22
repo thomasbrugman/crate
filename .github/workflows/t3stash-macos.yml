@@ -1,0 +1,68 @@
+name: t3stash macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - ".github/workflows/t3stash-macos.yml"
+      - "apps/desktop/**"
+      - "scripts/build-desktop-artifact.*"
+      - "scripts/lib/mac-app-identity.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: Package universal Mac app
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      # actions/checkout's credential cleanup fails on the vendored gitlinks.
+      - name: Checkout
+        shell: bash
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/apps/mobile/modules/t3-terminal/Vendor/**/*.a'
+          git checkout --detach FETCH_HEAD
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts... --frozen-lockfile
+
+      - name: Install Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Build unsigned app
+        env:
+          T3CODE_DESKTOP_SIGNED: "false"
+        run: env -u GITHUB_REPOSITORY vp run dist:desktop:artifact --platform mac --target zip --arch universal
+
+      - name: Check packaged app
+        run: |
+          archives=(release/t3stash-*-universal.zip)
+          ditto -x -k "${archives[0]}" "$RUNNER_TEMP/t3stash"
+          app="$RUNNER_TEMP/t3stash/t3stash.app"
+          plist="$app/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = com.thomasbrugman.t3stash
+          plutil -extract CFBundleURLTypes json -o - "$plist" |
+            node -e 'const types = JSON.parse(require("node:fs").readFileSync(0, "utf8")); require("node:assert/strict").deepEqual(types.flatMap(type => type.CFBundleURLSchemes).sort(), ["http", "https", "t3stash"])'
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")"
+          binary="$app/Contents/MacOS/$executable"
+          lipo -info "$binary"
+          lipo "$binary" -verify_arch arm64 x86_64
+          node scripts/smoke-desktop-app.ts --executable "$binary" --artifacts-dir "$RUNNER_TEMP/desktop-launch-check"
+
+      - name: Upload universal ZIP
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: release/t3stash-*-universal.zip
+          archive: false
+          if-no-files-found: error

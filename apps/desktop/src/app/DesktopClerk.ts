@@ -13,7 +13,7 @@ import { receiveCodexAuthCallback, CodexAuthCallbackError } from "./CodexAuthCal
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import { providerAuthReturnUrl } from "@t3tools/shared/providerAuthReturnUrl";
 import { promptLinkAppPath } from "@t3tools/shared/promptLinks";
-import { readPairingAppLink } from "@t3tools/shared/remote";
+import { isAppLinkProtocol, readPairingAppLink, T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -85,7 +85,7 @@ export const desktopClerkFrontendApiHostname = resolveDesktopClerkFrontendApiHos
     : __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__,
 );
 
-function createDesktopClerkBridge(stateDir: string, isDevelopment: boolean, userDataPath: string) {
+function createDesktopClerkBridge(stateDir: string, scheme: string, userDataPath: string) {
   return createClerkBridge({
     storage: openClerkTokenStorage(
       stateDir,
@@ -95,7 +95,7 @@ function createDesktopClerkBridge(stateDir: string, isDevelopment: boolean, user
     manageSingleInstanceLock: false,
     passkeys: true,
     renderer: {
-      scheme: ElectronProtocol.getDesktopScheme(isDevelopment),
+      scheme,
       host: ElectronProtocol.DESKTOP_HOST,
     },
   });
@@ -106,6 +106,7 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const electronApp = yield* ElectronApp.ElectronApp;
   const shell = yield* ElectronShell.ElectronShell;
+  const scheme = ElectronProtocol.getDesktopScheme(environment.isDevelopment, environment);
 
   // Must not yield: the bridge registers a scheme Electron rejects once ready.
   const userDataPath = yield* DesktopUserData.resolveUserDataPath(environment);
@@ -141,8 +142,7 @@ export const make = Effect.gen(function* () {
 
   yield* Effect.acquireRelease(
     Effect.try({
-      try: () =>
-        createDesktopClerkBridge(environment.stateDir, environment.isDevelopment, userDataPath),
+      try: () => createDesktopClerkBridge(environment.stateDir, scheme, userDataPath),
       catch: (cause) =>
         new DesktopClerkBridgeInitializationError({
           stateDir: environment.stateDir,
@@ -172,7 +172,7 @@ export const make = Effect.gen(function* () {
 
       const startProviderAuthHandoff = (value: string | undefined) => {
         if (!value) return false;
-        const request = readCodexAuthHandoff(value, environment.isDevelopment);
+        const request = readCodexAuthHandoff(value, scheme);
         if (!request) return false;
         void runPromise(
           Effect.gen(function* () {
@@ -199,7 +199,7 @@ export const make = Effect.gen(function* () {
       };
       const resumeProviderAuth = (value: string | undefined) => {
         const destination = providerAuthReturnUrl(value);
-        const expectedOrigin = `${ElectronProtocol.getDesktopScheme(environment.isDevelopment)}://app`;
+        const expectedOrigin = `${scheme}://${ElectronProtocol.DESKTOP_HOST}`;
         if (!destination?.startsWith(`${expectedOrigin}/`)) return false;
         void runPromise(
           Effect.gen(function* () {
@@ -217,6 +217,13 @@ export const make = Effect.gen(function* () {
       };
       const openAppLink = (value: string | undefined) => {
         if (!value || (promptLinkAppPath(value) === null && readPairingAppLink(value) === null))
+          return false;
+        const protocol = new URL(value).protocol;
+        if (
+          scheme === T3STASH_APP_SCHEME &&
+          isAppLinkProtocol(protocol) &&
+          protocol !== `${scheme}:`
+        )
           return false;
         void runPromise(webLinks.receive(value));
         return true;

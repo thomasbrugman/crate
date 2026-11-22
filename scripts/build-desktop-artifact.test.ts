@@ -37,6 +37,7 @@ import {
   MacPasskeySigningConfigurationResolutionError,
   MissingMacPasskeyProvisioningProfileError,
   packWindowsServerAsar,
+  preflightMacDesktopBuild,
   preflightWindowsDesktopBuild,
   renderMacPasskeyEntitlements,
   resolveMacFileExclusions,
@@ -570,6 +571,65 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
+  it.effect("merges universal Mac builds without duplicating architecture-specific files", () =>
+    Effect.gen(function* () {
+      const universal = yield* createBuildConfig(
+        "mac",
+        "zip",
+        "0.1.10",
+        false,
+        false,
+        undefined,
+        undefined,
+        false,
+        "universal",
+      );
+      const arm64 = yield* createBuildConfig(
+        "mac",
+        "zip",
+        "0.1.10",
+        false,
+        false,
+        undefined,
+        undefined,
+        false,
+        "arm64",
+      );
+
+      assert.notProperty(universal, "afterPack");
+      assert.property(arm64, "afterPack");
+      assert.include(universal, {
+        appId: "com.thomasbrugman.t3stash",
+        productName: "t3stash",
+        artifactName: "t3stash-${version}-${arch}.${ext}",
+      });
+      const { x64ArchFiles, protocols } = universal.mac as {
+        x64ArchFiles: string;
+        protocols: unknown;
+      };
+      assert.deepEqual(protocols, [
+        { name: "t3stash", schemes: ["t3stash"] },
+        { name: "Web site URL", schemes: ["http", "https"], role: "Viewer" },
+      ]);
+      const modules = "Contents/Resources/app.asar.unpacked/node_modules";
+      assert.isTrue(
+        NodePath.matchesGlob(
+          `${modules}/@clerk/electron-passkeys/electron-passkeys.darwin-arm64.node`,
+          x64ArchFiles,
+        ),
+      );
+      assert.isTrue(
+        NodePath.matchesGlob(
+          `${modules}/objc-js/prebuilds/darwin-x64/node.napi.node`,
+          x64ArchFiles,
+        ),
+      );
+      assert.isFalse(
+        NodePath.matchesGlob(`${modules}/node-pty/build/Release/pty.node`, x64ArchFiles),
+      );
+    }),
+  );
+
   it.effect("names updatable AppImages without a version and apart per channel", () =>
     Effect.gen(function* () {
       const appImageName = (version: string) =>
@@ -821,6 +881,33 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ),
         );
       }),
+    ),
+  );
+
+  it.effect("finds lipo for universal macOS builds without invoking unsupported flags", () =>
+    preflightMacDesktopBuild("universal").pipe(
+      Effect.provide(
+        Layer.merge(
+          Layer.succeed(
+            ChildProcessSpawner.ChildProcessSpawner,
+            ChildProcessSpawner.make((command) => {
+              const probe = command as unknown as {
+                readonly command: string;
+                readonly args: ReadonlyArray<string>;
+              };
+              const exitsSuccessfully =
+                probe.command === "xcrun"
+                  ? probe.args[0] === "--find" &&
+                    (probe.args[1] === "iconutil" || probe.args[1] === "lipo")
+                  : ["clang", "make", "sips"].includes(probe.command);
+              return Effect.succeed(mockProcess(exitsSuccessfully ? 0 : 1));
+            }),
+          ),
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({ env: { T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true" } }),
+          ),
+        ),
+      ),
     ),
   );
 
@@ -1564,7 +1651,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "com.thomasbrugman.t3stash",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1587,7 +1674,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.thomasbrugman.t3stash</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");

@@ -156,7 +156,7 @@ describe("DesktopAppIdentity", () => {
 
         assert.equal(userDataPath, "/Users/alice/Library/Application Support/t3code-v2");
       }),
-      { legacyPathExists: true },
+      { legacyPathExists: true, environment: { isPackaged: false } },
     ),
   );
 
@@ -171,40 +171,59 @@ describe("DesktopAppIdentity", () => {
       }),
       {
         legacyPathExists: true,
-        environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
+        environment: {
+          isPackaged: false,
+          env: { VITE_DEV_SERVER_URL: "http://localhost:5173" },
+        },
       },
     ),
   );
 
   it.effect.each([
-    { stage: "Beta", environment: {} },
+    {
+      stage: "Beta",
+      runtimeName: "T3 Code Beta",
+      displayName: "T3 Code (Beta)",
+      environment: { isPackaged: false },
+    },
     {
       stage: "Nightly",
-      environment: { appVersion: "0.0.43-nightly.20260929.2428" },
+      runtimeName: "T3 Code Nightly",
+      displayName: "T3 Code (Nightly)",
+      environment: { isPackaged: false, appVersion: "0.0.43-nightly.20260929.2428" },
     },
     {
       stage: "Dev",
-      environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
+      runtimeName: "T3 Code Dev",
+      displayName: "T3 Code (Dev)",
+      environment: {
+        isPackaged: false,
+        env: { VITE_DEV_SERVER_URL: "http://localhost:5173" },
+      },
     },
-  ])("uses a valid native User-Agent product name for $stage", ({ stage, environment }) => {
-    const calls: ElectronAppCalls = {
-      setAboutPanelOptions: [],
-      setDockIcon: [],
-      setName: [],
-    };
+    { stage: "packaged macOS", runtimeName: "t3stash", displayName: "t3stash", environment: {} },
+  ])(
+    "uses a valid native User-Agent product name for $stage",
+    ({ runtimeName, displayName, environment }) => {
+      const calls: ElectronAppCalls = {
+        setAboutPanelOptions: [],
+        setDockIcon: [],
+        setName: [],
+      };
 
-    return withIdentity(
-      Effect.gen(function* () {
-        const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
-        yield* identity.configure;
+      return withIdentity(
+        Effect.gen(function* () {
+          const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+          yield* identity.configure;
 
-        const runtimeName = calls.setName[0];
-        assert.isDefined(runtimeName);
-        assert.equal(runtimeName, `T3 Code ${stage}`);
-        assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `T3 Code (${stage})`);
-      }),
-      { calls, environment },
-    );
-  });
+          const name = calls.setName[0];
+          assert.isDefined(name);
+          assert.equal(name, runtimeName);
+          assert.match(name.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
+          assert.equal(calls.setAboutPanelOptions[0]?.applicationName, displayName);
+        }),
+        { calls, environment },
+      );
+    },
+  );
 });

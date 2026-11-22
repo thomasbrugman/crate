@@ -31,6 +31,8 @@ import {
 import { T, useGT, useMessages } from "gt-react";
 
 import { ensureLocalApi } from "../../localApi";
+import { resolveDesktopAppHandoff } from "../../branding.logic";
+import { browserClientOs } from "../../connection/clientMetadata";
 import { managedInstanceLocks, useManagedPolicy } from "../../state/managedPolicy";
 import { ManagedControl } from "../ManagedPolicy";
 import { useEnvironmentHttpBaseUrl } from "../../state/environments";
@@ -684,6 +686,7 @@ function ManagedCodexSetup({
     (reconnectEmail ?? gt("Use your ChatGPT subscription."))
   );
 
+  const desktopHandoff = resolveDesktopAppHandoff(browserClientOs(navigator), import.meta.env.DEV);
   const handoffUrl =
     needsManualCallback && url && auth?.flowId && providerAuthReturnUrl(returnUrl.toString())
       ? codexAuthHandoffUrl(
@@ -694,7 +697,7 @@ function ManagedCodexSetup({
             instanceId,
             flowId: auth.flowId,
           },
-          import.meta.env.DEV,
+          desktopHandoff.scheme,
         )
       : null;
   const waitingControl = (
@@ -791,8 +794,22 @@ function ManagedCodexSetup({
               <T>Other ways to connect</T>
             </summary>
             <Button className="mt-2" size="sm" variant="outline" render={<a href={handoffUrl} />}>
-              <T>Use T3 desktop for automatic return</T>
+              {desktopHandoff.macInstallUrl ? (
+                gt("Open in desktop app")
+              ) : (
+                <T>Use T3 desktop for automatic return</T>
+              )}
             </Button>
+            {desktopHandoff.macInstallUrl ? (
+              <Button
+                className="mt-2"
+                size="sm"
+                variant="ghost"
+                render={<a href={desktopHandoff.macInstallUrl} />}
+              >
+                {gt("Get {app}", { app: "t3stash" })}
+              </Button>
+            ) : null}
           </details>
         ) : null}
       </div>
