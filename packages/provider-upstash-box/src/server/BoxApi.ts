@@ -5,6 +5,8 @@ import {
   BoxError,
   type BoxConfig,
   type Chunk,
+  type ExecSessionHandle,
+  type ExecSessionOptions,
   type ExecStreamChunk,
   type ClaudeCode,
   type OpenAICodex,
@@ -91,6 +93,7 @@ export interface BoxHandle {
   readonly id: string;
   readonly agent: { readonly stream: (options: StreamOptions) => Promise<BoxStream> };
   readonly exec: {
+    readonly session?: (options: ExecSessionOptions) => Promise<ExecSessionHandle>;
     readonly stream?: (command: string) => Promise<
       {
         readonly id: string;
@@ -144,6 +147,7 @@ function projectBox(box: Box): BoxHandle {
       },
     },
     exec: {
+      session: (options) => box.exec.session(options),
       stream: async (command) => {
         const run = await box.exec.stream(command);
         return {

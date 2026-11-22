@@ -87,6 +87,7 @@ import * as SecretResolver from "./secrets/SecretResolver.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import * as BoxPty from "./terminal/BoxPty.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as PeerForwarding from "./peer/PeerForwarding.ts";
 import * as RemoteDelegation from "./peer/RemoteDelegation.ts";
@@ -106,7 +107,7 @@ import * as DesktopBrowserChannel from "./preview/DesktopBrowserChannel.ts";
 import * as ServerBrowserStream from "./preview/ServerBrowserStream.ts";
 import * as PreviewBrowser from "./preview/PreviewBrowser.ts";
 import * as ProcessRunner from "./processRunner.ts";
-import { BoxExec } from "@t3tools/provider-upstash-box/server";
+import { BoxApi, BoxExec } from "@t3tools/provider-upstash-box/server";
 import * as BoxThreadResolver from "./vcs/BoxThreadResolver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
@@ -495,15 +496,13 @@ const layerReview = ReviewService.cloudLayer.pipe(
   Layer.provideMerge(layerVcsDriverRegistry),
 );
 
-const layerBoxGit = BoxExec.layer.pipe(
-  Layer.provideMerge(
-    BoxThreadResolver.layer.pipe(
-      Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
-      Layer.provide(SecretResolver.layer),
-      Layer.provide(layerServerSettings),
-    ),
-  ),
+const layerBoxThreadResolver = BoxThreadResolver.layer.pipe(
+  Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
+  Layer.provide(SecretResolver.layer),
+  Layer.provide(layerServerSettings),
 );
+
+const layerBoxGit = BoxExec.layer.pipe(Layer.provideMerge(layerBoxThreadResolver));
 
 const layerVcs = Layer.empty.pipe(
   Layer.provideMerge(VcsProjectConfig.layer),
@@ -536,12 +535,11 @@ const layerPortScanner = PortScanner.layer.pipe(
   Layer.provide(layerBackground),
 );
 
-const layerTerminal = TerminalManager.layer(
-  ProviderInstanceRegistryHydration.deriveProviderInstanceConfigMap,
-).pipe(
+const layerTerminal = TerminalManager.layer.pipe(
+  Layer.provide(
+    BoxPty.layer.pipe(Layer.provide(BoxApi.layer), Layer.provide(layerBoxThreadResolver)),
+  ),
   Layer.provide(layerPtyAdapter),
-  Layer.provide(layerPortScanner),
-  Layer.provide(layerNativeTelemetry),
 );
 
 const layerPreview = Layer.empty.pipe(

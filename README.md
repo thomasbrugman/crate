@@ -46,11 +46,13 @@ their credentials after restoring the snapshot.
 - **Worktrees and setup:** cloud launches do not create host worktrees or run project
   setup scripts. App-started subagent turns get a worktree inside the parent Box when
   it contains a Git repository. Local checkpoint capture and restoration are skipped.
-- **Terminal and diff:** disabled, not proxied. Server-side terminal and host process/Git
-  boundaries reject execution; web terminal/diff/file/preview/device surfaces show
-  “Not available in cloud threads.” Use the agent's Box tools to run commands, inspect
-  files, or produce a diff. This avoids exposing a host PTY or accidentally reviewing
-  unrelated local files. The vendored local-provider packages remain unregistered.
+- **Terminal:** open the terminal drawer or a terminal tab after the first agent turn
+  provisions the thread's Box. Each terminal is an independent interactive shell in
+  the Box, never on the server host. If the Box connection drops and the terminal
+  reconnects, it marks the start of a fresh shell; the old process does not survive.
+- **Diff, files, preview, and device:** disabled, not proxied. Use the agent's Box
+  tools to inspect files or produce a diff. Host process/Git boundaries still reject
+  execution. The vendored local-provider packages remain unregistered.
   The host sleep inhibitor is also unregistered; cloud work does not need to keep the
   host's agent process awake.
 - **Other limits:** no rollback, active steering, approvals, cross-harness agent
