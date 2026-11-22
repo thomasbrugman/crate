@@ -4031,6 +4031,8 @@ const makeCore = Effect.fn("makeGitVcsDriverCore")(function* () {
     explicitBaseRef?: string,
     knownOriginDefaultBranch: string | null = null,
   ) {
+    const target = yield* VcsThreadTarget.VcsThreadTarget;
+    explicitBaseRef ??= target?.comparisonBaseRef;
     const base =
       explicitBaseRef !== undefined
         ? ((yield* resolveComparisonBaseRef(cwd, explicitBaseRef)) ?? {

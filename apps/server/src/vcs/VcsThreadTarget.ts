@@ -10,6 +10,7 @@ export interface Target {
   readonly threadId: ThreadId;
   readonly projectRoot: string;
   readonly checkoutRoot: string;
+  readonly comparisonBaseRef?: string;
 }
 
 class TargetKey extends Data.Class<Target> {}
