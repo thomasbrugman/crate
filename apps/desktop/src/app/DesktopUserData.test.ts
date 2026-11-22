@@ -24,6 +24,7 @@ it.effect.each(["t3code", "T3 Code (Alpha)"])(
       yield* resolveUserDataPath({
         appDataDirectory: directory,
         isDevelopment: false,
+        isPackaged: true,
         platform: "win32",
       });
       assert.equal(yield* fs.readFileString(path.join(destination, "Local State")), state);
@@ -33,6 +34,7 @@ it.effect.each(["t3code", "T3 Code (Alpha)"])(
       yield* resolveUserDataPath({
         appDataDirectory: directory,
         isDevelopment: false,
+        isPackaged: true,
         platform: "win32",
       });
       assert.equal(

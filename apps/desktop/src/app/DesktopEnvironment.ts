@@ -15,6 +15,7 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
+import { isPackagedMacApp, MAC_APP_NAME } from "../../../../scripts/lib/mac-app-identity.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
@@ -148,6 +149,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const homeDirectory = input.homeDirectory;
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
+  const brandedMacApp = isPackagedMacApp(input);
   const appDataDirectory =
     input.platform === "win32"
       ? Option.getOrElse(config.appDataDirectory, () =>
@@ -160,6 +162,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     homeDirectory,
     joinPath: path.join,
     t3Home: config.t3Home,
+    ...(brandedMacApp ? { defaultHomeName: `.${MAC_APP_NAME}` } : {}),
   });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
@@ -167,10 +170,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
       : appRoot;
-  const branding = resolveDesktopAppBranding({
+  const upstreamBranding = resolveDesktopAppBranding({
     isDevelopment,
     appVersion: input.appVersion,
   });
+  const branding = brandedMacApp
+    ? { ...upstreamBranding, baseName: MAC_APP_NAME, displayName: MAC_APP_NAME }
+    : upstreamBranding;
   const displayName = branding.displayName;
   const stateDir = resolveDesktopStateDir({
     baseDir,

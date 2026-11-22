@@ -4,6 +4,8 @@ import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 
+import { isPackagedMacApp, MAC_APP_NAME } from "../../../../scripts/lib/mac-app-identity.ts";
+
 export class DesktopUserDataInitializationError extends Schema.TaggedError<DesktopUserDataInitializationError>()(
   "DesktopUserDataInitializationError",
   {
@@ -35,10 +37,12 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
   function* (input: {
     readonly appDataDirectory: string;
     readonly isDevelopment: boolean;
+    readonly isPackaged: boolean;
     readonly platform: NodeJS.Platform;
   }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    if (isPackagedMacApp(input)) return path.join(input.appDataDirectory, MAC_APP_NAME);
     const names = input.isDevelopment
       ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
       : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };

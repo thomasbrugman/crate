@@ -25,12 +25,12 @@ work lives in Git, where it would have ended up anyway.
 
 1. Download the universal ZIP only from a successful [build pushed to `main`](https://github.com/thomasbrugman/t3stash/actions/workflows/t3stash-macos.yml?query=branch%3Amain+event%3Apush).
    Do not install artifacts from pull request builds. The same ZIP works on Apple Silicon and Intel Macs.
-2. Unzip it and drag **T3 Code (Beta).app** to Applications.
+2. Unzip it and drag **t3stash.app** to Applications.
 3. The app isn't Developer ID-signed or notarized. To open this trusted copy, remove quarantine
    from just the installed app in Terminal, then open it:
 
    ```sh
-   xattr -dr com.apple.quarantine "/Applications/T3 Code (Beta).app"
+   xattr -dr com.apple.quarantine "/Applications/t3stash.app"
    ```
 
    Alternatively, try opening it once, then choose **Open Anyway** in **System Settings → Privacy
@@ -45,7 +45,8 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin
 T3CODE_DESKTOP_SIGNED=false vp run dist:desktop:artifact --platform mac --target zip --arch universal
 ```
 
-The ZIP is written to `release/`.
+The `t3stash-*-universal.zip` is written to `release/`. The app stores its server state in
+`~/.t3stash` and its Electron profile in `~/Library/Application Support/t3stash`, separate from T3 Code.
 
 ### Phone (iPhone and Android)
 

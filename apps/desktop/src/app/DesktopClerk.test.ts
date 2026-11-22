@@ -68,6 +68,7 @@ const layerDesktopClerk = (
   const environment = DesktopEnvironment.DesktopEnvironment.of({
     stateDir: clerkStateDir,
     isDevelopment,
+    isPackaged: !isDevelopment,
     appDataDirectory: "/tmp/app-data",
     platform,
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
@@ -122,7 +123,7 @@ describe("DesktopClerk", () => {
       name: "packaged macOS",
       isDevelopment: false,
       platform: "darwin" as const,
-      userData: "/tmp/app-data/t3code-v2",
+      userData: "/tmp/app-data/t3stash",
     },
     {
       name: "packaged Linux",
@@ -284,7 +285,7 @@ describe("DesktopClerk", () => {
 
         assert.isTrue(Exit.hasInterrupts(exit));
         assert.deepEqual(events, [
-          "setPath:userData:/tmp/app-data/t3code-v2",
+          `setPath:userData:/tmp/app-data/${platform === "darwin" ? "t3stash" : "t3code-v2"}`,
           "requestSingleInstanceLock",
           "quit",
         ]);

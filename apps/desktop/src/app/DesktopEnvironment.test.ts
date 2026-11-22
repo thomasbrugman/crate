@@ -72,4 +72,17 @@ describe("DesktopEnvironment", () => {
       assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
     }),
   );
+
+  it.effect("isolates the packaged Mac app from upstream T3 Code state", () =>
+    Effect.gen(function* () {
+      const packaged = { isPackaged: true };
+      const environment = yield* makeEnvironment(packaged);
+      const overridden = yield* makeEnvironment(packaged, { T3CODE_HOME: "/explicit-home" });
+
+      assert.equal(environment.baseDir, "/Users/alice/.t3stash");
+      assert.equal(environment.stateDir, "/Users/alice/.t3stash/userdata");
+      assert.equal(environment.branding.displayName, "t3stash");
+      assert.equal(overridden.stateDir, "/explicit-home/userdata");
+    }),
+  );
 });

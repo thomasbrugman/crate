@@ -598,6 +598,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       assert.notProperty(universal, "afterPack");
       assert.property(arm64, "afterPack");
+      assert.include(universal, {
+        appId: "com.thomasbrugman.t3stash",
+        productName: "t3stash",
+        artifactName: "t3stash-${version}-${arch}.${ext}",
+      });
 
       const { x64ArchFiles } = universal.mac as { x64ArchFiles: string };
       const modules = "Contents/Resources/app.asar.unpacked/node_modules";
@@ -1640,7 +1645,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "com.thomasbrugman.t3stash",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1663,7 +1668,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.thomasbrugman.t3stash</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
