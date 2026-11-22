@@ -111,3 +111,26 @@ it.each([1280, 390])("names each group by a heading outside it at %ipx wide", as
   }
   expect(page.getByRole("tree").query()).toBeNull();
 });
+
+it("navigates phone settings through labeled sections and dismisses search", async () => {
+  await page.viewport(390, 844);
+  await using screen = await renderNav();
+
+  const sections = page.getByRole("button", { name: "Settings sections", exact: true });
+  await sections.click();
+  await page.getByRole("menuitem", { name: "Providers", exact: true }).click();
+  await vi.waitFor(() =>
+    expect(screen.router?.state.location.pathname).toBe("/settings/providers"),
+  );
+  await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
+
+  await page.getByRole("button", { name: "Search settings", exact: true }).click();
+  const search = page.getByRole("combobox", { name: "Search settings" });
+  await expect.element(search).toHaveFocus();
+  await search.fill("theme");
+  await expect.element(page.getByRole("option", { name: /Theme/ })).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect.element(sections).toBeVisible();
+  await expect.element(search).toHaveValue("");
+  await expect.element(page.getByRole("option", { name: /Theme/ })).not.toBeInTheDocument();
+});

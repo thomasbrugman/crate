@@ -13,6 +13,7 @@ import {
   BotIcon,
   createLucideIcon,
   CalendarClockIcon,
+  ChevronDownIcon,
   FileDiffIcon,
   FolderTreeIcon,
   GitBranchIcon,
@@ -40,6 +41,7 @@ import { T, useGT, useMessages } from "gt-react";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
+import { Menu, MenuGroup, MenuGroupLabel, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import {
   SidebarContent,
   SidebarFooter,
@@ -130,6 +132,52 @@ function SettingsSectionIcon({ to }: { to: SettingsPath }) {
   return <Icon className="size-4 h-5 shrink-0 text-(--sidebar-icon-color)" />;
 }
 
+function MobileSettingsSections({
+  activePath,
+  onSelect,
+}: {
+  activePath: string;
+  onSelect: (to: SettingsPath) => void;
+}) {
+  const gt = useGT();
+  const m = useMessages();
+  const selected = SETTINGS_NAV_GROUPS.flatMap((group) => group.paths).find(
+    (to) => activePath === to || activePath.startsWith(`${to}/`),
+  );
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={gt("Settings sections")}
+        render={<Button size="xl" variant="outline" className="w-full" />}
+      >
+        {selected ? <SettingsSectionIcon to={selected} /> : <Settings2Icon />}
+        <span className="min-w-0 flex-1 truncate text-start">
+          {selected ? m(SETTINGS_SECTION_LABELS[selected]) : gt("Settings")}
+        </span>
+        <ChevronDownIcon />
+      </MenuTrigger>
+      <MenuPopup align="start" className="w-(--anchor-width)">
+        {SETTINGS_NAV_GROUPS.map((group) => (
+          <MenuGroup key={group.heading}>
+            {group.headingHidden ? null : <MenuGroupLabel>{m(group.heading)}</MenuGroupLabel>}
+            {group.paths.map((to) => (
+              <MenuItem
+                key={to}
+                density="touch"
+                aria-current={selected === to ? "page" : undefined}
+                onClick={() => onSelect(to)}
+              >
+                <SettingsSectionIcon to={to} />
+                <span className="min-w-0 truncate">{m(SETTINGS_NAV_LABELS[to])}</span>
+              </MenuItem>
+            ))}
+          </MenuGroup>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+}
+
 export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const gt = useGT();
   const m = useMessages();
@@ -139,7 +187,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  // Below md the nav is an icon rail; searching expands it over the page.
+  // Below md, search expands over the page instead of taking content width.
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(0);
   const searchableItems = useAvailableSettingsSearchItems();
@@ -255,189 +303,198 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   };
 
   return (
-    <nav
-      {...navArea}
-      role="navigation"
-      className={cn(
-        "flex w-60 shrink-0 flex-col border-e bg-sidebar text-sidebar-foreground max-md:w-14",
-        compactSearchOpen &&
-          "max-md:absolute max-md:inset-y-0 max-md:start-0 max-md:z-10 max-md:w-full",
-      )}
-    >
-      <SidebarContent className="overflow-x-hidden">
-        <SidebarGroup>
-          <div className="flex flex-col gap-2">
-            <div
-              className={cn(
-                "flex h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
-                !compactSearchOpen && "max-md:hidden",
-              )}
-            >
-              <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-              {/* Native search inputs clear on Escape even during IME composition. */}
-              <SidebarInput
-                ref={searchInputRef}
-                nativeInput
-                type="text"
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.currentTarget.value);
-                  setActiveResultIndex(0);
-                }}
-                onKeyDown={handleSearchKeyDown}
-                onFocus={() => setCompactSearchOpen(true)}
-                onBlur={() => {
-                  if (!isSearching) setCompactSearchOpen(false);
-                }}
-                placeholder={gt("Search")}
-                aria-label={gt("Search settings")}
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded={isSearching && hasResults}
-                aria-controls={isSearching && hasResults ? "settings-search-results" : undefined}
-                aria-activedescendant={
-                  isSearching && results[activeResultIndex]
-                    ? `settings-search-result-${results[activeResultIndex].id}`
-                    : undefined
-                }
-                className="min-w-0 flex-1"
-              />
-              {isSearching ? (
-                <Button
-                  type="button"
-                  size="icon-micro"
-                  variant="ghost-muted"
-                  className="shrink-0"
-                  aria-label={gt("Clear settings search")}
-                  onClick={() => {
-                    clearSearch();
-                    searchInputRef.current?.focus();
+    <>
+      <div className="flex shrink-0 items-center gap-2 border-b bg-sidebar p-2 md:hidden">
+        <div className="min-w-0 flex-1">
+          <MobileSettingsSections activePath={activePath} onSelect={handleSectionClick} />
+        </div>
+        <Button
+          size="icon-xl"
+          variant="ghost"
+          aria-label={gt("Search settings")}
+          onClick={() => setCompactSearchOpen(true)}
+        >
+          <SearchIcon />
+        </Button>
+      </div>
+      <nav
+        {...navArea}
+        role="navigation"
+        className={cn(
+          "hidden w-60 shrink-0 flex-col border-e bg-sidebar text-sidebar-foreground md:flex",
+          compactSearchOpen &&
+            "max-md:absolute max-md:inset-y-0 max-md:start-0 max-md:z-10 max-md:flex max-md:w-full",
+        )}
+      >
+        <div className="flex justify-end px-2 pt-2 md:hidden">
+          <Button
+            size="icon-xl"
+            variant="ghost"
+            aria-label={gt("Close")}
+            onClick={() => {
+              clearSearch();
+              setCompactSearchOpen(false);
+            }}
+          >
+            <XIcon />
+          </Button>
+        </div>
+        <SidebarContent className="overflow-x-hidden">
+          <SidebarGroup>
+            <div className="flex flex-col gap-2">
+              <div
+                className={cn(
+                  "flex h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+                  !compactSearchOpen && "max-md:hidden",
+                )}
+              >
+                <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
+                {/* Native search inputs clear on Escape even during IME composition. */}
+                <SidebarInput
+                  ref={searchInputRef}
+                  nativeInput
+                  type="text"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.currentTarget.value);
+                    setActiveResultIndex(0);
                   }}
-                >
-                  <XIcon className="size-3" />
-                </Button>
-              ) : (
-                <Kbd>/</Kbd>
-              )}
-            </div>
-            {isSearching && results.length === 0 ? (
-              <p
-                role="status"
-                className="px-2 py-6 text-center text-xs text-sidebar-muted-foreground"
-              >
-                <T>No settings found</T>
-              </p>
-            ) : null}
-            {isSearching ? (
-              <SidebarMenu
-                id={hasResults ? "settings-search-results" : undefined}
-                role={hasResults ? "listbox" : undefined}
-                aria-label={hasResults ? gt("Settings search results") : undefined}
-              >
-                {results.map((item, index) => (
-                  <SidebarMenuItem
-                    key={item.id}
-                    role="presentation"
-                    ref={index === activeResultIndex ? scrollResultIntoView : undefined}
+                  onKeyDown={handleSearchKeyDown}
+                  onFocus={() => setCompactSearchOpen(true)}
+                  onBlur={() => {
+                    if (!isSearching) setCompactSearchOpen(false);
+                  }}
+                  placeholder={gt("Search")}
+                  aria-label={gt("Search settings")}
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={isSearching && hasResults}
+                  aria-controls={isSearching && hasResults ? "settings-search-results" : undefined}
+                  aria-activedescendant={
+                    isSearching && results[activeResultIndex]
+                      ? `settings-search-result-${results[activeResultIndex].id}`
+                      : undefined
+                  }
+                  className="min-w-0 flex-1"
+                />
+                {isSearching ? (
+                  <Button
+                    type="button"
+                    size="icon-micro"
+                    variant="ghost-muted"
+                    className="shrink-0"
+                    aria-label={gt("Clear settings search")}
+                    onClick={() => {
+                      clearSearch();
+                      searchInputRef.current?.focus();
+                    }}
                   >
-                    <SidebarMenuButton
-                      id={`settings-search-result-${item.id}`}
-                      role="option"
-                      aria-selected={index === activeResultIndex}
-                      tabIndex={-1}
-                      size="sm"
-                      isActive={index === activeResultIndex}
-                      className="h-auto min-h-10 items-start"
-                      onMouseMove={() => setActiveResultIndex(index)}
-                      onClick={() => handleSearchResultClick(item)}
+                    <XIcon className="size-3" />
+                  </Button>
+                ) : (
+                  <Kbd>/</Kbd>
+                )}
+              </div>
+              {isSearching && results.length === 0 ? (
+                <p
+                  role="status"
+                  className="px-2 py-6 text-center text-xs text-sidebar-muted-foreground"
+                >
+                  <T>No settings found</T>
+                </p>
+              ) : null}
+              {isSearching ? (
+                <SidebarMenu
+                  id={hasResults ? "settings-search-results" : undefined}
+                  role={hasResults ? "listbox" : undefined}
+                  aria-label={hasResults ? gt("Settings search results") : undefined}
+                >
+                  {results.map((item, index) => (
+                    <SidebarMenuItem
+                      key={item.id}
+                      role="presentation"
+                      ref={index === activeResultIndex ? scrollResultIntoView : undefined}
                     >
-                      <SettingsSectionIcon to={item.to} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-sidebar-foreground">
-                          {m(item.title)}
-                        </span>
-                        <span className="block truncate text-2xs text-sidebar-muted-foreground/75">
-                          {m(SETTINGS_SECTION_LABELS[item.to])}
-                        </span>
-                      </span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {compactSearchOpen ? null : (
-                  <SidebarMenu className="md:hidden">
-                    <SidebarMenuItem>
                       <SidebarMenuButton
-                        aria-label={gt("Search settings")}
-                        onClick={() => setCompactSearchOpen(true)}
+                        id={`settings-search-result-${item.id}`}
+                        role="option"
+                        aria-selected={index === activeResultIndex}
+                        tabIndex={-1}
+                        size="sm"
+                        isActive={index === activeResultIndex}
+                        className="h-auto min-h-10 items-start"
+                        onMouseMove={() => setActiveResultIndex(index)}
+                        onClick={() => handleSearchResultClick(item)}
                       >
-                        <SearchIcon />
+                        <SettingsSectionIcon to={item.to} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-sidebar-foreground">
+                            {m(item.title)}
+                          </span>
+                          <span className="block truncate text-2xs text-sidebar-muted-foreground/75">
+                            {m(SETTINGS_SECTION_LABELS[item.to])}
+                          </span>
+                        </span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  </SidebarMenu>
-                )}
-                <div onKeyDown={handleSettingsSectionKeyDown} className="flex flex-col gap-4">
-                  {SETTINGS_NAV_GROUPS.map((group, index) => (
-                    <div
-                      key={group.heading}
-                      className="flex flex-col gap-1 max-md:border-t max-md:border-sidebar-border max-md:pt-4 max-md:first:border-t-0 max-md:first:pt-0"
-                    >
-                      <h3
-                        id={`settings-nav-group-${index}`}
-                        className={cn(
-                          "px-2 text-xs font-medium text-sidebar-muted-foreground/80",
-                          group.headingHidden ? "sr-only" : !compactSearchOpen && "max-md:sr-only",
-                        )}
-                      >
-                        {m(group.heading)}
-                      </h3>
-                      {/* The heading stays outside the group it names so NVDA does not read the name twice. */}
-                      <div role="group" aria-labelledby={`settings-nav-group-${index}`}>
-                        <SidebarMenu>
-                          {group.paths.map((to) => {
-                            const Icon = SETTINGS_SECTION_ICONS[to];
-                            const isActive = activePath === to || activePath.startsWith(`${to}/`);
-                            return (
-                              <SidebarMenuItem key={to}>
-                                <SidebarMenuButton
-                                  data-settings-section={to}
-                                  aria-current={isActive ? "page" : undefined}
-                                  isActive={isActive}
-                                  onClick={() => handleSectionClick(to)}
-                                >
-                                  <Icon />
-                                  <span
-                                    className={cn(
-                                      "truncate",
-                                      !compactSearchOpen && "max-md:sr-only",
-                                    )}
-                                  >
-                                    {m(SETTINGS_NAV_LABELS[to])}
-                                  </span>
-                                </SidebarMenuButton>
-                              </SidebarMenuItem>
-                            );
-                          })}
-                        </SidebarMenu>
-                      </div>
-                    </div>
                   ))}
+                </SidebarMenu>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div onKeyDown={handleSettingsSectionKeyDown} className="flex flex-col gap-4">
+                    {SETTINGS_NAV_GROUPS.map((group, index) => (
+                      <div
+                        key={group.heading}
+                        className="flex flex-col gap-1 max-md:border-t max-md:border-sidebar-border max-md:pt-4 max-md:first:border-t-0 max-md:first:pt-0"
+                      >
+                        <h3
+                          id={`settings-nav-group-${index}`}
+                          className={cn(
+                            "px-2 text-xs font-medium text-sidebar-muted-foreground/80",
+                            group.headingHidden && "sr-only",
+                          )}
+                        >
+                          {m(group.heading)}
+                        </h3>
+                        {/* The heading stays outside the group it names so NVDA does not read the name twice. */}
+                        <div role="group" aria-labelledby={`settings-nav-group-${index}`}>
+                          <SidebarMenu>
+                            {group.paths.map((to) => {
+                              const Icon = SETTINGS_SECTION_ICONS[to];
+                              const isActive = activePath === to || activePath.startsWith(`${to}/`);
+                              return (
+                                <SidebarMenuItem key={to}>
+                                  <SidebarMenuButton
+                                    data-settings-section={to}
+                                    aria-current={isActive ? "page" : undefined}
+                                    isActive={isActive}
+                                    onClick={() => handleSectionClick(to)}
+                                  >
+                                    <Icon />
+                                    <span className="truncate">{m(SETTINGS_NAV_LABELS[to])}</span>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              );
+                            })}
+                          </SidebarMenu>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="max-md:hidden">
-        <Suspense fallback={null}>
-          <T3ConnectSidebarSignIn />
-        </Suspense>
-        <Suspense fallback={null}>
-          <T3ConnectSidebarAvatar />
-        </Suspense>
-      </SidebarFooter>
-    </nav>
+              )}
+            </div>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="max-md:hidden">
+          <Suspense fallback={null}>
+            <T3ConnectSidebarSignIn />
+          </Suspense>
+          <Suspense fallback={null}>
+            <T3ConnectSidebarAvatar />
+          </Suspense>
+        </SidebarFooter>
+      </nav>
+    </>
   );
 }
