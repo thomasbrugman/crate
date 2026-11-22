@@ -1987,7 +1987,7 @@ export const preflightMacDesktopBuild = Effect.fn("preflightMacDesktopBuild")(fu
       ),
       lipo:
         arch === "universal"
-          ? desktopBuildProbeSucceeds(ChildProcess.make("lipo", ["-version"]), "lipo")
+          ? desktopBuildProbeSucceeds(ChildProcess.make("xcrun", ["--find", "lipo"]), "lipo")
           : Effect.succeed(true),
     },
     { concurrency: "unbounded" },
@@ -2787,8 +2787,17 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   wslRuntimeBundled = false,
   arch?: typeof BuildArch.Type,
 ) {
+  const isMacUniversal = platform === "mac" && arch === "universal";
   const buildConfig: Record<string, unknown> = {
-    afterPack: (yield* Path.Path).join(yield* RepoRoot, "scripts/prepare-server-compile-cache.cjs"),
+    // The universal merge needs matching resources, but the prepared cache differs by architecture.
+    ...(isMacUniversal
+      ? {}
+      : {
+          afterPack: (yield* Path.Path).join(
+            yield* RepoRoot,
+            "scripts/prepare-server-compile-cache.cjs",
+          ),
+        }),
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-${version}-${arch}.${ext}",
@@ -2838,6 +2847,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const repoRoot = yield* RepoRoot;
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
+      // Both staged copies include prebuilds already named for their architecture.
+      ...(isMacUniversal
+        ? {
+            x64ArchFiles:
+              "**/node_modules/**/{*darwin-*{arm64,x64}*/**,*darwin-*{arm64,x64}*.node}",
+          }
+        : {}),
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
       extendInfo: {

@@ -3,6 +3,34 @@
 T3 Code with its agent runtime in [Upstash Box](https://upstash.com/box).
 Upstream documentation is retained in [UPSTREAM.md](./UPSTREAM.md).
 
+## macOS app
+
+Download the universal ZIP from a successful [t3stash macOS build](https://github.com/thomasbrugman/t3stash/actions/workflows/t3stash-macos.yml).
+The same ZIP works on Apple Silicon and Intel Macs. Unzip it and move **T3 Code (Beta).app**
+to Applications. The app uses the upstream desktop shell, but runs the bundled t3stash
+server on your Mac and runs agents in Upstash Boxes. No local agent CLIs are needed.
+Configure Upstash Box during onboarding or in Settings → Providers.
+
+The app is not Developer ID-signed or notarized. If macOS blocks it, Control-click
+the app in Finder and choose **Open**, or try opening it once and then choose **Open Anyway**
+under **System Settings → Privacy & Security**. If Gatekeeper still blocks this trusted
+copy, remove quarantine from just the installed app and try again:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/T3 Code (Beta).app"
+```
+
+To build it yourself on a Mac with Xcode command-line tools, Rust, and the repo's
+Node.js and Vite+ versions:
+
+```sh
+vp i
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+T3CODE_DESKTOP_SIGNED=false vp run dist:desktop:artifact --platform mac --target zip --arch universal
+```
+
+The ZIP is written to `release/`.
+
 ## Status
 
 An experimental cloud-only fork of T3 Code v0.1.11. Upstash Box is the only registered
