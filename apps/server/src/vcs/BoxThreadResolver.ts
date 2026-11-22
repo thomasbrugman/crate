@@ -115,6 +115,7 @@ export const make = Effect.gen(function* () {
         nativeId: providerThread.nativeThreadRef.nativeId,
         apiKey,
         projectRoot: project.value.workspaceRoot,
+        comparisonBaseRef: context.thread.lineage.boxBaseCommit,
       };
     },
     (effect, threadId) =>
@@ -156,6 +157,7 @@ export const make = Effect.gen(function* () {
       apiKey,
       checkoutRoot,
       projectRoot,
+      comparisonBaseRef: thread.comparisonBaseRef,
     };
   });
   return {
@@ -189,6 +191,7 @@ export const make = Effect.gen(function* () {
             threadId,
             projectRoot: value.projectRoot,
             checkoutRoot: value.checkoutRoot,
+            ...(value.comparisonBaseRef ? { comparisonBaseRef: value.comparisonBaseRef } : {}),
           })),
         ),
       ),

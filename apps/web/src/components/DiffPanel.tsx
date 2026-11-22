@@ -274,7 +274,7 @@ export default function DiffPanel({
     activeThread !== null && activeThread !== undefined && activeCwd != null
       ? vcsEnvironment.status({
           environmentId: activeThread.environmentId,
-          input: { cwd: activeCwd },
+          input: { cwd: activeCwd, threadId: activeThread.id },
         })
       : null,
   );
@@ -376,6 +376,7 @@ export default function DiffPanel({
     canReadFiles && isGitSelection && activeThread && activeCwd
       ? {
           cwd: activeCwd,
+          threadId: activeThread.id,
           ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
           ...(selectedCommitSha !== null ? { commitSha: selectedCommitSha } : {}),
           ignoreWhitespace: diffIgnoreWhitespace,
@@ -412,6 +413,7 @@ export default function DiffPanel({
           environmentId: activeThread.environmentId,
           input: {
             cwd: activeCwd,
+            threadId: activeThread.id,
             ...(rememberedBaseRef ? { baseRef: rememberedBaseRef } : {}),
           },
         })
@@ -556,6 +558,7 @@ export default function DiffPanel({
       ? createGitDiffFileContentsLoader(getDiffFileContents, {
           environmentId: activeThread.environmentId,
           cwd: preview.cwd,
+          threadId: activeThread.id,
           sourceKind: selectedGitSource.kind,
           baseRef: selectedGitSource.baseRef,
           headRef: selectedGitSource.headRef,
@@ -576,6 +579,7 @@ export default function DiffPanel({
           environmentId: activeThread.environmentId,
           input: {
             cwd: branchRefsCwd,
+            threadId: activeThread.id,
             includeMatchingRemoteRefs: true,
             refKind: "local",
             ...(baseRefQuery.trim().length > 0 ? { query: baseRefQuery.trim() } : {}),
@@ -590,6 +594,7 @@ export default function DiffPanel({
           environmentId: activeThread.environmentId,
           input: {
             cwd: branchRefsCwd,
+            threadId: activeThread.id,
             includeMatchingRemoteRefs: true,
             refKind: "remote",
             ...(baseRefQuery.trim().length > 0 ? { query: baseRefQuery.trim() } : {}),

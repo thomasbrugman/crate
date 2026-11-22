@@ -42,6 +42,7 @@ export function useReviewFilePatches({
   const registry = useContext(RegistryContext);
   const scope = JSON.stringify([
     environmentId,
+    previewInput?.threadId,
     cwd,
     source?.kind,
     source?.baseRef,
@@ -199,6 +200,7 @@ function reviewFileQueries({
                 ...(previewInput ? { preview: previewInput } : {}),
                 request: {
                   cwd,
+                  ...(previewInput?.threadId ? { threadId: previewInput.threadId } : {}),
                   ...(baseRef ? { baseRef } : {}),
                   ...(source.kind === "commit" ? { commitSha: source.id } : {}),
                   ignoreWhitespace,

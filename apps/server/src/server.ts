@@ -492,7 +492,7 @@ const layerKnownWorkspaces = KnownWorkspaces.layer.pipe(
   Layer.provide(GitVcsDriver.layer),
 );
 
-const layerReview = ReviewService.cloudLayer.pipe(
+const layerReview = ReviewService.layer.pipe(
   Layer.provideMerge(layerKnownWorkspaces),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(layerVcsDriverRegistry),

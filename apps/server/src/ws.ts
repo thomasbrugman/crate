@@ -3276,9 +3276,12 @@ export const layerWsRpc = (
           ),
         [WS_METHODS.vcsInit]: (input) =>
           vcsProvisioning.initRepository(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-        [WS_METHODS.reviewGetBranchCommits]: (input) => review.getBranchCommits(input),
-        [WS_METHODS.reviewGetDiffPreview]: (input) => review.getDiffPreview(input),
-        [WS_METHODS.reviewGetDiffFileContents]: (input) => review.getDiffFileContents(input),
+        [WS_METHODS.reviewGetBranchCommits]: (input) =>
+          BoxThreadResolver.withTarget(input, review.getBranchCommits(input)),
+        [WS_METHODS.reviewGetDiffPreview]: (input) =>
+          BoxThreadResolver.withTarget(input, review.getDiffPreview(input)),
+        [WS_METHODS.reviewGetDiffFileContents]: (input) =>
+          BoxThreadResolver.withTarget(input, review.getDiffFileContents(input)),
         [WS_METHODS.terminalOpen]: (input) =>
           prepareTerminalLaunch(input).pipe(
             Effect.flatMap((launch) =>

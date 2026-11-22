@@ -2462,7 +2462,7 @@ export default function ChatView(props: ChatViewProps) {
     threadPanelPresentation,
     isServerThread,
     embedded,
-    isGitRepo: isGitRepo && !cloudThread,
+    isGitRepo,
     browserAvailable,
     canOperatePreview,
     diffOpen,
@@ -3471,6 +3471,23 @@ export default function ChatView(props: ChatViewProps) {
           </header>
         )}
 
+        <ChatBannerLane
+          environmentId={activeThread.environmentId}
+          providerStatus={visibleProviderStatus}
+          providerStatusDismissalKey={providerStatusDismissalKey}
+          onOpenProviderSetup={openProviderSetupStable}
+          threadId={activeThread.id}
+          threadError={timelineThreadError}
+          threadErrorClass={
+            threadErrorIsServerRuntimeError ? (serverRuntime?.lastErrorClass ?? null) : null
+          }
+          threadErrorCode={
+            threadErrorIsServerRuntimeError ? (serverRuntime?.lastErrorCode ?? null) : null
+          }
+          threadErrorBannerKey={threadErrorBannerKey}
+          setThreadError={setThreadError}
+          setThreadErrorBannerDismissTick={setThreadErrorBannerDismissTick}
+        />
         <div className="relative flex min-h-0 min-w-0 flex-1">
           <ThreadFindCanvas
             findOptions={{
@@ -3492,23 +3509,6 @@ export default function ChatView(props: ChatViewProps) {
           >
             <ThreadFind onClose={focusComposerStable} />
             {isWorkspaceFileDragActive ? <WorkspaceFileDropOverlay /> : null}
-            <ChatBannerLane
-              environmentId={activeThread.environmentId}
-              providerStatus={visibleProviderStatus}
-              providerStatusDismissalKey={providerStatusDismissalKey}
-              onOpenProviderSetup={openProviderSetupStable}
-              threadId={activeThread.id}
-              threadError={timelineThreadError}
-              threadErrorClass={
-                threadErrorIsServerRuntimeError ? (serverRuntime?.lastErrorClass ?? null) : null
-              }
-              threadErrorCode={
-                threadErrorIsServerRuntimeError ? (serverRuntime?.lastErrorCode ?? null) : null
-              }
-              threadErrorBannerKey={threadErrorBannerKey}
-              setThreadError={setThreadError}
-              setThreadErrorBannerDismissTick={setThreadErrorBannerDismissTick}
-            />
             <div
               {...conversationArea}
               className="relative flex min-h-0 flex-1 flex-col bg-background"
@@ -4043,7 +4043,7 @@ export default function ChatView(props: ChatViewProps) {
                     ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                     : {})}
                   onComposerFocusRequest={scheduleComposerFocusStable}
-                  {...(isServerThread && isGitRepo && !cloudThread
+                  {...(isServerThread && isGitRepo
                     ? { onOpenChanges: openChangesFromThreadPanelStable }
                     : {})}
                   projectScriptsAvailable={projectScriptsAvailable}
@@ -4139,7 +4139,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
-          diffAvailable={isServerThread && isGitRepo && !cloudThread}
+          diffAvailable={isServerThread && isGitRepo}
           cloudThread={cloudThread}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}

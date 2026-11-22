@@ -381,9 +381,7 @@ function RightPanelEmptyState(props: {
       icon: FileDiff,
       shortcut: "D",
       available: props.diffAvailable,
-      disabledReason: props.cloudThread
-        ? messages(msg("Not available in cloud threads. Ask the agent to use its Box tools."))
-        : messages(SURFACE_UNAVAILABLE_HINTS.diff),
+      disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.diff),
       onClick: props.onAddDiff,
     },
     {
@@ -1202,9 +1200,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       icon: FileDiff,
       shortcut: "D",
       available: props.diffAvailable,
-      disabledReason: props.cloudThread
-        ? messages(msg("Not available in cloud threads. Ask the agent to use its Box tools."))
-        : messages(SURFACE_DISABLED_REASONS.diff),
+      disabledReason: messages(SURFACE_DISABLED_REASONS.diff),
       onClick: props.onAddDiff,
     },
     {

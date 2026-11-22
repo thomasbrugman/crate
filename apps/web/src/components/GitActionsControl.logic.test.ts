@@ -8,6 +8,7 @@ import {
   hasUsableGitMenuContent,
   requiresDefaultBranchConfirmation,
   resolveChangesTotals,
+  resolveCommitFiles,
   resolveDefaultBranchActionDialogCopy,
   resolveFeatureBranchUnavailableReason,
   resolveLiveThreadBranchUpdate,
@@ -40,6 +41,43 @@ function pushDisabledReason(gitStatus: VcsStatusResult): string | null {
   assert.isDefined(item);
   return getMenuActionDisabledReason({ item, gitStatus, isBusy: false, hasPrimaryRemote: true });
 }
+
+it("counts untracked contents without changing selectable status paths", () => {
+  const files = [
+    { path: "tracked.ts", insertions: 2, deletions: 1 },
+    { path: "new/", insertions: 0, deletions: 0 },
+    { path: "renamed-from.ts", insertions: 0, deletions: 8 },
+    { path: "renamed-to.ts", insertions: 0, deletions: 0 },
+  ];
+  assert.deepEqual(
+    resolveCommitFiles(files, [
+      { path: "tracked.ts", previousPath: null, changeType: "change", additions: 3, deletions: 2 },
+      { path: "new/one.ts", previousPath: null, changeType: "new", additions: 1, deletions: 0 },
+      { path: "new/two.ts", previousPath: null, changeType: "new", additions: 2, deletions: 0 },
+      {
+        path: "newer/unrelated.ts",
+        previousPath: null,
+        changeType: "new",
+        additions: 9,
+        deletions: 0,
+      },
+      {
+        path: "renamed-to.ts",
+        previousPath: "renamed-from.ts",
+        changeType: "rename-changed",
+        additions: 1,
+        deletions: 1,
+      },
+    ]),
+    [
+      { path: "tracked.ts", insertions: 3, deletions: 2 },
+      { path: "new/", insertions: 3, deletions: 0 },
+      { path: "renamed-from.ts", insertions: 0, deletions: 0 },
+      { path: "renamed-to.ts", insertions: 1, deletions: 1 },
+    ],
+  );
+  assert.strictEqual(resolveCommitFiles(files, undefined), files);
+});
 
 it("offers manual commits and plain pushes, but no generated PRs, without a text generator", () => {
   for (const hasUpstream of [true, false]) {

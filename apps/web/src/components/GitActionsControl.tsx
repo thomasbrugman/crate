@@ -60,6 +60,7 @@ import {
   type DefaultBranchConfirmableAction,
   requiresDefaultBranchConfirmation,
   resolveChangesTotals,
+  resolveCommitFiles,
   resolveDefaultBranchActionDialogCopy,
   resolveFeatureBranchUnavailableReason,
   resolveGitActionProgressPresentation,
@@ -1139,6 +1140,7 @@ function CheckoutGitActionsControl({
             environmentId: activeEnvironmentId,
             input: {
               cwd: gitCwd,
+              ...(sourceControlScope.threadId ? { threadId: sourceControlScope.threadId } : {}),
               ...(changesBaseRef ? { baseRef: changesBaseRef } : {}),
               ignoreWhitespace,
               metadataOnly: true,
@@ -1161,7 +1163,28 @@ function CheckoutGitActionsControl({
       : gt("vs {ref}", { ref: resolvedChangesTotals.baseRef })
     : null;
 
-  const allFiles = gitStatusForActions?.workingTree.files ?? [];
+  const commitPreview = useEnvironmentQuery(
+    isCommitDialogOpen && canReadFiles && activeEnvironmentId !== null && gitCwd !== null
+      ? revisionedQuery(
+          reviewEnvironment.diffPreview({
+            environmentId: activeEnvironmentId,
+            input: {
+              cwd: gitCwd,
+              ...(sourceControlScope.threadId ? { threadId: sourceControlScope.threadId } : {}),
+              sourceKind: "working-tree",
+              metadataOnly: true,
+            },
+          }),
+          changesRevision,
+        )
+      : null,
+  );
+  const allFiles = resolveCommitFiles(
+    gitStatusForActions?.workingTree.files ?? [],
+    commitPreview.data?.incomplete
+      ? undefined
+      : commitPreview.data?.sources.find((source) => source.kind === "working-tree")?.files,
+  );
   // Changed-file paths are repository-relative, so they must resolve against
   // the worktree root from the same status snapshot, not the project cwd.
   const workingTreeRoot = gitStatusForActions?.workingTree.rootPath ?? null;

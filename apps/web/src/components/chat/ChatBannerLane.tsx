@@ -41,8 +41,9 @@ export function ChatBannerLane(props: {
     setThreadError,
     setThreadErrorBannerDismissTick,
   } = props;
+  if (providerStatus === null && !threadError) return null;
   return (
-    <div className="chat-banner-lane pointer-events-none absolute top-0 z-30 flex flex-col">
+    <div className="chat-composer-lane relative z-30 flex max-h-1/3 shrink-0 flex-col overflow-y-auto pb-3">
       <ProviderStatusBanner
         environmentId={props.environmentId}
         status={providerStatus}

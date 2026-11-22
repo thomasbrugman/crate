@@ -123,6 +123,8 @@ it.effect("prepares and partially commits in Box without host filesystem or proc
   Effect.gen(function* () {
     const cwd = yield* makeTmpDir();
     yield* initRepoWithCommit(cwd);
+    const baseCommit = yield* git(cwd, ["rev-parse", "HEAD"]);
+    yield* git(cwd, ["checkout", "--detach"]);
     yield* writeTextFile(cwd, "selected.txt", "selected content\n");
     yield* writeTextFile(cwd, "other.txt", "leave uncommitted\n");
     const commands: string[] = [];
@@ -161,11 +163,28 @@ it.effect("prepares and partially commits in Box without host filesystem or proc
       });
       const status = yield* driver.statusDetailsLocal("/host/shared");
       assert.isTrue(status.hasWorkingTreeChanges);
+      const preview = yield* driver.getReviewDiffPreview({ cwd: "/host/shared" });
+      assert.deepEqual(
+        preview.sources
+          .find((source) => source.kind === "branch-range")
+          ?.files?.map((file) => file.path),
+        ["other.txt", "selected.txt"],
+      );
+      const history = yield* driver.getReviewBranchCommits({ cwd: "/host/shared" });
+      assert.equal(history.commits.length, 1);
+      const explicit = yield* driver.getReviewDiffPreview({ cwd: "/host/shared", baseRef: "HEAD" });
+      assert.deepEqual(
+        explicit.sources
+          .find((source) => source.kind === "branch-range")
+          ?.files?.map((file) => file.path),
+        ["other.txt"],
+      );
     }).pipe(
       Effect.provideService(VcsThreadTarget.VcsThreadTarget, {
         threadId: ThreadId.make("box-partial"),
         projectRoot: "/host/shared",
         checkoutRoot: cwd,
+        comparisonBaseRef: baseCommit,
       }),
       Effect.provideService(BoxExec.BoxExec, fake),
       Effect.provideService(FileSystem.FileSystem, hostFileSystem),
