@@ -74,6 +74,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import type {
+  Browser,
   BrowserContext,
   CDPSession,
   Dialog,
@@ -597,6 +598,22 @@ const make = Effect.gen(function* () {
   const launchersDir = NodePath.join(config.stateDir, "server-browser", "launchers");
 
   const tabs = new Map<string, ServerTab>();
+  const boxProfiles = new WeakMap<Browser, Map<string, Promise<BrowserContext>>>();
+  const boxProfileContext = (browser: Browser, profileId: string) => {
+    let profiles = boxProfiles.get(browser);
+    if (profiles === undefined) {
+      profiles = new Map();
+      boxProfiles.set(browser, profiles);
+    }
+    const existing = profiles.get(profileId);
+    if (existing !== undefined) return existing;
+    const cache = profiles;
+    const evict = () => cache.delete(profileId);
+    const pending = browser.newContext();
+    cache.set(profileId, pending);
+    void pending.then((context) => context.once("close", evict), evict);
+    return pending;
+  };
   const pendingTabs = new Map<
     string,
     { readonly agentId: string | null; promise?: Promise<ServerTab> }
@@ -1133,17 +1150,19 @@ const make = Effect.gen(function* () {
     const isolatedContext =
       adopted === undefined &&
       desktop === null &&
-      (managed !== undefined ||
-        (snapshot.automationOwner !== undefined && snapshot.profileId === undefined) ||
+      ((snapshot.automationOwner !== undefined && snapshot.profileId === undefined) ||
         snapshot.profileId === INCOGNITO_BROWSER_PROFILE_ID);
     const context =
       adopted?.page.context() ??
       desktop?.page.context() ??
-      (await managed?.newContext()) ??
-      (await contexts.contextFor(
-        snapshot.profileId ?? "default",
-        isolatedContext ? tabKey(snapshot.threadId, snapshot.tabId) : undefined,
-      ));
+      (await (managed
+        ? isolatedContext
+          ? managed.newContext()
+          : boxProfileContext(managed, snapshot.profileId ?? "default")
+        : contexts.contextFor(
+            snapshot.profileId ?? "default",
+            isolatedContext ? tabKey(snapshot.threadId, snapshot.tabId) : undefined,
+          )));
     if (isolatedContext) opened.push(() => context.close());
     if (adopted?.page.isClosed()) throw new Error("The popup closed before it opened.");
     if (!desktop) await prepareContext(context);

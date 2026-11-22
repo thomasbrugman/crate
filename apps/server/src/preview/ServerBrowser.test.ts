@@ -293,6 +293,7 @@ function makeContext(onClose?: (context: BrowserContext) => void, initialUrl = "
     page,
     sessions,
     cssViewport,
+    once: (name: string, callback: () => void) => events.once(`context:${name}`, callback),
     newPage: async () => page as unknown as Page,
     grantPermissions: vi.fn(async () => {}),
     newCDPSession: async (target: unknown) => {
@@ -307,6 +308,7 @@ function makeContext(onClose?: (context: BrowserContext) => void, initialUrl = "
     close: vi.fn(async () => {
       if (contextClosed) return;
       contextClosed = true;
+      events.emit("context:close");
       context.closing.resolve();
       await page.close();
       onClose?.(context as unknown as BrowserContext);
@@ -563,6 +565,41 @@ const viewerInput = (tabId: string, canOperate: boolean) => ({
   maxWidth: 1280,
   maxHeight: 800,
   quality: 70,
+});
+
+it.effect("shares a Box profile's context without closing it when a tab closes", () => {
+  const remote = makeContext();
+  const other = makeContext();
+  other.page.context = () => remote;
+  const newSession = remote.newCDPSession;
+  remote.newCDPSession = (target) =>
+    target === other.page ? other.newCDPSession(target) : newSession(target);
+  remote.newPage = vi.fn().mockResolvedValueOnce(remote.page).mockResolvedValueOnce(other.page);
+  const newContext = vi.fn(async () => remote as unknown as BrowserContext);
+  const browser = { newContext, isConnected: () => true } as unknown as Browser;
+  Object.assign(remote, { browser: () => browser });
+  const managed = Layer.succeed(BoxBrowser, {
+    connect: () => Effect.succeed(browser),
+  });
+  return Effect.gen(function* () {
+    const server = yield* ServerBrowser.ServerBrowser;
+    const manager = yield* Manager.PreviewManager;
+    const threadId = scope.thread.threadId;
+    const first = yield* manager.open({ threadId, profileId: "default" });
+    yield* server.attachViewer(viewerInput(first.tabId, true));
+    const second = yield* manager.open({ threadId, profileId: "default" });
+    yield* server.attachViewer(viewerInput(second.tabId, true));
+    expect(newContext).toHaveBeenCalledTimes(1);
+    yield* manager.close({ threadId, tabId: first.tabId });
+    expect(remote.page.close).toHaveBeenCalled();
+    expect(remote.close).not.toHaveBeenCalled();
+    expect(other.page.close).not.toHaveBeenCalled();
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      ServerBrowser.layer.pipe(Layer.provideMerge(dependencies), Layer.provideMerge(managed)),
+    ),
+  );
 });
 
 it.effect("opens and streams an agent tab in the Box rather than host Chromium", () => {
