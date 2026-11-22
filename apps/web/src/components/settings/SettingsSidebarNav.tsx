@@ -246,6 +246,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   }, [compactSearchOpen]);
 
   const handleSectionClick = (to: SettingsPath) => {
+    setCompactSearchOpen(false);
     void navigate({
       to,
       hash: "",
@@ -361,9 +362,6 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                   }}
                   onKeyDown={handleSearchKeyDown}
                   onFocus={() => setCompactSearchOpen(true)}
-                  onBlur={() => {
-                    if (!isSearching) setCompactSearchOpen(false);
-                  }}
                   placeholder={gt("Search")}
                   aria-label={gt("Search settings")}
                   role="combobox"

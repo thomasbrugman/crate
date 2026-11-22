@@ -1,5 +1,6 @@
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
+import "~/index.css";
 
 import { act, render } from "../../../test/render";
 import { SidebarProvider } from "../ui/sidebar";
@@ -13,6 +14,7 @@ vi.mock("./useAvailableSettingsSearchItems", () => ({
 }));
 
 it("ignores composing keys in the search", async () => {
+  await page.viewport(1280, 800);
   await using screen = await render(
     <SidebarProvider defaultOpen>
       <SettingsSidebarNav pathname="/settings/general" />
@@ -54,6 +56,7 @@ function renderNav() {
 }
 
 it("opens search from the physical Slash and F keys on non-US layouts", async () => {
+  await page.viewport(1280, 800);
   await using _screen = await renderNav();
   const search = page.getByRole("combobox", { name: "Search settings" });
 
@@ -89,8 +92,8 @@ it("moves Tab through every settings section", async () => {
   expect(tabbed).toEqual(sections);
 });
 
-it.each([1280, 390])("names each group by a heading outside it at %ipx wide", async (width) => {
-  await page.viewport(width, 800);
+it("names each sidebar group by a heading outside it", async () => {
+  await page.viewport(1280, 800);
   await using _screen = await renderNav();
 
   for (const name of ["Agents", "Code", "Connections"]) {
@@ -127,10 +130,17 @@ it("navigates phone settings through labeled sections and dismisses search", asy
   await page.getByRole("button", { name: "Search settings", exact: true }).click();
   const search = page.getByRole("combobox", { name: "Search settings" });
   await expect.element(search).toHaveFocus();
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await vi.waitFor(() =>
+    expect(screen.router?.state.location.pathname).toBe("/settings/appearance"),
+  );
+  await page.getByRole("button", { name: "Search settings", exact: true }).click();
   await search.fill("theme");
   await expect.element(page.getByRole("option", { name: /Theme/ })).toBeVisible();
+  const searchInput = search.element();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect.element(sections).toBeVisible();
-  await expect.element(search).toHaveValue("");
+  await expect.element(searchInput).toHaveValue("");
   await expect.element(page.getByRole("option", { name: /Theme/ })).not.toBeInTheDocument();
+  await expect.element(searchInput).not.toBeVisible();
 });
