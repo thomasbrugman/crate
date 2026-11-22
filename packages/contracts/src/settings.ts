@@ -983,6 +983,9 @@ export const UpstashBoxEnvironmentSettings = Schema.Struct({
     secretSetting,
   ),
   templateBoxName: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("cc-harness"))),
+  snapshotNames: Schema.Record(Schema.String, TrimmedString).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   size: UpstashBoxSize.pipe(Schema.withDecodingDefault(Effect.succeed("small" as const))),
 });
 export type UpstashBoxEnvironmentSettings = typeof UpstashBoxEnvironmentSettings.Type;
@@ -2021,6 +2024,7 @@ export const ServerSettingsPatch = Schema.Struct({
       claudeCodeAuth: Schema.optionalKey(SettingsSecretValue),
       codexAuth: Schema.optionalKey(SettingsSecretValue),
       templateBoxName: Schema.optionalKey(TrimmedString),
+      snapshotNames: Schema.optionalKey(Schema.Record(Schema.String, TrimmedString)),
       size: Schema.optionalKey(UpstashBoxSize),
     }),
   ),

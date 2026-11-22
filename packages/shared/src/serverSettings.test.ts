@@ -91,6 +91,26 @@ describe("fallbackTextGenerationModelSelection", () => {
 });
 
 describe("serverSettings helpers", () => {
+  it("keeps other snapshot names when a project names or resets one snapshot", () => {
+    const named = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      upstashBox: { snapshotNames: { first: "Frontend dependencies", second: "Backend ready" } },
+    });
+    const renamed = applyServerSettingsPatch(named, {
+      upstashBox: { snapshotNames: { first: "Frontend ready" } },
+    });
+    expect(renamed.upstashBox.snapshotNames).toEqual({
+      first: "Frontend ready",
+      second: "Backend ready",
+    });
+    const reset = applyServerSettingsPatch(renamed, {
+      upstashBox: { snapshotNames: { first: "" } },
+    });
+    expect(reset.upstashBox.snapshotNames).toEqual({ first: "", second: "Backend ready" });
+    expect(decodeServerSettings({ upstashBox: { apiKey: "" } }).upstashBox.snapshotNames).toEqual(
+      {},
+    );
+  });
+
   it("translates a shipped client's idle compaction switch into a mode", () => {
     const off = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, { idleCompaction: "off" });
     expect([off.idleCompaction, off.compactIdleThreads]).toEqual(["off", false]);

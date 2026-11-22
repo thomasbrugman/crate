@@ -83,6 +83,9 @@ describe("RPC authorization scopes", () => {
 
   it("still lets readers load settings the way installed Swift clients ask", () => {
     expect(requiredScopeForRpcMethod("server.getSettings")).toBe(AuthOrchestrationReadScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.serverListBoxSnapshots)).toBe(
+      AuthSettingsWriteScope,
+    );
   });
 
   it("rejects unknown RPC method names", () => {

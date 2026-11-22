@@ -154,6 +154,7 @@ export class BoxApi extends Context.Service<
     readonly create: (config: BoxConfig) => Promise<BoxHandle>;
     readonly restore?: (snapshotId: string, config: BoxConfig) => Promise<BoxHandle>;
     readonly list: (apiKey: string) => Promise<unknown>;
+    readonly listSnapshots?: (apiKey: string) => Promise<unknown>;
     /** The HTTP status the model provider answers a cheap authenticated request with. */
     readonly checkModelKey: (harness: ManagedAgentHarness, apiKey: string) => Promise<number>;
   }
@@ -275,6 +276,16 @@ export const layer = Layer.succeed(BoxApi, {
   restore: async (snapshotId, config) => projectBox(await Box.fromSnapshot(snapshotId, config)),
   list: async (apiKey) => {
     await Box.list({ apiKey });
+  },
+  listSnapshots: async (apiKey) => {
+    // The SDK only lists a living Box's snapshots; the account endpoint includes deleted sources.
+    // @effect-diagnostics-next-line globalFetch:off - This service is the Promise boundary the Box SDK already uses.
+    const response = await fetch("https://us-east-1.box.upstash.com/v2/box/snapshots", {
+      headers: { authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error("Box snapshots unavailable.");
+    return response.json();
   },
   checkModelKey: async (harness, apiKey) => {
     // @effect-diagnostics-next-line globalFetch:off - This service is the Promise boundary the Box SDK already uses.
