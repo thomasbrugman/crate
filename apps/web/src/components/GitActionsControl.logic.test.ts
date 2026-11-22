@@ -46,7 +46,8 @@ it("counts untracked contents without changing selectable status paths", () => {
   const files = [
     { path: "tracked.ts", insertions: 2, deletions: 1 },
     { path: "new/", insertions: 0, deletions: 0 },
-    { path: "renamed-from.ts", insertions: 0, deletions: 0 },
+    { path: "renamed-from.ts", insertions: 0, deletions: 8 },
+    { path: "renamed-to.ts", insertions: 0, deletions: 0 },
   ];
   assert.deepEqual(
     resolveCommitFiles(files, [
@@ -60,11 +61,19 @@ it("counts untracked contents without changing selectable status paths", () => {
         additions: 9,
         deletions: 0,
       },
+      {
+        path: "renamed-to.ts",
+        previousPath: "renamed-from.ts",
+        changeType: "rename",
+        additions: 1,
+        deletions: 1,
+      },
     ]),
     [
       { path: "tracked.ts", insertions: 3, deletions: 2 },
       { path: "new/", insertions: 3, deletions: 0 },
       { path: "renamed-from.ts", insertions: 0, deletions: 0 },
+      { path: "renamed-to.ts", insertions: 1, deletions: 1 },
     ],
   );
   assert.strictEqual(resolveCommitFiles(files, undefined), files);

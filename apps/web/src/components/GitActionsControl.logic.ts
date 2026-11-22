@@ -670,7 +670,10 @@ export function resolveCommitFiles(
       });
     }
   }
-  return files.map((file) => ({ ...file, ...totals.get(file.path) }));
+  return files.map((file) => ({
+    path: file.path,
+    ...(totals.get(file.path) ?? { insertions: 0, deletions: 0 }),
+  }));
 }
 
 // `branchChanges ?? workingTree` treats `{0,0}` as present, so a zero branch total hid a dirty
