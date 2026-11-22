@@ -12,14 +12,15 @@
 
 .scene {
   font-family: Arial, Helvetica, sans-serif;
-  color: #f5f5f5;
-  background: #0a0a0b;
+  color: #f1eee5;
+  background-color: #181815;
+  background-image: repeating-linear-gradient(0deg, #fff0 0 4px, #ffffff05 4px 5px);
 }
 
 .window {
   position: absolute;
-  left: 160px;
-  top: 286px;
+  left: 92px;
+  top: 346px;
   width: 1600px;
   height: 720px;
   border: 1px solid #373739;
@@ -27,7 +28,7 @@
   overflow: hidden;
   background: var(--background);
   box-shadow: 0 36px 100px #0009;
-  transform-origin: 20% 40%;
+  transform-origin: top left;
 }
 
 .toolbar {
@@ -68,10 +69,233 @@
 }
 .beat {
   position: absolute;
-  top: 112px;
-  left: 160px;
+  top: 183px;
+  left: 92px;
   font-size: 76px;
   font-weight: 600;
   letter-spacing: -3px;
   line-height: 1.12;
+}
+
+.jam-header,
+.dispatch-header,
+.dispatch-footer,
+.printer-title,
+.printer-status,
+.thermal-label header,
+.dispatch-kicker,
+.dispatch-dock > span {
+  font:
+    22px/1.2 "Courier New",
+    monospace;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.jam-header,
+.dispatch-header,
+.dispatch-footer {
+  position: absolute;
+  left: 92px;
+  right: 92px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.jam-header,
+.dispatch-header {
+  top: 67px;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 20px;
+}
+
+.jam-header {
+  color: #e2a381;
+}
+
+.printer {
+  position: absolute;
+  top: 297px;
+  left: 1280px;
+  width: 548px;
+  height: 636px;
+  background: #282822;
+  border: 1px solid #48473e;
+}
+
+.printer-title,
+.printer-status {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 66px;
+  left: 0;
+  right: 0;
+  padding: 0 26px;
+  background: #282822;
+  font-size: 18px;
+}
+
+.printer-title {
+  top: 0;
+}
+
+.printer-status {
+  bottom: 0;
+  justify-content: flex-start;
+  gap: 14px;
+  border-top: 1px solid #48473e;
+}
+
+.printer-status i {
+  width: 10px;
+  height: 10px;
+  background: #84ac6d;
+  border-radius: 50%;
+}
+
+.printer-error {
+  color: #fd754d;
+}
+
+.printer-error i {
+  background: currentColor;
+  box-shadow: 0 0 16px #fd754d70;
+}
+
+.printer-tray {
+  position: absolute;
+  inset: 65px 25px 66px;
+  background: #141412;
+  box-shadow: inset 0 8px 26px #000a;
+  overflow: hidden;
+}
+
+.printer-slot {
+  position: absolute;
+  z-index: 8;
+  inset: 0 0 auto;
+  height: 17px;
+  background: #080808;
+  border-bottom: 3px solid #515048;
+}
+
+.printed {
+  position: absolute;
+  top: 15px;
+  left: 58px;
+  transform-origin: top left;
+}
+
+.thermal-label {
+  width: 312px;
+  height: 131px;
+  padding: 12px 14px;
+  background-color: #f1eee5;
+  background-image: repeating-linear-gradient(0deg, #0000 0 3px, #0000000e 3px 4px);
+  border: 1px solid #0004;
+  box-shadow: 0 10px 14px #0003;
+  color: #181815;
+}
+
+.printed .thermal-label {
+  scale: 1.14;
+  transform-origin: top left;
+}
+
+.thermal-label.priority-label {
+  background-color: #ff7849;
+}
+
+.thermal-label header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px dashed #181815;
+  padding-bottom: 6px;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.thermal-label strong {
+  display: block;
+  margin: 8px 0 5px;
+  font-size: 28px;
+  line-height: 1.05;
+}
+
+.thermal-code {
+  display: flex;
+  height: 30px;
+  align-items: stretch;
+  gap: 3px;
+}
+
+.thermal-code span {
+  margin-left: auto;
+  font:
+    28px/1 Arial,
+    Helvetica,
+    sans-serif;
+}
+
+.dispatch {
+  z-index: 20;
+  color: #181815;
+  background-color: #ff7849;
+  background-image: repeating-linear-gradient(0deg, #0000 0 4px, #0000000b 4px 5px);
+}
+
+.dispatch-copy {
+  position: absolute;
+  top: 270px;
+  left: 92px;
+}
+
+.dispatch-copy strong {
+  display: block;
+  font-size: 180px;
+  line-height: 1;
+  letter-spacing: -12px;
+}
+
+.dispatch-copy p {
+  font-size: 66px;
+  line-height: 1.02;
+  letter-spacing: -3px;
+  margin-top: 25px;
+}
+
+.dispatch-rack {
+  position: absolute;
+  width: 648px;
+  top: 215px;
+  right: 92px;
+  display: grid;
+  gap: 14px;
+}
+
+.dispatch-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  min-height: 188px;
+  background: #181815;
+  padding: 18px 30px;
+  border: 1px solid #181815;
+  color: #f1eee5;
+}
+
+.dispatch-footer {
+  bottom: 61px;
+  border-top: 1px solid currentColor;
+  align-items: center;
+  padding-top: 12px;
+}
+
+.dispatch-footer span:last-child {
+  font-size: 36px;
 }
