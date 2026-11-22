@@ -1139,6 +1139,7 @@ function CheckoutGitActionsControl({
             environmentId: activeEnvironmentId,
             input: {
               cwd: gitCwd,
+              ...(sourceControlScope.threadId ? { threadId: sourceControlScope.threadId } : {}),
               ...(changesBaseRef ? { baseRef: changesBaseRef } : {}),
               ignoreWhitespace,
               metadataOnly: true,
