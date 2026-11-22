@@ -795,7 +795,7 @@ function ManagedCodexSetup({
             </summary>
             <Button className="mt-2" size="sm" variant="outline" render={<a href={handoffUrl} />}>
               {desktopHandoff.macInstallUrl ? (
-                <T>Open in desktop app</T>
+                gt("Open in desktop app")
               ) : (
                 <T>Use T3 desktop for automatic return</T>
               )}
