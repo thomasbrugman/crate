@@ -1,4 +1,10 @@
-import { settingsSecretLiteral, type UpstashBoxEnvironmentSettings } from "@t3tools/contracts";
+import {
+  isSecretReference,
+  type SecretReference,
+  type SettingsSecretValue,
+  type UpstashBoxEnvironmentSettings,
+} from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
 
 import type { BoxHarness } from "../harnesses.ts";
 
@@ -11,12 +17,23 @@ export const BOX_HARNESS_AUTH_FIELDS = {
   codex: "codexAuth",
 } as const;
 
-export function readHarnessCredentials(box: UpstashBoxEnvironmentSettings): BoxHarnessCredentials {
-  return {
-    commandCode: settingsSecretLiteral(box.commandCodeAuth),
-    claudeCode: settingsSecretLiteral(box.claudeCodeAuth),
-    codex: settingsSecretLiteral(box.codexAuth),
-  };
+export function readBoxSecret(
+  value: SettingsSecretValue,
+  resolve?: (reference: SecretReference) => Effect.Effect<string | undefined>,
+): Effect.Effect<string> {
+  if (!isSecretReference(value)) return Effect.succeed(value);
+  return resolve?.(value).pipe(Effect.map((value) => value ?? "")) ?? Effect.succeed("");
+}
+
+export function readHarnessCredentials(
+  box: UpstashBoxEnvironmentSettings,
+  resolve?: (reference: SecretReference) => Effect.Effect<string | undefined>,
+): Effect.Effect<BoxHarnessCredentials> {
+  return Effect.all({
+    commandCode: readBoxSecret(box.commandCodeAuth, resolve),
+    claudeCode: readBoxSecret(box.claudeCodeAuth, resolve),
+    codex: readBoxSecret(box.codexAuth, resolve),
+  });
 }
 
 export function isAuthJson(value: string): boolean {

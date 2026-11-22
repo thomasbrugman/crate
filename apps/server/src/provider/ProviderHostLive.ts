@@ -1,5 +1,6 @@
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { ProviderCredentialError } from "@t3tools/provider-core/server/errors";
+import { SecretResolver } from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -24,6 +25,7 @@ export const layer = Layer.effect(
     const serverSettings = yield* ServerSettings.ServerSettingsService;
     const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
     const secrets = yield* ServerSecretStore.ServerSecretStore;
+    const secretResolver = yield* Effect.serviceOption(SecretResolver);
     const digest = yield* Digest.Digest;
     const fileSystem = yield* FileSystem.FileSystem;
     // Optional so standalone provider layers in tests probe at once.
@@ -52,6 +54,13 @@ export const layer = Layer.effect(
       settings: {
         get: serverSettings.getSettings,
         update: serverSettings.updateSettings,
+        ...Option.match(secretResolver, {
+          onNone: () => ({}),
+          onSome: (resolver) => ({
+            resolveSecret: (reference) =>
+              resolver.read([reference]).pipe(Effect.map(([value]) => value)),
+          }),
+        }),
         withSnapshot: serverSettings.withSettingsSnapshot,
         changes: serverSettings.streamChanges,
         subscribe: serverSettings.subscribeChanges,

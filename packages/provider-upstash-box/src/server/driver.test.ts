@@ -1,10 +1,32 @@
 import { assert, it } from "@effect/vitest";
+import { DEFAULT_SERVER_SETTINGS, SecretProviderId } from "@t3tools/contracts";
 import { BoxError } from "@upstash/box";
 import * as Effect from "effect/Effect";
 
 import type { BoxHarness } from "../harnesses.ts";
 import { BoxApi } from "./BoxApi.ts";
+import { readHarnessCredentials } from "./credentials.ts";
 import { probe } from "./driver.ts";
+
+it.effect("resolves vault-backed harness credentials alongside pasted ones", () =>
+  Effect.gen(function* () {
+    const provider = SecretProviderId.make("vault");
+    const credentials = yield* readHarnessCredentials(
+      {
+        ...DEFAULT_SERVER_SETTINGS.upstashBox,
+        commandCodeAuth: "fixture-key",
+        claudeCodeAuth: { provider, reference: "op://fixture/claude" },
+        codexAuth: { provider, reference: "op://fixture/missing" },
+      },
+      (ref) => Effect.succeed(ref.reference.endsWith("/claude") ? "fixture-oauth" : undefined),
+    );
+    assert.deepEqual(credentials, {
+      commandCode: "fixture-key",
+      claudeCode: "fixture-oauth",
+      codex: "",
+    });
+  }),
+);
 
 it.effect("reports whether the Box key and the harness's model key can start a run", () =>
   Effect.gen(function* () {

@@ -34,7 +34,7 @@ import {
   type ManagedAgentHarness,
 } from "./BoxApi.ts";
 import { boxHarnessModels } from "./models.ts";
-import { harnessCredentialKind, readHarnessCredentials } from "./credentials.ts";
+import { harnessCredentialKind, readBoxSecret, readHarnessCredentials } from "./credentials.ts";
 
 const MODEL_VENDORS = { claudeCode: "Anthropic", codex: "OpenAI" } as const;
 
@@ -156,15 +156,20 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         input.environment.find((entry) => entry.name === "UPSTASH_BOX_API_KEY")?.value ??
         inheritedKey;
       // The Box is the thread's environment: its settings belong to the server, not this provider.
-      const boxEnvironment = (box: typeof DEFAULT_SERVER_SETTINGS.upstashBox) => ({
-        apiKey: settingsSecretLiteral(box.apiKey) || envKey,
-        templateBoxName: box.templateBoxName,
-        size: box.size,
-        credentials: readHarnessCredentials(box),
+      const boxEnvironment = Effect.fn("UpstashBox.readEnvironment")(function* (
+        box: typeof DEFAULT_SERVER_SETTINGS.upstashBox,
+      ) {
+        const key = yield* readBoxSecret(box.apiKey, host.settings.resolveSecret);
+        return {
+          apiKey: box.apiKey === "" ? envKey : key,
+          templateBoxName: box.templateBoxName,
+          size: box.size,
+          credentials: yield* readHarnessCredentials(box, host.settings.resolveSecret),
+        };
       });
       const environment: Effect.Effect<BoxEnvironmentConfig> = host.settings.get.pipe(
-        Effect.map((settings) => boxEnvironment(settings.upstashBox)),
-        Effect.orElseSucceed(() => boxEnvironment(DEFAULT_SERVER_SETTINGS.upstashBox)),
+        Effect.orElseSucceed(() => DEFAULT_SERVER_SETTINGS),
+        Effect.flatMap((settings) => boxEnvironment(settings.upstashBox)),
       );
       const continuationIdentity = defaultProviderContinuationIdentity({ driverKind, instanceId });
       const agent = {
@@ -213,7 +218,9 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
       const snapshot = yield* makeManagedServerProvider({
         getSettings: environment.pipe(Effect.map(toProbeSettings)),
         streamSettings: host.settings.changes.pipe(
-          Stream.map((settings) => toProbeSettings(boxEnvironment(settings.upstashBox))),
+          Stream.mapEffect((settings) =>
+            boxEnvironment(settings.upstashBox).pipe(Effect.map(toProbeSettings)),
+          ),
         ),
         haveSettingsChanged: (previous, next) => !Equal.equals(previous, next),
         initialSnapshot: () => base,
