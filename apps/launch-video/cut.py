@@ -259,6 +259,10 @@ def still(image, output, length):
     )
 
 
+def easing(t, seconds):
+    return f"(1-cos(PI*clip(({t})/{seconds},0,1)))/2"
+
+
 def footage(shot, inputs, plate, output, *, delivered=False):
     path = inputs / shot.file
     frames = round(shot.length * FPS)
@@ -273,14 +277,16 @@ def footage(shot, inputs, plate, output, *, delivered=False):
         width, height = 1440, 810
     scale = min(SCREEN[0] / width, SCREEN[1] / height)
     width, height = (2 * round(d * scale / 2) for d in (width, height))
+    arrival = easing("t", 0.55)
+    departure = easing(f"t-{shot.length - 0.24}", 0.24)
     graph = (
         f"[0:v]setpts=(PTS-STARTPTS)/{shot.speed},fps={FPS},{crop}"
         f"tpad=stop_mode=clone:stop_duration={shot.length},"
         f"scale={width * 2}:{height * 2},"
-        f"zoompan=z='1+0.065*(1-cos(PI*min(on/{frames - 1},1)))/2':"
+        f"zoompan=z='1+0.10*(1-cos(PI*min(on/{frames - 1},1)))/2':"
         f"x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=1:s={width}x{height}:fps={FPS},"
         "setsar=1,drawbox=c=0xa7a293:w=iw:h=ih:t=2[screen];"
-        "[1:v][screen]overlay=(W-w)/2:589-h/2"
+        f"[1:v][screen]overlay=x='(W-w)/2+96*(1-{arrival})-64*{departure}':y=589-h/2"
     )
     stamp_input = []
     if delivered:
@@ -327,36 +333,41 @@ def parallel(inputs, plate, output):
     card = dispatch_card(
         "04 / IN TRANSIT", "Three jobs. Three separate Boxes.", dark=True
     )
-    draw = ImageDraw.Draw(card)
     args = ["-loop", "1", "-framerate", FPS, "-i", plate]
     graph = []
+    row_width, row_height = 1736, 222
     for i, (name, start, label) in enumerate(PARALLEL):
-        delay = i * 0.48
-        x, y = 619, 229 + i * 242
+        delay = i * 38 / FPS
+        y = 229 + i * 242
+        row = Image.new("RGB", (row_width, row_height), "#282822")
+        draw = ImageDraw.Draw(row)
         draw.rectangle(
-            (92, y, 1828, y + 221), fill="#282822", outline="#625b4e", width=2
+            (0, 0, row_width - 1, row_height - 1), outline="#625b4e", width=2
         )
-        waybill(draw, 132, y + 50, f"TS-{i + 1:03}", label, ORANGE if i == 0 else PAPER)
-        draw.text((522, y + 108), "→", anchor="mm", font=font(52, "bold"), fill=PAPER)
+        waybill(draw, 40, 50, f"TS-{i + 1:03}", label, ORANGE if i == 0 else PAPER)
+        draw.text((430, 108), "→", anchor="mm", font=font(52, "bold"), fill=PAPER)
         draw.text(
-            (1720, y + 109),
+            (1628, 109),
             f"BOX 0{i + 1}",
             anchor="mm",
             font=font(23, "mono"),
             fill=ORANGE if i == 0 else PAPER,
         )
+        row_path = plate.with_name(f"dock-{i}.png")
+        row.save(row_path)
+        args += ["-loop", "1", "-framerate", FPS, "-i", row_path]
         args += ["-ss", start, "-i", inputs / name]
         graph.append(
-            f"[{i + 1}:v]crop=1116:284:252:62,scale=856:218,fps={FPS},setsar=1,"
+            f"[{2 * i + 2}:v]crop=1116:284:252:62,scale=856:218,fps={FPS},setsar=1,"
             "drawbox=c=0xc9c7c2:w=iw:h=ih:t=2,"
-            f"tpad=stop_mode=clone:stop_duration={PARALLEL_LENGTH},"
-            f"setpts=PTS-STARTPTS+{delay}/TB[clip{i}]"
+            f"tpad=stop_mode=clone:stop_duration={PARALLEL_LENGTH}[clip{i}];"
+            f"[{2 * i + 1}:v][clip{i}]overlay=527:2:shortest=1,"
+            f"setpts=PTS+{delay}/TB[dock{i}]"
         )
         base = "0:v" if i == 0 else f"row{i - 1}"
         graph.append(
-            f"[{base}][clip{i}]overlay="
-            f"x='{x}+84*pow(max(0,1-(t-{delay})/0.38),3)':"
-            f"y={y + 2}:enable='gte(t,{delay})'[row{i}]"
+            f"[{base}][dock{i}]overlay=x='92+552*(1-{easing(f't-{delay}', 0.71)})':"
+            f"y={y}:enable='gte(t,{delay})'[row{i}]"
         )
     card.save(plate)
     ffmpeg(
@@ -393,10 +404,13 @@ def phone_handoff(inputs, plate, output):
         font=font(32),
         fill=MUTED,
     )
-    draw.rounded_rectangle(
-        (x - 14, y - 14, x + width + 13, y + height + 13), radius=40, fill="#252525"
-    )
     card.save(plate)
+    bezel = Image.new("RGBA", (width + 28, height + 28))
+    ImageDraw.Draw(bezel).rounded_rectangle(
+        (0, 0, width + 27, height + 27), radius=40, fill="#252525"
+    )
+    bezel_path = plate.with_name("phone-bezel.png")
+    bezel.save(bezel_path)
     mask = Image.new("L", (width, height))
     ImageDraw.Draw(mask).rounded_rectangle(
         (0, 0, width - 1, height - 1), radius=28, fill=255
@@ -418,12 +432,20 @@ def phone_handoff(inputs, plate, output):
         FPS,
         "-i",
         mask_path,
+        "-loop",
+        "1",
+        "-framerate",
+        FPS,
+        "-i",
+        bezel_path,
         "-filter_complex_threads",
         1,
         "-filter_complex",
         f"[0:v]scale={width}:{height},setsar=1,fps={FPS},"
         f"tpad=stop_mode=clone:stop_duration={PHONE_LENGTH}[capture];"
-        f"[capture][2:v]alphamerge[phone];[1:v][phone]overlay={x}:{y}[out]",
+        "[capture][2:v]alphamerge[screen];"
+        "[3:v][screen]overlay=14:14:format=auto[phone];"
+        f"[1:v][phone]overlay=x='{x - 14}+224*(1-{easing('t', 0.66)})':y={y - 14}[out]",
         "-map",
         "[out]",
         "-frames:v",

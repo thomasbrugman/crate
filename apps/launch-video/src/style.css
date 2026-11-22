@@ -67,6 +67,32 @@
   font-size: 17px;
   color: #929297;
 }
+.source-preview {
+  margin-top: 17px;
+  width: min(100%, 640px);
+  color: #f1eee5;
+  background: #1b1b1a;
+  border: 1px solid #4d4941;
+  border-radius: 8px;
+  overflow: hidden;
+  font:
+    19px/1.22 "Courier New",
+    monospace;
+}
+.source-preview > div {
+  padding: 8px 18px;
+  display: flex;
+  justify-content: space-between;
+  color: #ffc1a8;
+  border-bottom: 1px solid #4d4941;
+}
+.source-preview pre {
+  padding: 8px 0;
+}
+.source-preview pre span {
+  display: block;
+  padding: 0 18px;
+}
 .beat {
   position: absolute;
   top: 183px;
@@ -203,6 +229,15 @@
 .printed .thermal-label {
   scale: 1.14;
   transform-origin: top left;
+}
+
+.pull-order {
+  position: absolute;
+  z-index: 12;
+  top: 81px;
+  left: 38px;
+  transform-origin: top left;
+  pointer-events: none;
 }
 
 .thermal-label.priority-label {

@@ -1,13 +1,19 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import manifest from "../../../package.json";
 import { Button } from "../../web/src/components/ui/button";
 import { Badge } from "../../web/src/components/ui/badge";
-import { Skeleton } from "../../web/src/components/ui/skeleton";
 import { Spinner } from "../../web/src/components/ui/spinner";
 import { DispatchReveal, PrinterJam } from "./ShippingLabels";
 
 const titles = ["README edit", "Install review", "Phone pairing", "Review tests"];
+const source = JSON.stringify(
+  { engines: manifest.engines, packageManager: manifest.packageManager },
+  null,
+  2,
+);
 const ramp = (frame: number, input: number[], output: number[]) =>
   interpolate(frame, input, output, { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+const ease = (n: number) => (1 - Math.cos(n * Math.PI)) / 2;
 
 export function Opener() {
   const renderFrame = useCurrentFrame();
@@ -15,11 +21,14 @@ export function Opener() {
   const frame = (renderFrame * 30) / fps;
   const entrance = spring({ frame: renderFrame, fps, config: { damping: 24, stiffness: 100 } });
   const frozenFrame = Math.min(frame, 60);
-  const reduced = frame >= 105;
-  const zoom = ramp(frame, [60, 104, 105, 195], [1, 1.035, 1.02, 1.04]);
+  const reduced = frame >= 93;
+  const camera = ease(ramp(frame, [51, 183], [0, 1]));
+  const retry = ease(ramp(frame, [68, 97], [0, 1]));
+  const sourceIn = ease(ramp(frozenFrame, [10, 28], [0, 1]));
+  const highlight = ramp(frozenFrame, [30, 55], [0, 1]);
   const headlineOpacity = reduced
-    ? ramp(frame, [113, 122, 190, 198], [0, 1, 1, 0])
-    : ramp(frame, [9, 19, 90, 96], [0, 1, 1, 0]);
+    ? ramp(frame, [93, 105, 188, 201], [0, 1, 1, 0])
+    : ramp(frame, [9, 19, 76, 92], [0, 1, 1, 0]);
   const click = ramp(frame, [69, 74, 83], [0, 1, 0]);
 
   return (
@@ -36,7 +45,7 @@ export function Opener() {
           className="window"
           style={{
             opacity: entrance,
-            transform: `translateY(${(1 - entrance) * 60}px) scale(${(0.66 + entrance * 0.04) * zoom})`,
+            transform: `translate(${-68 * camera}px, ${(1 - entrance) * 60 - 27 * camera}px) scale(${(0.66 + entrance * 0.04) * (1 + 0.13 * camera)})`,
           }}
         >
           <div className="toolbar">
@@ -71,8 +80,16 @@ export function Opener() {
                   + New thread
                 </Button>
               </div>
-              {titles.slice(0, reduced ? 2 : 4).map((title, index) => (
-                <div className={`thread ${index === 0 ? "active" : ""}`} key={title}>
+              {titles.map((title, index) => (
+                <div
+                  className={`thread ${index === 0 ? "active" : ""}`}
+                  key={title}
+                  style={
+                    index >= 2
+                      ? { opacity: 1 - retry, transform: `translateX(${-55 * retry}px)` }
+                      : undefined
+                  }
+                >
                   <Spinner
                     style={{
                       width: 25,
@@ -122,10 +139,28 @@ export function Opener() {
                 />
                 <span>Checking package.json</span>
               </div>
-              <div style={{ marginTop: 25, display: "grid", gap: 15 }}>
-                <Skeleton style={{ height: 13, width: "88%" }} />
-                <Skeleton style={{ height: 13, width: "73%" }} />
-                <Skeleton style={{ height: 13, width: "80%" }} />
+              <div
+                className="source-preview"
+                style={{ opacity: sourceIn, transform: `translateY(${30 * (1 - sourceIn)}px)` }}
+              >
+                <div>
+                  t3stash / package.json <span>EXCERPT</span>
+                </div>
+                <pre>
+                  {source.split("\n").map((line) => (
+                    <span
+                      key={line}
+                      style={
+                        line.includes('"node"')
+                          ? { backgroundColor: `rgb(255 120 73 / ${0.23 * highlight})` }
+                          : undefined
+                      }
+                    >
+                      {line}
+                      {"\n"}
+                    </span>
+                  ))}
+                </pre>
               </div>
               <div
                 style={{

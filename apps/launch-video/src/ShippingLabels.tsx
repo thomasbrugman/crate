@@ -36,7 +36,8 @@ function Label({ index }: { index: number }) {
 
 export function PrinterJam({ frame }: { frame: number }) {
   const stopped = frame >= 60;
-  const order = ease(frame, 163, 190);
+  const order = ease(frame, 119, 151);
+  const pull = ease(frame, 151, 209);
   return (
     <div className="printer">
       <div className="printer-title">
@@ -46,14 +47,14 @@ export function PrinterJam({ frame }: { frame: number }) {
       <div className="printer-tray">
         {jobs.map((job, index) => {
           const arrive = ease(Math.min(frame, 60), 9 + index * 10, 47 + index * 5);
-          const tuck = ease(frame, 105, 116);
+          const tuck = ease(frame, 73, 114);
           const raise = index === 0 ? order : 0;
           return (
             <div
               className="printed"
               key={job}
               style={{
-                opacity: arrive * (index >= 2 ? 1 - tuck : 1),
+                opacity: arrive * (index >= 2 ? 1 - tuck : index === 0 && pull > 0 ? 0 : 1),
                 zIndex: index === 0 && raise > 0 ? 6 : index,
                 transform: `translate(${index * 14 - 45 * raise}px, ${-210 + arrive * (267 + index * 105) - 56 * raise}px) rotate(${arrive * [3, -7, 8, -4][index]! * (1 - raise)}deg)`,
               }}
@@ -68,6 +69,16 @@ export function PrinterJam({ frame }: { frame: number }) {
         <i />
         {stopped ? "QUEUE JAM / NOT RESPONDING" : "PRINTING WORK ORDERS"}
       </div>
+      {pull > 0 && (
+        <div
+          className="pull-order"
+          style={{
+            transform: `translate(${-568 * pull}px, ${192 * pull}px) rotate(${-8 * pull}deg) scale(${1.14 + 0.38 * pull})`,
+          }}
+        >
+          <Label index={0} />
+        </div>
+      )}
     </div>
   );
 }
