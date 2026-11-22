@@ -15,9 +15,9 @@ from PIL import Image, ImageDraw, ImageFont
 WIDTH, HEIGHT, FPS = 1920, 1080, 30
 REPO = "github.com/thomasbrugman/t3stash"
 REVEAL_AT = 7
-REVEAL_LENGTH = 1.8
+REVEAL_LENGTH = 1.6
 CAMERA_LENGTH = 3.3
-CTA_LENGTH = 4
+CTA_LENGTH = 3.6
 SCREEN = (1656, 896)
 PAPER = "#f2f1ee"
 INK = "#191918"
@@ -47,64 +47,71 @@ class Shot:
     speed: float = 1
     crop: tuple[int, int, int, int] | None = None  # width, height, x, y
     note: str = ""
+    taps: tuple[float, ...] = ()
 
 
 SHOTS = (
     Shot(
         "onboarding.mp4",
-        3.2,
+        2.3,
         "CONNECT",
         "Connect your agent once.",
-        0.25,
+        0.1,
+        crop=(800, 610, 320, 115),
+        taps=(0.65,),
     ),
     Shot(
         "snapshot-setting.mp4",
-        3.2,
+        1.5,
         "PREPARE",
         "Start new threads from a prepared snapshot.",
         3.6,
-        crop=(984, 468, 350, 320),
+        crop=(970, 430, 365, 365),
     ),
     Shot(
         "box-size.mp4",
-        3.5,
+        2.2,
         "START A THREAD",
         "Pick a Box size.",
-        crop=(884, 452, 354, 175),
+        0.8,
+        crop=(680, 330, 407, 263),
+        taps=(0.54, 1.74),
     ),
     Shot(
         "readme.mp4",
-        4.8,
+        3.5,
         "START A THREAD",
         "Send a task to its own Box.",
-        1.35,
-        1.6,
+        2.1,
+        1.55,
+        crop=(830, 580, 332, 38),
         note="FOOTAGE SPED UP",
+        taps=(2.4,),
     ),
 )
-PARALLEL_LENGTH = 4.2
+PARALLEL_LENGTH = 3.8
 PARALLEL = (
-    ("readme.mp4", 6.25, "README EDIT"),
-    ("install.mp4", 5.0, "INSTALL REVIEW"),
-    ("phone.mp4", 4.35, "PHONE PAIRING"),
+    ("readme.mp4", 6.25, "README edit"),
+    ("install.mp4", 5.0, "Install review"),
+    ("phone.mp4", 4.35, "Phone pairing"),
 )
 RESULT = (
     Shot(
         "recut-workspace.mp4",
-        5.4,
+        3.6,
         "CHECK THE WORK",
         "Switch between threads.",
-        1.15,
-        1.7,
+        1.3,
+        2.3,
         note="FOOTAGE SPED UP",
     ),
     Shot(
         "recut-workspace.mp4",
-        3.4,
+        3.2,
         "CHECK THE WORK",
         "The README diff, straight from the Box.",
-        10.35,
-        crop=(886, 435, 350, 130),
+        11.3,
+        crop=(820, 280, 346, 165),
     ),
 )
 
@@ -137,13 +144,12 @@ def title_card(kind, wordmark=None, music_credit=None):
     card = canvas()
     draw = ImageDraw.Draw(card)
     if kind == "camera":
-        center(draw, "CAMERA INSERT", 360, 24, MUTED, "mono")
+        center(draw, "PHONE INSERT PENDING", 360, 24, MUTED, "mono")
         center(draw, "Same thread. Now on your phone.", 475, 70, kind="bold")
-        center(draw, "Thomas’s lid-and-phone shot goes here", 575, 34, MUTED)
         center(
             draw,
             "Phone access needs an awake, reachable t3stash host.",
-            755,
+            620,
             32,
             MUTED,
         )
@@ -160,6 +166,7 @@ def title_card(kind, wordmark=None, music_credit=None):
             card.paste(logo, ((WIDTH - logo.width) // 2, 488 - logo.height // 2), logo)
         else:
             center(draw, "t3stash", 488, 154, kind="bold")
+        center(draw, "Get it on GitHub", 607, 30, MUTED)
         center(draw, REPO, 668, 43, kind="mono")
         center(draw, "Built on T3 Code and Upstash Box.", 854, 29, MUTED)
         if music_credit:
@@ -176,8 +183,21 @@ def shot_card(shot):
     return card
 
 
-def still(image, output, length):
-    ffmpeg("-loop", "1", "-framerate", FPS, "-i", image, "-t", length, *ENCODE, output)
+def still(image, output, length, fade_in=0):
+    fade = ["-vf", f"fade=t=in:d={fade_in}:color=0x131313"] if fade_in else []
+    ffmpeg(
+        "-loop",
+        "1",
+        "-framerate",
+        FPS,
+        "-i",
+        image,
+        *fade,
+        "-t",
+        length,
+        *ENCODE,
+        output,
+    )
 
 
 def footage(shot, inputs, plate, output):
@@ -227,20 +247,24 @@ def parallel(inputs, plate, output):
             PARALLEL_LENGTH,
             "RUN IN PARALLEL",
             "Three tasks. Three separate Boxes.",
-            note="THREE REAL THREADS · MONTAGE",
         )
     )
     draw = ImageDraw.Draw(card)
     args = ["-loop", "1", "-framerate", FPS, "-i", plate]
     graph = []
     for i, (name, start, label) in enumerate(PARALLEL):
-        delay = i * 0.58
+        delay = i * 0.42
         x, y = 460 + i * 165, 170 + i * 258
+        draw.rounded_rectangle(
+            (x - 310, y + 80, x - 24, y + 148),
+            radius=18,
+            fill="#e3e1db",
+        )
         draw.text(
-            (x - 24, y + 114),
-            f"0{i + 1} / {label}",
+            (x - 43, y + 114),
+            label,
             anchor="rm",
-            font=font(23, "mono"),
+            font=font(32, "bold"),
             fill=INK,
         )
         args += ["-ss", start, "-i", inputs / name]
@@ -272,7 +296,7 @@ def parallel(inputs, plate, output):
     )
 
 
-def sound(output, length, title_at, cta_at):
+def sound(output, length, title_at, cta_at, taps):
     rate = 24000
     rng = random.Random(24)
     low_noise = 0.0
@@ -300,6 +324,15 @@ def sound(output, length, title_at, cta_at):
                         math.sin(2 * math.pi * root * age)
                         + 0.17 * math.sin(2 * math.pi * 2.5 * root * age)
                     )
+                )
+        for when in taps:
+            age = t - when
+            if 0 <= age < 0.055:
+                cue += (
+                    0.19
+                    * min(1, age * 850)
+                    * math.exp(-95 * age)
+                    * (math.sin(2 * math.pi * 1350 * age) + 0.4 * low_noise)
                 )
         samples.extend(struct.pack("<h", round(32767 * (fan + cue))))
     with wave.open(str(output), "wb") as audio:
@@ -368,7 +401,7 @@ def main():
             clip_path(),
         )
         title_card("intro").save(plate)
-        still(plate, clip_path(), REVEAL_LENGTH)
+        still(plate, clip_path(), REVEAL_LENGTH, fade_in=0.23)
 
         def shots(sequence):
             for shot in sequence:
@@ -387,16 +420,17 @@ def main():
         program.write_text(
             "".join(f"file {clip.name}\n" for clip in clips), encoding="utf-8"
         )
+        elapsed = REVEAL_AT + REVEAL_LENGTH
+        taps = [74 / FPS]
+        for shot in SHOTS:
+            taps.extend(elapsed + offset for offset in shot.taps)
+            elapsed += shot.length
         cta_at = (
-            REVEAL_AT
-            + REVEAL_LENGTH
-            + PARALLEL_LENGTH
-            + CAMERA_LENGTH
-            + sum(s.length for s in SHOTS + RESULT)
+            elapsed + PARALLEL_LENGTH + sum(s.length for s in RESULT) + CAMERA_LENGTH
         )
         length = cta_at + CTA_LENGTH
         audio = temp / "sound.wav"
-        sound(audio, length, REVEAL_AT, cta_at)
+        sound(audio, length, REVEAL_AT, cta_at, taps)
         if args.music:
             music = [
                 "-ss",

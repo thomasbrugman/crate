@@ -28,7 +28,7 @@ one directory; the script uses these filenames:
 | Clip                   | Content                                                   |
 | ---------------------- | --------------------------------------------------------- |
 | `opener.mp4`           | Seven-second simulation                                   |
-| `onboarding.mp4`       | Command Code connection in t3stash                        |
+| `onboarding.mp4`       | Numbered Box setup and the saved Command Code connection  |
 | `snapshot-setting.mp4` | Project snapshot setting                                  |
 | `box-size.mp4`         | Medium Box size selection                                 |
 | `readme.mp4`           | README prompt and Box startup                             |
@@ -45,9 +45,10 @@ python3 apps/launch-video/cut.py /path/to/clips /path/to/launch-cut.mp4
 Pass `--wordmark /path/to/compact-black.png` to use the approved transparent wordmark on the light
 end card. Without it, the card typesets the product name.
 
-The crop coordinates and timing are for 1440×810 captures. The three-thread montage uses separate
-recordings of real threads. The phone shot is a placeholder: phone access requires an awake,
-reachable t3stash host. Remove credentials and pairing links from the footage before sharing it.
+The crop coordinates and timing are for 1440×810 captures. Use the numbered setup screen for
+onboarding and record after saving the credentials, not during entry. The three-thread montage
+uses separate recordings of real threads. The phone shot is a placeholder: phone access requires
+an awake, reachable t3stash host. Remove credentials and pairing links before sharing the footage.
 
 Without a music file the render includes only sound cues. To audition a licensed track from its
 first beat at the reveal, pass `--music /path/to/track.mp3 --music-start SECONDS`; the offset skips
