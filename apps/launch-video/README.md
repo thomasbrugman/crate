@@ -15,9 +15,10 @@ The 1080p/60 fps H.264 export is `out/opener.mp4` inside this package (ignored b
 Use `vp run --filter @t3tools/launch-video studio` to preview `Opener`.
 Remotion may download headless Chrome on the first render.
 
-The scene imports the real web Button, Badge, Skeleton, and Spinner components and web theme CSS.
+The scene imports the real web Button, Badge, and Spinner components and web theme CSS.
 Local webpack shims isolate their translation and class-name helpers from application stores.
-All animation, including spinner rotation and the unsuccessful click, is frame-driven.
+The manifest excerpt comes from this repository's MIT-licensed root manifest. The freeze remains
+simulated. All animation, including spinner rotation and the unsuccessful click, is frame-driven.
 
 ## Assemble the launch cut
 
