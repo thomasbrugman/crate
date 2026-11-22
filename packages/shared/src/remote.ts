@@ -6,7 +6,9 @@ const PAIRING_TOKEN_PARAM = "token";
 const HOSTED_PAIRING_HOST_PARAM = "host";
 const HOSTED_PAIRING_LABEL_PARAM = "label";
 const PAIRING_APP_LINK_PARAM = "pairingUrl";
-const APP_LINK_PROTOCOL = /^t3code(?:-[a-z]+)?:$/;
+export const T3STASH_APP_SCHEME = "t3stash";
+export const isAppLinkProtocol = (protocol: string): boolean =>
+  protocol === `${T3STASH_APP_SCHEME}:` || /^t3code(?:-[a-z]+)?:$/.test(protocol);
 const SUPPORTED_REMOTE_BACKEND_PROTOCOLS = new Set(["http:", "https:", "ws:", "wss:"]);
 
 export const readHashParams = (url: URL): URLSearchParams =>
@@ -189,15 +191,15 @@ export const readHostedPairingRequest = (url: URL): HostedPairingRequest | null 
   };
 };
 
-/** Wraps a pairing URL in the `t3code://pair` link that desktop opens and mobile scans. */
-export const buildPairingAppLink = (pairingUrl: string): string =>
-  `t3code://pair?${new URLSearchParams([[PAIRING_APP_LINK_PARAM, pairingUrl]])}`;
+/** Wraps a pairing URL in an app deep link. */
+export const buildPairingAppLink = (pairingUrl: string, scheme = "t3code"): string =>
+  `${scheme}://pair?${new URLSearchParams([[PAIRING_APP_LINK_PARAM, pairingUrl]])}`;
 
-/** Reads the pairing URL from a `t3code://pair` link on any app channel scheme. */
+/** Reads the pairing URL from an app deep link. */
 export const readPairingAppLink = (value: string): string | null => {
   const url = parseUrl(value);
   if (!url) return null;
-  if (!APP_LINK_PROTOCOL.test(url.protocol) || url.host !== "pair") return null;
+  if (!isAppLinkProtocol(url.protocol) || url.host !== "pair") return null;
   if (url.pathname !== "" && url.pathname !== "/") return null;
   return url.searchParams.get(PAIRING_APP_LINK_PARAM)?.trim() || null;
 };

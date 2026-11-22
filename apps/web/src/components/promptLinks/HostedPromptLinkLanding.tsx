@@ -5,6 +5,7 @@ import {
 } from "@t3tools/shared/promptLinks";
 import { parseNewThreadLink, parseThreadLinkPrompt } from "@t3tools/shared/promptLinksCopy";
 import { useLocation } from "@tanstack/react-router";
+import { T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
 import * as Schema from "effect/Schema";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { MessageResolver } from "../../i18n/messages";
 
 import { DESKTOP_DOWNLOAD_URL } from "~/branding";
+import { browserClientOs } from "~/connection/clientMetadata";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { isHostedStaticApp } from "~/hostedPairing";
 import { useEnvironments } from "~/state/environments";
@@ -142,7 +144,10 @@ function HostedPromptLinkLanding({
   const m = useMessages();
   const summary = summarize(appPath, m);
   const [remember, setRemember] = useState(false);
-  const deepLink = promptLinkDeepLink(appPath);
+  const deepLink = promptLinkDeepLink(
+    appPath,
+    browserClientOs(navigator) === "macOS" ? T3STASH_APP_SCHEME : undefined,
+  );
   const onPhone = /android|iphone|ipad/i.test(navigator.userAgent);
   const autoOpenedRef = useRef(false);
 

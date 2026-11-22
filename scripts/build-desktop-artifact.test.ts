@@ -603,8 +603,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         productName: "t3stash",
         artifactName: "t3stash-${version}-${arch}.${ext}",
       });
-
-      const { x64ArchFiles } = universal.mac as { x64ArchFiles: string };
+      const { x64ArchFiles, protocols } = universal.mac as {
+        x64ArchFiles: string;
+        protocols: unknown;
+      };
+      assert.deepEqual(protocols, [{ name: "t3stash", schemes: ["t3stash"] }]);
       const modules = "Contents/Resources/app.asar.unpacked/node_modules";
       assert.isTrue(
         NodePath.matchesGlob(

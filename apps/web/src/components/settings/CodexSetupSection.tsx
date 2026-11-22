@@ -16,6 +16,7 @@ import type {
   ServerProvider,
 } from "@t3tools/contracts";
 import { codexAuthHandoffUrl } from "@t3tools/shared/codexAuthHandoff";
+import { T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
 import { providerAuthReturnUrl } from "@t3tools/shared/providerAuthReturnUrl";
 import { isLoopbackHost } from "@t3tools/shared/preview";
 import { CheckIcon, ChevronRightIcon, ExternalLinkIcon } from "lucide-react";
@@ -31,6 +32,7 @@ import {
 import { T, useGT, useMessages } from "gt-react";
 
 import { ensureLocalApi } from "../../localApi";
+import { browserClientOs } from "../../connection/clientMetadata";
 import { managedInstanceLocks, useManagedPolicy } from "../../state/managedPolicy";
 import { ManagedControl } from "../ManagedPolicy";
 import { useEnvironmentHttpBaseUrl } from "../../state/environments";
@@ -694,7 +696,11 @@ function ManagedCodexSetup({
             instanceId,
             flowId: auth.flowId,
           },
-          import.meta.env.DEV,
+          import.meta.env.DEV
+            ? "t3code-dev"
+            : browserClientOs(navigator) === "macOS"
+              ? T3STASH_APP_SCHEME
+              : "t3code",
         )
       : null;
   const waitingControl = (

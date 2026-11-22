@@ -1,3 +1,5 @@
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -11,21 +13,22 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
+import { isPackagedMacApp } from "../../../../scripts/lib/mac-app-identity.ts";
 
 export const DESKTOP_HOST = "app";
 const DESKTOP_PRODUCTION_SCHEME = "t3code";
 const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
 
-export function getDesktopScheme(isDevelopment: boolean): string {
+export function getDesktopScheme(
+  isDevelopment: boolean,
+  identity?: Parameters<typeof isPackagedMacApp>[0],
+): string {
+  if (identity && isPackagedMacApp(identity)) return T3STASH_APP_SCHEME;
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
 }
 
-function getDesktopOrigin(isDevelopment: boolean): string {
-  return `${getDesktopScheme(isDevelopment)}://${DESKTOP_HOST}`;
-}
-
-export function getDesktopUrl(isDevelopment: boolean): string {
-  return `${getDesktopOrigin(isDevelopment)}/`;
+export function getDesktopUrl(...args: Parameters<typeof getDesktopScheme>): string {
+  return `${getDesktopScheme(...args)}://${DESKTOP_HOST}/`;
 }
 
 export class ElectronProtocolRegistrationError extends Schema.TaggedError<ElectronProtocolRegistrationError>()(
@@ -108,10 +111,11 @@ function withContentSecurityPolicy(response: Response, policy: string): Response
 }
 
 // Must run synchronously before Electron emits ready.
-function registerDesktopSchemePrivilegesSync(): void {
+function registerDesktopSchemePrivilegesSync(platform: NodeJS.Platform): void {
+  const identity = { platform, isPackaged: Electron.app.isPackaged };
   Electron.protocol.registerSchemesAsPrivileged([
     {
-      scheme: DESKTOP_PRODUCTION_SCHEME,
+      scheme: getDesktopScheme(false, identity),
       privileges: {
         standard: true,
         secure: true,
@@ -122,20 +126,25 @@ function registerDesktopSchemePrivilegesSync(): void {
         codeCache: true,
       },
     },
-    {
-      scheme: DESKTOP_DEVELOPMENT_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-        stream: true,
-      },
-    },
+    ...(isPackagedMacApp(identity)
+      ? []
+      : [
+          {
+            scheme: DESKTOP_DEVELOPMENT_SCHEME,
+            privileges: {
+              standard: true,
+              secure: true,
+              supportFetchAPI: true,
+              corsEnabled: true,
+              stream: true,
+            },
+          },
+        ]),
   ]);
 }
 
-const registerDesktopSchemePrivileges = Effect.sync(registerDesktopSchemePrivilegesSync).pipe(
+const registerDesktopSchemePrivileges = HostProcess.Platform.pipe(
+  Effect.map(registerDesktopSchemePrivilegesSync),
   Effect.withSpan("desktop.electron.protocol.registerSchemePrivileges"),
 );
 
