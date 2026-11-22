@@ -3,8 +3,8 @@ import type { OrchestrationV2ProviderCapabilities } from "@t3tools/contracts";
 export const capabilities = {
   sessions: {
     supportsMultipleProviderThreadsPerSession: false,
-    supportsModelSwitchInSession: false,
-    supportsProviderSwitchingViaHandoff: false,
+    supportsModelSwitchInSession: true,
+    supportsProviderSwitchingViaHandoff: true,
     supportsRuntimeModeSwitchInSession: false,
     pendingRequestsSurviveRestart: false,
   },
@@ -70,12 +70,12 @@ export const capabilities = {
   context: {
     acceptsSystemContext: false,
     acceptsDeveloperContext: false,
-    acceptsSyntheticUserContext: false,
+    acceptsSyntheticUserContext: true,
     canGenerateSummaries: false,
-    canConsumeHandoffSummaries: false,
-    supportsDeltaHandoff: false,
-    supportsFullThreadHandoff: false,
-    maxRecommendedHandoffChars: null,
+    canConsumeHandoffSummaries: true,
+    supportsDeltaHandoff: true,
+    supportsFullThreadHandoff: true,
+    maxRecommendedHandoffChars: 24_000,
   },
   checkpointing: {
     appCanCheckpointFilesystem: false,

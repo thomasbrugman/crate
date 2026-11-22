@@ -10,7 +10,7 @@ it.effect("reports whether the Box key and the harness's model key can start a r
   Effect.gen(function* () {
     for (const [key, error, harness, agentApiKey, modelStatus, status, auth] of [
       ["", null, "commandCode", "", null, "warning", "unauthenticated"],
-      ["key", null, "commandCode", "", null, "ready", "authenticated"],
+      ["key", null, "commandCode", '{"token":"fixture"}', null, "ready", "authenticated"],
       [
         "key",
         new BoxError("private auth error", 401),
@@ -20,8 +20,16 @@ it.effect("reports whether the Box key and the harness's model key can start a r
         "error",
         "unauthenticated",
       ],
-      ["key", new Error("private network error"), "commandCode", "", null, "error", "unknown"],
-      ["key", null, "claudeCode", "", null, "warning", "authenticated"],
+      [
+        "key",
+        new Error("private network error"),
+        "commandCode",
+        '{"token":"fixture"}',
+        null,
+        "error",
+        "unknown",
+      ],
+      ["key", null, "claudeCode", "", null, "warning", "unauthenticated"],
       ["key", null, "codex", "sk", 200, "ready", "authenticated"],
       ["key", null, "claudeCode", "sk", 401, "error", "unauthenticated"],
       ["key", null, "codex", "sk", 500, "warning", "authenticated"],
@@ -51,7 +59,7 @@ it.effect("reports whether the Box key and the harness's model key can start a r
       );
       assert.equal(result.status, status);
       assert.equal(result.auth.status, auth);
-      assert.equal(boxProbes, key ? 1 : 0);
+      assert.equal(boxProbes, key && agentApiKey ? 1 : 0);
       assert.equal(modelProbes, modelStatus !== null && !error ? 1 : 0);
       assert.notInclude(JSON.stringify(result), "private");
     }

@@ -5,6 +5,7 @@ import {
   BoxError,
   type BoxConfig,
   type Chunk,
+  type ExecStreamChunk,
   type ClaudeCode,
   type OpenAICodex,
   type StreamOptions,
@@ -12,7 +13,6 @@ import {
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 
 import type { BoxHarness } from "../harnesses.ts";
 
@@ -30,18 +30,8 @@ export const BoxErrorDetails = Schema.Struct({
 
 export function boxErrorDetails(
   error: unknown,
-  options: { readonly apiKeys?: ReadonlyArray<string>; readonly boxId?: string } = {},
+  options: { readonly boxId?: string } = {},
 ): typeof BoxErrorDetails.Type {
-  let message = error instanceof Error && !/[{}]/u.test(error.message) ? error.message : "";
-  for (const key of options.apiKeys ?? []) {
-    if (key) message = message.replaceAll(key, "[REDACTED]");
-  }
-  message = makeProviderFailure({ message })
-    .message.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, "[REDACTED]")
-    .replace(/\b(?:sk|ghp|gho|github_pat|upstash|qstash)[_-][A-Za-z0-9_-]+\b/gu, "[REDACTED]")
-    .replace(/\b[A-Za-z0-9_+/=-]{32,}\b/gu, "[REDACTED]")
-    .replace(/\s+/gu, " ")
-    .trim();
   const statusCode =
     error instanceof Error &&
     "statusCode" in error &&
@@ -52,9 +42,7 @@ export function boxErrorDetails(
       ? error.statusCode
       : undefined;
   return {
-    message: Array.from(message || "Upstash Box request failed.")
-      .slice(0, 200)
-      .join(""),
+    message: "Upstash Box request failed.",
     ...(statusCode === undefined ? {} : { statusCode }),
     ...(options.boxId === undefined ? {} : { boxId: options.boxId }),
   };
@@ -75,7 +63,22 @@ export function isMissingStoredKey(error: unknown): boolean {
   );
 }
 
-export interface BoxStream extends AsyncIterable<Chunk> {
+export type BoxSubagentChunk =
+  | {
+      readonly type: "subagent-start";
+      readonly taskId: string;
+      readonly parentTaskId?: string;
+      readonly title: string;
+      readonly prompt: string;
+    }
+  | {
+      readonly type: "subagent-finish";
+      readonly taskId: string;
+      readonly status: "completed" | "failed" | "cancelled";
+      readonly result: string;
+    };
+
+export interface BoxStream extends AsyncIterable<Chunk | BoxSubagentChunk> {
   readonly id: string;
   readonly cancel: () => Promise<void>;
 }
@@ -84,6 +87,12 @@ export interface BoxHandle {
   readonly id: string;
   readonly agent: { readonly stream: (options: StreamOptions) => Promise<BoxStream> };
   readonly exec: {
+    readonly stream?: (command: string) => Promise<
+      {
+        readonly id: string;
+        readonly cancel: () => Promise<void>;
+      } & AsyncIterable<ExecStreamChunk>
+    >;
     readonly command: (command: string) => Promise<{
       readonly stdout: string;
       readonly stderr?: string;
@@ -92,6 +101,7 @@ export interface BoxHandle {
   };
   readonly files: {
     readonly write: (options: { path: string; content: string }) => Promise<unknown>;
+    readonly writeVolatile?: (path: string, content: string) => Promise<void>;
   };
   readonly delete: () => Promise<unknown>;
   readonly resume: () => Promise<void>;
@@ -103,6 +113,7 @@ export class BoxApi extends Context.Service<
   {
     readonly get: (id: string, apiKey: string) => Promise<BoxHandle>;
     readonly create: (config: BoxConfig) => Promise<BoxHandle>;
+    readonly restore?: (snapshotId: string, config: BoxConfig) => Promise<BoxHandle>;
     readonly list: (apiKey: string) => Promise<unknown>;
     /** The HTTP status the model provider answers a cheap authenticated request with. */
     readonly checkModelKey: (harness: ManagedAgentHarness, apiKey: string) => Promise<number>;
@@ -129,6 +140,20 @@ function projectBox(box: Box): BoxHandle {
       },
     },
     exec: {
+      stream: async (command) => {
+        const run = await box.exec.stream(command);
+        return {
+          get id() {
+            return run.id;
+          },
+          cancel: async () => {
+            await run.cancel();
+          },
+          async *[Symbol.asyncIterator]() {
+            yield* run;
+          },
+        };
+      },
       command: async (command) => {
         const result = await box.exec.command(command);
         return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
@@ -137,6 +162,19 @@ function projectBox(box: Box): BoxHandle {
     files: {
       write: async (options) => {
         await box.files.write(options);
+      },
+      writeVolatile: async (path, content) => {
+        // The files API does not reach tmpfs. Send the bytes over live stdin, not argv or stdout.
+        const session = await box.exec.session({
+          argv: ["sh", "-c", 'umask 077; cat > "$1"', "sh", path],
+        });
+        try {
+          session.write(content);
+          session.endStdin();
+          if ((await session.wait()) !== 0) throw new Error("Box credential write failed.");
+        } finally {
+          session.close();
+        }
       },
     },
     delete: async () => {
@@ -152,6 +190,7 @@ function projectBox(box: Box): BoxHandle {
 export const layer = Layer.succeed(BoxApi, {
   get: async (id, apiKey) => projectBox(await Box.get(id, { apiKey })),
   create: async (config) => projectBox(await Box.create(config)),
+  restore: async (snapshotId, config) => projectBox(await Box.fromSnapshot(snapshotId, config)),
   list: async (apiKey) => {
     await Box.list({ apiKey });
   },
@@ -193,6 +232,7 @@ export function boxConfig(input: {
     size: input.size ?? "small",
     keepAlive: false,
     labels: ["t3stash"],
+    networkPolicy: { mode: "allow-all" },
   } satisfies BoxConfig;
   if (input.harness === "commandCode")
     return {

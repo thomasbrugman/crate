@@ -1,4 +1,5 @@
 import { pipe } from "effect/Function";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   defaultInstanceIdForDriver,
@@ -68,6 +69,7 @@ function isProviderInstanceHealthy(entry: ProviderInstanceEntry): boolean {
 
 /** Also true after a check that only failed or ran late: an earlier check's models stay offered. */
 export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boolean {
+  if (!isProviderInstancePickerVisible(entry)) return false;
   if (isProviderInstanceHealthy(entry)) return true;
   const { subProviders, auth, modelsRetained } = entry.snapshot;
   if (!entry.enabled || !entry.isAvailable || subProviders !== undefined) return false;
@@ -82,7 +84,10 @@ export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boo
 }
 
 export function isProviderInstancePickerVisible(entry: ProviderInstanceEntry): boolean {
-  return entry.enabled;
+  return (
+    entry.enabled &&
+    (!isUpstashBoxDriver(entry.driverKind) || entry.snapshot.auth.status === "authenticated")
+  );
 }
 
 export function deriveProviderInstanceEntries(

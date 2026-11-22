@@ -8,6 +8,7 @@ function setup(
   options: {
     prompt?: string;
     session?: string;
+    explicitSession?: boolean;
     files?: Record<string, { mtimeMs: number; header: unknown }>;
     unavailable?: boolean;
   } = {},
@@ -50,6 +51,7 @@ function setup(
         "harness",
         "-p",
         options.prompt ?? "test",
+        ...(options.explicitSession ? ["--explicit-session"] : []),
         ...(options.session ? ["--session", options.session] : []),
       ],
       env: { BOXJOB_CC_BIN: "command-code" },
@@ -90,6 +92,7 @@ it("resumes the newest matching Command Code transcript only when no session was
   };
   assert.include(setup({ files }).args.join(" "), "--resume newer");
   assert.include(setup({ files, session: "explicit" }).args.join(" "), "--resume explicit");
+  assert.notInclude(setup({ files, explicitSession: true }).args, "--resume");
   assert.notInclude(setup().args, "--resume");
   assert.notInclude(setup({ unavailable: true }).args, "--resume");
 });
@@ -157,6 +160,6 @@ it("ignores malformed frames, preserves empty results and reports process errors
   child.emit("error", new Error("spawn failed"));
   assert.deepEqual(events(), [
     { event: "tool_result", data: { tool_call_id: "empty", output: null } },
-    { event: "error", data: { error: "failed to start command-code: spawn failed" } },
+    { event: "error", data: { error: "Could not start Command Code" } },
   ]);
 });

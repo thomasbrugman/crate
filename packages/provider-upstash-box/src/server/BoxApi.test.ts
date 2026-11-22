@@ -16,9 +16,9 @@ it("keeps only sanitized diagnostic fields from SDK errors", () => {
       ...metadata,
     },
   );
-  const detail = boxErrorDetails(error, { apiKeys: [sentinel], boxId: "box" });
+  const detail = boxErrorDetails(error, { boxId: "box" });
   assert.deepEqual(detail, {
-    message: "Delete refused for [REDACTED]",
+    message: "Upstash Box request failed.",
     statusCode: 503,
     boxId: "box",
   });

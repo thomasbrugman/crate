@@ -744,8 +744,6 @@
   "fd961a3820d46cfa": "Conectando à Box",
   "9f6faa1464231d0f": "Criando a Box",
   "21ace56348b5b799": "Verificando a configuração da Box",
-  "20322174bd84f616": "Instalando o Command Code",
-  "aaa55cdbc9661af6": "Copiando credenciais da Box modelo",
   "9c08b1739f450ae2": "Clonando o repositório",
   "49221d2a7a2da0de": "Configurando Box",
   "f1d27d127ab27ac6": "Iniciando",
@@ -11219,7 +11217,6 @@
   "5cc965d9a688198b": "Chave de API do Upstash Box",
   "2c5674665579a329": "Remover",
   "b5fa42d9412ab917": "Box de modelo",
-  "701bc68befe01da1": "Novos Boxes copiam as credenciais do Git e o login do Command Code deste Box.",
   "13c467f9d514b497": "Tamanho do Box",
   "832282c673f5f672": "Aplica-se aos Boxes criados para novas threads.",
   "f54364b854a07918": "Nenhum hub configurado.",
@@ -12226,5 +12223,15 @@
   "27d76249d09eb69f": "Guia de revisão pronto",
   "faa3bb26abb39c93": "O guia de revisão falhou",
   "b7df38b7d8792d78": "Abrir guia",
-  "9e91e9a77b664e4e": "Não foi possível iniciar um guia de revisão"
+  "9e91e9a77b664e4e": "Não foi possível iniciar um guia de revisão",
+  "9f754eebb3866690": "Instalando os agentes",
+  "67f4aa1a06528a91": "Preparando as credenciais",
+  "10a8d3ed31c3da0c": "Cole uma chave de API do Command Code ou o conteúdo de ~/.commandcode/auth.json.",
+  "b348145623c69867": "Snapshot do Upstash Box",
+  "2dbd2da341f1f37e": "Opcional. Restaure as Boxes de novas conversas de um snapshot criado sem credenciais de agentes.",
+  "276872b1b4120d7a": "Cole uma chave de API da Anthropic ou um token de claude setup-token.",
+  "7d49aae75c90c5c6": "Cole uma chave de API da OpenAI ou o conteúdo de ~/.codex/auth.json após entrar.",
+  "db982190df748359": "Novas Boxes copiam a configuração do Git desta Box, mas não as credenciais dos agentes.",
+  "3924cab20604eb29": "Conecte seus agentes",
+  "c291bdeadbb22b96": "Desconectar"
 }

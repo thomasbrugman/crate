@@ -744,8 +744,6 @@
   "fd961a3820d46cfa": "Verbindung zur Box wird hergestellt",
   "9f6faa1464231d0f": "Box wird erstellt",
   "21ace56348b5b799": "Box-Einrichtung wird geprüft",
-  "20322174bd84f616": "Command Code wird installiert",
-  "aaa55cdbc9661af6": "Zugangsdaten werden aus der Vorlagen-Box kopiert",
   "9c08b1739f450ae2": "Repository wird geklont",
   "49221d2a7a2da0de": "Box wird eingerichtet",
   "f1d27d127ab27ac6": "Wird gestartet",
@@ -5343,5 +5341,7 @@
   "ad208e3e32c85029": "Alle ausblenden",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Tool-Aufrufe im Chat",
-  "8d545d54c0a9e950": "Die Befehle, Bearbeitungen und Suchen ausblenden, die Agenten ausführen. „Erfolgreiche ausblenden“ behält Fehler. „Zen“ zeigt nur endgültige Antworten. Genehmigungen, Fragen und Fehler werden immer angezeigt."
+  "8d545d54c0a9e950": "Die Befehle, Bearbeitungen und Suchen ausblenden, die Agenten ausführen. „Erfolgreiche ausblenden“ behält Fehler. „Zen“ zeigt nur endgültige Antworten. Genehmigungen, Fragen und Fehler werden immer angezeigt.",
+  "9f754eebb3866690": "Harnesses werden installiert",
+  "67f4aa1a06528a91": "Anmeldedaten werden vorbereitet"
 }

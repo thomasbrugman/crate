@@ -1,3 +1,4 @@
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import {
   normalizeProviderAccentColor,
   resolveProviderInstanceDisplayName,
@@ -392,6 +393,7 @@ export function buildModelOptions(
       !isProviderEnabledForProject(config, provider, projectId) ||
       !provider.installed ||
       provider.auth.status === "unauthenticated" ||
+      (isUpstashBoxDriver(provider.driver) && provider.auth.status !== "authenticated") ||
       (provider.driver === "antigravity" && provider.availability === "unavailable")
     ) {
       continue;

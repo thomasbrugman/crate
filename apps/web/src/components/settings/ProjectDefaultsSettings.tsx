@@ -24,6 +24,7 @@ import { runtimeModeConfig, runtimeModeOptions } from "../chat/runtimeModeConfig
 import { PULL_REQUEST_MERGE_METHOD_LABELS } from "../pullRequest/pullRequestDetail.logic";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { DraftInput } from "../ui/draft-input";
 import { toastManager } from "../ui/toast";
 import { Switch } from "../ui/switch";
 import { resolveDefaultModelSettingsPresentation } from "./ProjectDefaultsSettings.logic";
@@ -360,6 +361,25 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
           {modelRow}
           {fallbackRow}
           {workspaceRow}
+          <SettingsRow
+            serverScoped
+            settingKeys={["upstashBoxSnapshotId"]}
+            title={gt("Upstash Box snapshot")}
+            description={gt(
+              "Optional. Restore new thread Boxes from a snapshot created without harness credentials.",
+            )}
+            control={
+              <DraftInput
+                aria-label={gt("Upstash Box snapshot")}
+                autoCapitalize="none"
+                spellCheck={false}
+                value={settings.upstashBoxSnapshotId}
+                onCommit={(upstashBoxSnapshotId) =>
+                  updateSettings({ upstashBoxSnapshotId: upstashBoxSnapshotId.trim() })
+                }
+              />
+            }
+          />
         </>
       ) : category === "general" ? (
         <>

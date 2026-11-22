@@ -91,7 +91,7 @@ const make = Effect.gen(function* () {
                 threadId,
                 providerThreadId: thread.id,
                 reason: "credentials_unavailable",
-                cause: BoxApi.boxErrorDetails(cause),
+                cause: { message: cause.message },
               }),
           ),
         );
@@ -128,7 +128,7 @@ const make = Effect.gen(function* () {
           }
         },
         catch: (error) => {
-          const diagnostic = BoxApi.boxErrorDetails(error, { apiKeys: [apiKey], boxId: nativeId });
+          const diagnostic = BoxApi.boxErrorDetails(error, { boxId: nativeId });
           return new BoxThreadCleanupError({
             threadId,
             providerThreadId: thread.id,

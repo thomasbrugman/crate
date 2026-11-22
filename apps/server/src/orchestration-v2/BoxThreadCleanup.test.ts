@@ -162,14 +162,14 @@ it.effect.each(scenarios)(
           assert.equal(result.failure.providerThreadId, thread.id);
           assert.equal(
             result.failure.message,
-            `Could not delete the thread Box (${scenario.reason}).${scenario.reason === "delete_failed" ? " Box deletion refused for [REDACTED]" : ""}`,
+            `Could not delete the thread Box (${scenario.reason}).${scenario.reason === "delete_failed" ? " Upstash Box request failed." : ""}`,
           );
           assert.notInclude(JSON.stringify(result.failure), "private upstream details");
           assert.notInclude(JSON.stringify(result.failure), "private-key");
           assert.notInclude(JSON.stringify(result.failure), "Authorization");
           if (scenario.reason === "delete_failed") {
             const diagnostic = {
-              message: "Box deletion refused for [REDACTED]",
+              message: "Upstash Box request failed.",
               statusCode: scenario.status,
               boxId: "persisted-box",
             };

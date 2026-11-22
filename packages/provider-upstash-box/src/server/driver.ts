@@ -14,19 +14,19 @@ import type { IdAllocatorV2 } from "@t3tools/provider-core/server/IdAllocator";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
 import { ProviderHost } from "@t3tools/provider-core/server/ProviderHost";
 import { providerModelsFromSettings } from "@t3tools/provider-core/server/snapshotProbe";
-import {
-  haveProviderSnapshotSettingsChanged,
-  makeProviderSnapshotSettingsSource,
-} from "@t3tools/provider-core/server/snapshotSettings";
 import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Config from "effect/Config";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import { BOX_HARNESS_DRIVER_KINDS, BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
 import { BoxCommandCodeSettings, BoxManagedAgentSettings } from "../settings.ts";
 import { makeUpstashBoxAdapter, type BoxEnvironmentConfig } from "./adapter.ts";
+import { makeBoxHarnessAuth } from "./auth.ts";
 import {
   BoxApi,
   BoxRuntimeError,
@@ -34,6 +34,7 @@ import {
   type ManagedAgentHarness,
 } from "./BoxApi.ts";
 import { boxHarnessModels } from "./models.ts";
+import { harnessCredentialKind, readHarnessCredentials } from "./credentials.ts";
 
 const MODEL_VENDORS = { claudeCode: "Anthropic", codex: "OpenAI" } as const;
 
@@ -46,12 +47,6 @@ const probeModelKey = Effect.fn("UpstashBox.probeModelKey")(function* (
   agentApiKey: string,
 ) {
   const vendor = MODEL_VENDORS[harness];
-  if (!agentApiKey)
-    return {
-      status: "warning",
-      auth: { status: "authenticated" },
-      message: `Runs with the ${vendor} key saved in your Upstash account, which can't be checked from here. Set a model API key in this provider's settings if turns fail.`,
-    } as const;
   const api = yield* BoxApi;
   return yield* Effect.tryPromise({
     try: () => api.checkModelKey(harness, agentApiKey),
@@ -93,6 +88,13 @@ export const probe = Effect.fn("UpstashBox.probe")(function* (
       auth: { status: "unauthenticated" },
       message: "Set the Upstash Box API key in environment settings or UPSTASH_BOX_API_KEY.",
     } as const;
+  const kind = harnessCredentialKind(agent.harness, agent.agentApiKey);
+  if (kind === undefined)
+    return {
+      status: "warning",
+      auth: { status: "unauthenticated" },
+      message: "Connect this harness in Settings → Providers.",
+    } as const;
   const box = yield* Effect.tryPromise({
     try: () => api.list(apiKey),
     catch: (error) =>
@@ -116,8 +118,7 @@ export const probe = Effect.fn("UpstashBox.probe")(function* (
         }) as const,
     }),
   );
-  // Command Code runs on the template Box's own login, so the Box key is all it needs.
-  if (box.status !== "ready" || agent.harness === "commandCode") return box;
+  if (box.status !== "ready" || agent.harness === "commandCode" || kind !== "key") return box;
   return yield* probeModelKey(agent.harness, agent.agentApiKey);
 });
 
@@ -155,14 +156,15 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         input.environment.find((entry) => entry.name === "UPSTASH_BOX_API_KEY")?.value ??
         inheritedKey;
       // The Box is the thread's environment: its settings belong to the server, not this provider.
+      const boxEnvironment = (box: typeof DEFAULT_SERVER_SETTINGS.upstashBox) => ({
+        apiKey: settingsSecretLiteral(box.apiKey) || envKey,
+        templateBoxName: box.templateBoxName,
+        size: box.size,
+        credentials: readHarnessCredentials(box),
+      });
       const environment: Effect.Effect<BoxEnvironmentConfig> = host.settings.get.pipe(
-        Effect.map((settings) => settings.upstashBox),
-        Effect.orElseSucceed(() => DEFAULT_SERVER_SETTINGS.upstashBox),
-        Effect.map((box) => ({
-          apiKey: settingsSecretLiteral(box.apiKey) || envKey,
-          templateBoxName: box.templateBoxName,
-          size: box.size,
-        })),
+        Effect.map((settings) => boxEnvironment(settings.upstashBox)),
+        Effect.orElseSucceed(() => boxEnvironment(DEFAULT_SERVER_SETTINGS.upstashBox)),
       );
       const continuationIdentity = defaultProviderContinuationIdentity({ driverKind, instanceId });
       const agent = {
@@ -175,6 +177,11 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         agent,
         environment,
       ).pipe(Effect.provide(boxApiLayer));
+      const auth = host.settings.update
+        ? yield* makeBoxHarnessAuth(instanceId, harness, environment, host.settings.update).pipe(
+            Effect.provide(SecureRandom.layerWebCrypto),
+          )
+        : undefined;
       const base = Effect.gen(function* () {
         const checkedAt = DateTime.formatIso(yield* DateTime.now);
         return {
@@ -193,21 +200,31 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
           supportsTextGeneration: false,
           supportedRuntimeModes: ["full-access"],
           showInteractionModeToggle: false,
-          setup: { canAuthenticate: false, canInstall: false },
+          setup: { canAuthenticate: auth !== undefined, canInstall: false },
           models: providerModelsFromSettings(boxHarnessModels(harness), config.customModels, null),
           slashCommands: [],
           skills: [],
         } satisfies ServerProvider;
       });
-      const source = yield* makeProviderSnapshotSettingsSource(config);
+      const toProbeSettings = ({ apiKey, credentials }: BoxEnvironmentConfig) => ({
+        apiKey,
+        agentApiKey: credentials?.[harness] || agent.agentApiKey,
+      });
       const snapshot = yield* makeManagedServerProvider({
-        ...source,
-        haveSettingsChanged: haveProviderSnapshotSettingsChanged,
+        getSettings: environment.pipe(Effect.map(toProbeSettings)),
+        streamSettings: host.settings.changes.pipe(
+          Stream.map((settings) => toProbeSettings(boxEnvironment(settings.upstashBox))),
+        ),
+        haveSettingsChanged: (previous, next) => !Equal.equals(previous, next),
         initialSnapshot: () => base,
         checkProvider: Effect.gen(function* () {
           const initial = yield* base;
           if (!enabled) return initial;
-          return { ...initial, ...(yield* probe((yield* environment).apiKey, agent)) };
+          const settings = toProbeSettings(yield* environment);
+          return {
+            ...initial,
+            ...(yield* probe(settings.apiKey, { harness, agentApiKey: settings.agentApiKey })),
+          };
         }).pipe(Effect.provide(boxApiLayer)),
         resolveMaintenance: () =>
           Effect.succeed({ provider: driverKind, packageName: null, update: null }),
@@ -237,6 +254,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         continuationIdentity,
         snapshot,
         orchestrationAdapter,
+        ...(auth ? { auth } : {}),
         textGeneration: {
           generateCommitMessage: () => unsupported("generateCommitMessage"),
           generatePrContent: () => unsupported("generatePrContent"),

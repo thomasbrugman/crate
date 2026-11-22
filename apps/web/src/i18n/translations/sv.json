@@ -744,8 +744,6 @@
   "fd961a3820d46cfa": "Ansluter till Box",
   "9f6faa1464231d0f": "Skapar Box",
   "21ace56348b5b799": "Kontrollerar Box-konfigurationen",
-  "20322174bd84f616": "Installerar Command Code",
-  "aaa55cdbc9661af6": "Kopierar inloggningsuppgifter från mall-Boxen",
   "9c08b1739f450ae2": "Klonar repositoryt",
   "49221d2a7a2da0de": "Konfigurerar Box",
   "f1d27d127ab27ac6": "Startar",
@@ -11228,7 +11226,6 @@
   "5cc965d9a688198b": "API-nyckel för Upstash Box",
   "2c5674665579a329": "Ta bort",
   "b5fa42d9412ab917": "Mall-Box",
-  "701bc68befe01da1": "Nya Boxar kopierar Git-uppgifter och Command Code-inloggningen från den här Boxen.",
   "13c467f9d514b497": "Box-storlek",
   "832282c673f5f672": "Gäller Boxar som skapas för nya trådar.",
   "f54364b854a07918": "Inga hubbar konfigurerade.",
@@ -12234,5 +12231,15 @@
   "27d76249d09eb69f": "Granskningsguiden är klar",
   "faa3bb26abb39c93": "Granskningsguiden misslyckades",
   "b7df38b7d8792d78": "Öppna guiden",
-  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide"
+  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide",
+  "9f754eebb3866690": "Installerar agenter",
+  "67f4aa1a06528a91": "Förbereder autentiseringsuppgifter",
+  "10a8d3ed31c3da0c": "Klistra in en API-nyckel för Command Code eller innehållet i ~/.commandcode/auth.json.",
+  "b348145623c69867": "Ögonblicksbild för Upstash Box",
+  "2dbd2da341f1f37e": "Valfritt. Återställ nya trådars Boxar från en ögonblicksbild skapad utan agenternas inloggningsuppgifter.",
+  "276872b1b4120d7a": "Klistra in en Anthropic-API-nyckel eller en token från claude setup-token.",
+  "7d49aae75c90c5c6": "Klistra in en OpenAI-API-nyckel eller innehållet i ~/.codex/auth.json när du har loggat in.",
+  "db982190df748359": "Nya Boxes kopierar Git-konfigurationen från denna Box men inte agenternas inloggningsuppgifter.",
+  "3924cab20604eb29": "Anslut dina agenter",
+  "c291bdeadbb22b96": "Koppla från"
 }

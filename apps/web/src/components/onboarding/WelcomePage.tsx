@@ -20,6 +20,7 @@ import {
   AuthProvidersManageScope,
   AuthRelayReadScope,
   AuthRelayWriteScope,
+  AuthSettingsWriteScope,
   AuthTerminalOperateScope,
   CommandId,
   AuthOrchestrationOperateScope,
@@ -102,6 +103,7 @@ import { AddProviderInstanceDialog } from "../settings/AddProviderInstanceDialog
 import { useDesktopCliCommand } from "../settings/CliCommandSettingsRow";
 import { CodexSetupSection } from "../settings/CodexSetupSection";
 import { readCodexSetupMode } from "../settings/CodexSetupSection.logic";
+import { UpstashBoxEnvironmentSettings } from "../settings/UpstashBoxEnvironmentSettings";
 import { TerminalViewport } from "../ThreadTerminalDrawer";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ACPRegistryIcon } from "../Icons";
@@ -139,6 +141,7 @@ export function WelcomePage({
     environments.find((environment) => environment.environmentId === environmentId)?.label ??
     gt("this computer");
   const agentReady = useWelcomeAgents(environmentId).readyCount > 0;
+  const canConfigureBox = useEnvironmentScope(environmentId, AuthSettingsWriteScope);
   // The phone and `t3` on PATH belong to the primary computer, so only it offers them.
   const isPrimary = usePrimaryEnvironmentId() === environmentId;
   // The same access Settings → Sharing & access checks.
@@ -292,6 +295,9 @@ export function WelcomePage({
               </T>
             </p>
             <div className="mt-10 border-t border-border/60">
+              {canConfigureBox ? (
+                <UpstashBoxEnvironmentSettings environmentId={environmentId} onboarding />
+              ) : null}
               <AgentsSection
                 environmentId={environmentId}
                 label={label}

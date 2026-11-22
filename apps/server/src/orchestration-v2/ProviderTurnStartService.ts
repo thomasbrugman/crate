@@ -903,7 +903,23 @@ export const layer: Layer.Layer<
         });
         return;
       }
-      const resolvedRuntimePolicy = resolvedPolicy.success;
+      let resolvedRuntimePolicy = resolvedPolicy.success;
+      if (isUpstashBoxDriver(providerThread.driver)) {
+        let owner = projection.thread;
+        const visited = new Set([owner.id]);
+        while (
+          owner.lineage.relationshipToParent === "subagent" &&
+          owner.lineage.parentThreadId !== null
+        ) {
+          const parentId = owner.lineage.parentThreadId;
+          if (visited.has(parentId)) break;
+          visited.add(parentId);
+          owner = yield* projectionStore.getThread(parentId);
+        }
+        if (owner.id !== projection.thread.id) {
+          resolvedRuntimePolicy = { ...resolvedRuntimePolicy, boxOwnerThreadId: owner.id };
+        }
+      }
       if (!(yield* isCurrentAttemptInStatus("starting"))) return;
       const existingSessionProjection = projection.providerSessions.find(
         (candidate) => candidate.id === providerSessionId,

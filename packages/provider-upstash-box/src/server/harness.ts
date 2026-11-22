@@ -1,3 +1,5 @@
+import { BOX_CREDENTIALS_DIR } from "./credentials.ts";
+
 export const commandCodeHarness = `#!/usr/bin/env node
 /*
  * Upstash Box custom harness ("box-sse-v1") backed by Command Code.
@@ -12,7 +14,7 @@ export const commandCodeHarness = `#!/usr/bin/env node
  */
 
 import { spawn, execFileSync } from 'node:child_process';
-import { readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { readdirSync, statSync, openSync, readSync, closeSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -68,7 +70,7 @@ function newestSession() {
 	return newest?.id;
 }
 
-const session = readArg(argv, '--session') || newestSession();
+const session = argv.includes('--explicit-session') ? readArg(argv, '--session') : readArg(argv, '--session') || newestSession();
 
 if (!prompt) {
 	emit('error', { error: 'no prompt received from the box' });
@@ -83,9 +85,17 @@ if (passthroughModel && passthroughModel !== 'custom') args.push('--model', pass
 if (session) args.push('--resume', session);
 if (process.env.BOXJOB_CC_PERMISSION !== 'default') args.push('--yolo');
 
+const env = { ...process.env };
+if (argv.includes('--explicit-session')) {
+	delete env.COMMAND_CODE_API_KEY;
+	try {
+		env.COMMAND_CODE_API_KEY = readFileSync('${BOX_CREDENTIALS_DIR}/commandCode-key', 'utf8');
+	} catch {}
+}
 const child = spawn(resolveBin(), args, {
 	cwd: process.env.BOXJOB_CC_CWD || process.cwd(),
-	stdio: ['ignore', 'pipe', 'pipe'],
+	stdio: ['ignore', 'pipe', 'ignore'],
+	env,
 });
 
 let buffer = '';
@@ -94,7 +104,6 @@ let finalText = '';
 let usage = {};
 let sessionId = session;
 let finished = false;
-let stderrTail = '';
 const announcedTools = new Set();
 
 function exitAfterFlush(code) {
@@ -121,7 +130,7 @@ function handleFrame(frame) {
 		usage = o.usage || usage;
 		sessionId = o.sessionId || sessionId;
 		if (o.subtype === 'error') {
-			finish('error', { error: o.error || 'command-code run failed', session_id: sessionId || '' });
+			finish('error', { error: 'Command Code run failed', session_id: sessionId || '' });
 			return;
 		}
 		finish('done', {
@@ -177,14 +186,9 @@ child.stdout.on('data', (chunk) => {
 	}
 });
 
-child.stderr.setEncoding('utf8');
-child.stderr.on('data', (chunk) => {
-	process.stderr.write(chunk);
-	stderrTail = (stderrTail + chunk).slice(-500);
-});
 
-child.on('error', (err) => {
-	finish('error', { error: \`failed to start command-code: \${err.message}\` });
+child.on('error', () => {
+	finish('error', { error: 'Could not start Command Code' });
 	exitAfterFlush(1);
 });
 
@@ -202,7 +206,7 @@ child.on('close', (code) => {
 		} else {
 			const codeNote = code === 8 ? 'max turns reached' : \`exit \${code}\`;
 			finish('error', {
-				error: \`\${codeNote}\${stderrTail ? ': ' + stderrTail.trim().split('\\n').slice(-3).join(' ') : ''}\`,
+				error: codeNote,
 				session_id: sessionId || '',
 			});
 		}

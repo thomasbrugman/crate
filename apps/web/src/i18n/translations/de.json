@@ -744,8 +744,6 @@
   "fd961a3820d46cfa": "Verbindung zur Box wird hergestellt",
   "9f6faa1464231d0f": "Box wird erstellt",
   "21ace56348b5b799": "Box-Einrichtung wird geprüft",
-  "20322174bd84f616": "Command Code wird installiert",
-  "aaa55cdbc9661af6": "Zugangsdaten werden aus der Vorlagen-Box kopiert",
   "9c08b1739f450ae2": "Repository wird geklont",
   "49221d2a7a2da0de": "Box wird eingerichtet",
   "f1d27d127ab27ac6": "Wird gestartet",
@@ -11221,7 +11219,6 @@
   "5cc965d9a688198b": "Upstash-Box-API-Schlüssel",
   "2c5674665579a329": "Entfernen",
   "b5fa42d9412ab917": "Vorlagen-Box",
-  "701bc68befe01da1": "Neue Boxen übernehmen Git-Zugangsdaten und die Command-Code-Anmeldung aus dieser Box.",
   "13c467f9d514b497": "Box-Größe",
   "832282c673f5f672": "Gilt für Boxen, die für neue Threads erstellt werden.",
   "f54364b854a07918": "Keine Hubs konfiguriert.",
@@ -12227,5 +12224,15 @@
   "27d76249d09eb69f": "Review-Leitfaden bereit",
   "faa3bb26abb39c93": "Review-Leitfaden fehlgeschlagen",
   "b7df38b7d8792d78": "Leitfaden öffnen",
-  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden"
+  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
+  "9f754eebb3866690": "Harnesses werden installiert",
+  "67f4aa1a06528a91": "Anmeldedaten werden vorbereitet",
+  "10a8d3ed31c3da0c": "Füge einen Command Code API-Schlüssel oder den Inhalt von ~/.commandcode/auth.json ein.",
+  "b348145623c69867": "Upstash Box-Snapshot",
+  "2dbd2da341f1f37e": "Optional. Stelle neue Thread-Boxes aus einem Snapshot ohne Harness-Anmeldedaten wieder her.",
+  "276872b1b4120d7a": "Füge einen Anthropic-API-Schlüssel oder ein Token von claude setup-token ein.",
+  "7d49aae75c90c5c6": "Füge einen OpenAI-API-Schlüssel oder nach der Anmeldung den Inhalt von ~/.codex/auth.json ein.",
+  "db982190df748359": "Neue Boxes übernehmen die Git-Konfiguration dieser Box, aber keine Harness-Anmeldedaten.",
+  "3924cab20604eb29": "Harnesses verbinden",
+  "c291bdeadbb22b96": "Trennen"
 }

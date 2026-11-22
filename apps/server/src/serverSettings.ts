@@ -55,6 +55,7 @@ import {
   isModelSelectionProviderEnabled,
 } from "@t3tools/shared/serverSettings";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import { encryptBoxHarnessSecrets } from "./auth/BoxHarnessSecretEncryption.ts";
 import * as ManagedPolicy from "./policy/ManagedPolicy.ts";
 import { secretProviderDefinitions } from "./secrets/secretProviderDefinitions.ts";
 import {
@@ -672,7 +673,7 @@ const make = Effect.gen(function* () {
   const { settingsPath } = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
-  const secretStore = yield* ServerSecretStore.ServerSecretStore;
+  const secretStore = encryptBoxHarnessSecrets(yield* ServerSecretStore.ServerSecretStore);
   const sql = yield* SqlClient.SqlClient;
   const {
     settings: managed,

@@ -72,7 +72,9 @@ export const layerBoxCleanup = Layer.effect(
       );
       yield* cleanupBoxThreads({
         threadId,
-        deleted: records.thread.deletedAt !== null,
+        deleted:
+          records.thread.deletedAt !== null &&
+          records.thread.lineage.relationshipToParent !== "subagent",
         providerThreads: records.providerThreads,
       }).pipe(Effect.provideService(BoxThreadCleanup.BoxThreadCleanup, boxes));
     });
@@ -117,7 +119,22 @@ export const cleanupSettledBoxes = Effect.fn("ResourceCleanupService.cleanupSett
     const dispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
     const now = DateTime.toEpochMillis(yield* DateTime.now);
     const snapshot = yield* projections.getShellSnapshot({ location: "active" });
+    const shells = new Map(snapshot.threads.map((shell) => [shell.id, shell]));
+    const busyOwners = new Set<ThreadId>();
     for (const shell of snapshot.threads) {
+      if (settledBoxQuietSince(shell, now) !== null) continue;
+      const seen = new Set<ThreadId>();
+      let current: OrchestrationV2ThreadShell | undefined = shell;
+      while (current?.lineage.relationshipToParent === "subagent") {
+        const parentId = current.lineage.parentThreadId;
+        if (!parentId || seen.has(parentId)) break;
+        seen.add(parentId);
+        busyOwners.add(parentId);
+        current = shells.get(parentId);
+      }
+    }
+    for (const shell of snapshot.threads) {
+      if (shell.lineage.relationshipToParent === "subagent" || busyOwners.has(shell.id)) continue;
       const quietSince = settledBoxQuietSince(shell, now);
       if (quietSince === null || now - quietSince < Duration.toMillis(SETTLED_BOX_RETENTION))
         continue;

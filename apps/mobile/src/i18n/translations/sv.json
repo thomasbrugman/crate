@@ -744,8 +744,6 @@
   "fd961a3820d46cfa": "Ansluter till Box",
   "9f6faa1464231d0f": "Skapar Box",
   "21ace56348b5b799": "Kontrollerar Box-konfigurationen",
-  "20322174bd84f616": "Installerar Command Code",
-  "aaa55cdbc9661af6": "Kopierar inloggningsuppgifter från mall-Boxen",
   "9c08b1739f450ae2": "Klonar repositoryt",
   "49221d2a7a2da0de": "Konfigurerar Box",
   "f1d27d127ab27ac6": "Startar",
@@ -5343,5 +5341,7 @@
   "ad208e3e32c85029": "Dölj alla",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Verktygsanrop i chatten",
-  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid."
+  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid.",
+  "9f754eebb3866690": "Installerar agenter",
+  "67f4aa1a06528a91": "Förbereder autentiseringsuppgifter"
 }

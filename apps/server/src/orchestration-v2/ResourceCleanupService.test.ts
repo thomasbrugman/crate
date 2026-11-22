@@ -103,6 +103,11 @@ it.effect("deletes Boxes of threads settled and quiet for three days unless they
     const shell = (id: string, overrides: Partial<OrchestrationV2ThreadShell>) =>
       ({
         id: ThreadId.make(id),
+        lineage: {
+          parentThreadId: null,
+          relationshipToParent: null,
+          rootThreadId: ThreadId.make(id),
+        },
         status: "idle",
         activeRunId: null,
         pendingRuntimeRequest: null,
@@ -119,11 +124,27 @@ it.effect("deletes Boxes of threads settled and quiet for three days unless they
     const threads = [
       shell("due", {}),
       shell("holds-work", {}),
+      shell("has-running-child", {}),
       shell("settled-two-days", { settledAt: at(-2) }),
       shell("recent-message", { latestUserMessageAt: at(-1) }),
       shell("unsettled", { settledAt: null }),
       shell("running", { activeRunId: "run-1" as OrchestrationV2ThreadShell["activeRunId"] }),
       shell("codex", {}),
+      shell("child", {
+        lineage: {
+          parentThreadId: ThreadId.make("due"),
+          relationshipToParent: "subagent",
+          rootThreadId: ThreadId.make("due"),
+        },
+      }),
+      shell("running-child", {
+        activeRunId: "run-2" as OrchestrationV2ThreadShell["activeRunId"],
+        lineage: {
+          parentThreadId: ThreadId.make("has-running-child"),
+          relationshipToParent: "subagent",
+          rootThreadId: ThreadId.make("has-running-child"),
+        },
+      }),
       shell("followed-up", {}),
     ];
     const current = (threadId: ThreadId) =>
@@ -182,6 +203,7 @@ it.effect("serializes settled Box deletion with follow-up intake in either order
         const driver = ProviderDriverKind.make("boxCommandCode");
         let shell = {
           id: threadId,
+          lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
           activeRunId: null,
           pendingRuntimeRequest: null,
           pendingBackgroundTasks: [],

@@ -970,6 +970,18 @@ export type UpstashBoxSize = typeof UpstashBoxSize.Type;
 /** The Upstash Box environment every thread runs in, whichever provider drives it. */
 export const UpstashBoxEnvironmentSettings = Schema.Struct({
   apiKey: SettingsSecretValue.pipe(Schema.withDecodingDefault(Effect.succeed("")), secretSetting),
+  commandCodeAuth: SettingsSecretValue.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
+  claudeCodeAuth: SettingsSecretValue.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
+  codexAuth: SettingsSecretValue.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
   templateBoxName: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("cc-harness"))),
   size: UpstashBoxSize.pipe(Schema.withDecodingDefault(Effect.succeed("small" as const))),
 });
@@ -1189,6 +1201,7 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "newWorktreesStartFromOrigin",
   "worktreeSubmodules",
   "defaultAutoPull",
+  "upstashBoxSnapshotId",
   "defaultProjectScripts",
   "enableAgentBrowserAccess",
   "enableAgentDeviceAccess",
@@ -1227,6 +1240,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: ForwardCompatibleOptional(WorktreeSubmodules),
   defaultAutoPull: Schema.optionalKey(Schema.Boolean),
+  upstashBoxSnapshotId: Schema.optionalKey(TrimmedString),
   defaultProjectScripts: Schema.optionalKey(Schema.Array(ProjectScript)),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   enableAgentDeviceAccess: Schema.optionalKey(Schema.Boolean),
@@ -1429,6 +1443,7 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   defaultAutoPull: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  upstashBoxSnapshotId: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   defaultProjectScripts: Schema.Array(ProjectScript).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -1895,6 +1910,7 @@ export const ServerSettingsPatch = Schema.Struct({
     Schema.Record(ProjectId, Schema.NullOr(Schema.Boolean)),
   ),
   defaultAutoPull: Schema.optionalKey(Schema.Boolean),
+  upstashBoxSnapshotId: Schema.optionalKey(TrimmedString),
   defaultProjectScripts: Schema.optionalKey(Schema.Array(ProjectScript)),
   projectScriptOverrides: Schema.optionalKey(
     Schema.Record(ProjectId, Schema.NullOr(Schema.Array(ProjectScript))),
@@ -2001,6 +2017,9 @@ export const ServerSettingsPatch = Schema.Struct({
   upstashBox: Schema.optionalKey(
     Schema.Struct({
       apiKey: Schema.optionalKey(SettingsSecretValue),
+      commandCodeAuth: Schema.optionalKey(SettingsSecretValue),
+      claudeCodeAuth: Schema.optionalKey(SettingsSecretValue),
+      codexAuth: Schema.optionalKey(SettingsSecretValue),
       templateBoxName: Schema.optionalKey(TrimmedString),
       size: Schema.optionalKey(UpstashBoxSize),
     }),
