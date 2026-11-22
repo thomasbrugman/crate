@@ -26,6 +26,10 @@ def render_options(parser):
     parser.add_argument('--lid-tilt', type=float, default=-12)
 
 
+def concat_entry(path):
+    return "file '" + str(path).replace("'", "'\\''") + "'\n"
+
+
 def complete_png(path):
     if not path.exists() or path.stat().st_size < 20:
         return False

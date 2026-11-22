@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from common import SHOTS, complete_png, render_options, work_parser
+from common import SHOTS, complete_png, concat_entry, render_options, work_parser
 
 
 class PipelineOptionsTest(unittest.TestCase):
@@ -33,6 +33,16 @@ class PipelineOptionsTest(unittest.TestCase):
     def test_cut_frame_budget(self):
         self.assertEqual(sum(round(s['seconds']*60) for s in SHOTS[:-1]), 1590)
         self.assertEqual(round(SHOTS[-1]['seconds']*60), 240)
+
+    def test_concat_entry_quoting(self):
+        for path, expected in [
+            (Path('/work dir/clip.mp4'), "file '/work dir/clip.mp4'\n"),
+            (Path("/Thomas's cut/clip.mp4"), "file '/Thomas'\\''s cut/clip.mp4'\n"),
+            ("a'b'c", "file 'a'\\''b'\\''c'\n"),
+            ('', "file ''\n"),
+        ]:
+            with self.subTest(path=path):
+                self.assertEqual(concat_entry(path), expected)
 
 
 if __name__ == '__main__':

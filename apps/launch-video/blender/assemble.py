@@ -3,7 +3,7 @@ import subprocess
 import json
 from PIL import Image, ImageDraw
 
-from common import work_parser
+from common import concat_entry, work_parser
 
 parser = work_parser('Assemble rendered shots with captions, end card and music')
 parser.add_argument('--final', action='store_true')
@@ -45,7 +45,7 @@ for index,shot in enumerate(shots):
         for column in range(3):sheet.paste(image,(column*480,index*300))
     clips.append(out)
 sheet.save(D/(prefix+'contact_sheet.jpg'),quality=94)
-(D/(prefix+'concat.txt')).write_text(''.join(f"file '{p}'\n" for p in clips))
+(D/(prefix+'concat.txt')).write_text(''.join(concat_entry(p) for p in clips))
 ff('-f','concat','-safe',0,'-i',D/(prefix+'concat.txt'),'-ss',args.music_start,'-i',music,
    '-map','0:v:0','-map','1:a:0','-c:v','copy','-af',
    'aresample=48000,volume=0.48,afade=t=in:d=0.4,afade=t=out:st=29.1:d=1.4',
