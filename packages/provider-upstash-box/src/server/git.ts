@@ -109,5 +109,5 @@ async function configureBoxGit(
     ].join(" && "),
   );
   await writeVolatile(gitCredential, `username=x-access-token\npassword=${token}\n`);
-  await writeVolatile(gitStamp, digest);
+  if (identity) await writeVolatile(gitStamp, digest);
 }

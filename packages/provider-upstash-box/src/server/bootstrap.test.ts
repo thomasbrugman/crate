@@ -284,7 +284,13 @@ it.effect.each([
               );
             return {
               stdout: "",
-              exitCode: command.startsWith("test -f") || command.startsWith("test -s") ? 1 : 0,
+              exitCode: command.startsWith("test -s /dev/shm/t3stash-git/credential")
+                ? volatile.has("/dev/shm/t3stash-git/stamp")
+                  ? 0
+                  : 1
+                : command.startsWith("test -f")
+                  ? 1
+                  : 0,
             };
           },
         },
@@ -303,7 +309,7 @@ it.effect.each([
         claudeCode: "sk-ant-oat-test",
         codex: "codex-key-fixture",
       };
-      yield* ensureBox(
+      const prepareBox = ensureBox(
         {
           apiKey: "key",
           templateBoxName: "template",
@@ -320,6 +326,7 @@ it.effect.each([
       ).pipe(
         Effect.provideService(BoxApi, {
           get: async (id) => {
+            if (id === "thread" && created) return box;
             if (id !== "template") throw new BoxError("missing", 404);
             return {
               ...box,
@@ -355,6 +362,7 @@ it.effect.each([
           ),
         ),
       );
+      yield* prepareBox;
       assert.deepEqual(created?.networkPolicy, { mode: "allow-all" });
       assert.equal(restored, snapshotId);
       assert.isUndefined(created?.agent);
@@ -392,6 +400,16 @@ it.effect.each([
         credentials.codex,
       );
       assert.deepEqual(templateReads, []);
+      if (profileStatus !== 200) {
+        const stampWrittenAfterFailure = volatile.has("/dev/shm/t3stash-git/stamp");
+        githubUser.mockResolvedValueOnce(Response.json({ id: 123, login: "fixture-login" }));
+        yield* prepareBox;
+        assert.equal(githubUser.mock.calls.length, 2);
+        assert.isFalse(stampWrittenAfterFailure);
+        assert.include(commands.join("\n"), "user.name 'fixture-login'");
+        assert.include(commands.join("\n"), "123+fixture-login@users.noreply.github.com");
+        assert.isTrue(volatile.has("/dev/shm/t3stash-git/stamp"));
+      }
     }),
 );
 
