@@ -16,7 +16,6 @@ import type {
   ServerProvider,
 } from "@t3tools/contracts";
 import { codexAuthHandoffUrl } from "@t3tools/shared/codexAuthHandoff";
-import { T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
 import { providerAuthReturnUrl } from "@t3tools/shared/providerAuthReturnUrl";
 import { isLoopbackHost } from "@t3tools/shared/preview";
 import { CheckIcon, ChevronRightIcon, ExternalLinkIcon } from "lucide-react";
@@ -32,6 +31,7 @@ import {
 import { T, useGT, useMessages } from "gt-react";
 
 import { ensureLocalApi } from "../../localApi";
+import { resolveDesktopAppHandoff } from "../../branding.logic";
 import { browserClientOs } from "../../connection/clientMetadata";
 import { managedInstanceLocks, useManagedPolicy } from "../../state/managedPolicy";
 import { ManagedControl } from "../ManagedPolicy";
@@ -686,6 +686,7 @@ function ManagedCodexSetup({
     (reconnectEmail ?? gt("Use your ChatGPT subscription."))
   );
 
+  const desktopHandoff = resolveDesktopAppHandoff(browserClientOs(navigator), import.meta.env.DEV);
   const handoffUrl =
     needsManualCallback && url && auth?.flowId && providerAuthReturnUrl(returnUrl.toString())
       ? codexAuthHandoffUrl(
@@ -696,11 +697,7 @@ function ManagedCodexSetup({
             instanceId,
             flowId: auth.flowId,
           },
-          import.meta.env.DEV
-            ? "t3code-dev"
-            : browserClientOs(navigator) === "macOS"
-              ? T3STASH_APP_SCHEME
-              : "t3code",
+          desktopHandoff.scheme,
         )
       : null;
   const waitingControl = (
@@ -797,8 +794,22 @@ function ManagedCodexSetup({
               <T>Other ways to connect</T>
             </summary>
             <Button className="mt-2" size="sm" variant="outline" render={<a href={handoffUrl} />}>
-              <T>Use T3 desktop for automatic return</T>
+              {desktopHandoff.macInstallUrl ? (
+                <T>Open in desktop app</T>
+              ) : (
+                <T>Use T3 desktop for automatic return</T>
+              )}
             </Button>
+            {desktopHandoff.macInstallUrl ? (
+              <Button
+                className="mt-2"
+                size="sm"
+                variant="ghost"
+                render={<a href={desktopHandoff.macInstallUrl} />}
+              >
+                {gt("Get {app}", { app: "t3stash" })}
+              </Button>
+            ) : null}
           </details>
         ) : null}
       </div>

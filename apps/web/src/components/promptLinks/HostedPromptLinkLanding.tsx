@@ -5,7 +5,6 @@ import {
 } from "@t3tools/shared/promptLinks";
 import { parseNewThreadLink, parseThreadLinkPrompt } from "@t3tools/shared/promptLinksCopy";
 import { useLocation } from "@tanstack/react-router";
-import { T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
 import * as Schema from "effect/Schema";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -13,6 +12,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { MessageResolver } from "../../i18n/messages";
 
 import { DESKTOP_DOWNLOAD_URL } from "~/branding";
+import { resolveDesktopAppHandoff } from "~/branding.logic";
 import { browserClientOs } from "~/connection/clientMetadata";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { isHostedStaticApp } from "~/hostedPairing";
@@ -144,10 +144,8 @@ function HostedPromptLinkLanding({
   const m = useMessages();
   const summary = summarize(appPath, m);
   const [remember, setRemember] = useState(false);
-  const deepLink = promptLinkDeepLink(
-    appPath,
-    browserClientOs(navigator) === "macOS" ? T3STASH_APP_SCHEME : undefined,
-  );
+  const handoff = resolveDesktopAppHandoff(browserClientOs(navigator));
+  const deepLink = promptLinkDeepLink(appPath, handoff.scheme);
   const onPhone = /android|iphone|ipad/i.test(navigator.userAgent);
   const autoOpenedRef = useRef(false);
 
@@ -200,8 +198,8 @@ function HostedPromptLinkLanding({
             <T>Continue here</T>
           </Button>
         ) : null}
-        <Button variant="ghost" render={<a href={DESKTOP_DOWNLOAD_URL} />}>
-          <T>Get T3 Code</T>
+        <Button variant="ghost" render={<a href={handoff.macInstallUrl ?? DESKTOP_DOWNLOAD_URL} />}>
+          {handoff.macInstallUrl ? gt("Get {app}", { app: "t3stash" }) : <T>Get T3 Code</T>}
         </Button>
       </div>
       <label className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
