@@ -337,7 +337,7 @@ def parallel(inputs, plate, output):
     graph = []
     row_width, row_height = 1736, 222
     for i, (name, start, label) in enumerate(PARALLEL):
-        delay = i * 0.64
+        delay = i * 38 / FPS
         y = 229 + i * 242
         row = Image.new("RGB", (row_width, row_height), "#282822")
         draw = ImageDraw.Draw(row)
@@ -361,7 +361,8 @@ def parallel(inputs, plate, output):
             f"[{2 * i + 2}:v]crop=1116:284:252:62,scale=856:218,fps={FPS},setsar=1,"
             "drawbox=c=0xc9c7c2:w=iw:h=ih:t=2,"
             f"tpad=stop_mode=clone:stop_duration={PARALLEL_LENGTH}[clip{i}];"
-            f"[{2 * i + 1}:v][clip{i}]overlay=527:2:shortest=1[dock{i}]"
+            f"[{2 * i + 1}:v][clip{i}]overlay=527:2:shortest=1,"
+            f"setpts=PTS+{delay}/TB[dock{i}]"
         )
         base = "0:v" if i == 0 else f"row{i - 1}"
         graph.append(
