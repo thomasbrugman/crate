@@ -82,6 +82,7 @@ vi.mock("./ServerBrowserContexts.ts", () => ({
     async close() {
       for (const context of contexts) await context.close();
     }
+    async clearProfile(_profileId: string) {}
   },
 }));
 
@@ -570,14 +571,20 @@ const viewerInput = (tabId: string, canOperate: boolean) => ({
 it.effect("shares a Box profile's context without closing it when a tab closes", () => {
   const remote = makeContext();
   const other = makeContext();
+  const fresh = makeContext();
+  fresh.newPage = vi.fn(fresh.newPage);
   other.page.context = () => remote;
   const newSession = remote.newCDPSession;
   remote.newCDPSession = (target) =>
     target === other.page ? other.newCDPSession(target) : newSession(target);
   remote.newPage = vi.fn().mockResolvedValueOnce(remote.page).mockResolvedValueOnce(other.page);
-  const newContext = vi.fn(async () => remote as unknown as BrowserContext);
+  const newContext = vi
+    .fn<Browser["newContext"]>()
+    .mockResolvedValueOnce(remote as unknown as BrowserContext)
+    .mockResolvedValueOnce(fresh as unknown as BrowserContext);
   const browser = { newContext, isConnected: () => true } as unknown as Browser;
   Object.assign(remote, { browser: () => browser });
+  Object.assign(fresh, { browser: () => browser });
   const managed = Layer.succeed(BoxBrowser, {
     connect: () => Effect.succeed(browser),
     readFile: () => Effect.succeed(null),
@@ -595,6 +602,14 @@ it.effect("shares a Box profile's context without closing it when a tab closes",
     expect(remote.page.close).toHaveBeenCalled();
     expect(remote.close).not.toHaveBeenCalled();
     expect(other.page.close).not.toHaveBeenCalled();
+    yield* manager.close({ threadId, tabId: second.tabId });
+    expect(remote.close).not.toHaveBeenCalled();
+    yield* server.clearProfile("default");
+    expect(remote.close).toHaveBeenCalledOnce();
+    const reopened = yield* manager.open({ threadId, profileId: "default" });
+    yield* server.attachViewer(viewerInput(reopened.tabId, true));
+    expect(newContext).toHaveBeenCalledTimes(2);
+    expect(fresh.newPage).toHaveBeenCalledOnce();
   }).pipe(
     Effect.scoped,
     Effect.provide(

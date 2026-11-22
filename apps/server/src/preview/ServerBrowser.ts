@@ -600,19 +600,26 @@ const make = Effect.gen(function* () {
   const launchersDir = NodePath.join(config.stateDir, "server-browser", "launchers");
 
   const tabs = new Map<string, ServerTab>();
-  const boxProfiles = new WeakMap<Browser, Map<string, Promise<BrowserContext>>>();
-  const boxProfileContext = (browser: Browser, profileId: string) => {
-    let profiles = boxProfiles.get(browser);
-    if (profiles === undefined) {
-      profiles = new Map();
-      boxProfiles.set(browser, profiles);
+  const boxProfiles = new Map<string, Map<Browser, Promise<BrowserContext>>>();
+  const clearingBoxProfiles = new Map<string, Promise<void>>();
+  const boxProfileContext = async (browser: Browser, profileId: string) => {
+    const clearing = clearingBoxProfiles.get(profileId);
+    if (clearing) await clearing.catch(constVoid);
+    let profile = boxProfiles.get(profileId);
+    if (profile === undefined) {
+      profile = new Map();
+      boxProfiles.set(profileId, profile);
     }
-    const existing = profiles.get(profileId);
+    const existing = profile.get(browser);
     if (existing !== undefined) return existing;
-    const cache = profiles;
-    const evict = () => cache.delete(profileId);
+    const cache = profile;
     const pending = browser.newContext();
-    cache.set(profileId, pending);
+    const evict = () => {
+      if (cache.get(browser) !== pending) return;
+      cache.delete(browser);
+      if (cache.size === 0) boxProfiles.delete(profileId);
+    };
+    cache.set(browser, pending);
     void pending.then((context) => context.once("close", evict), evict);
     return pending;
   };
@@ -3599,7 +3606,27 @@ const make = Effect.gen(function* () {
 
   const clearProfile = (profileId: string) =>
     Effect.tryPromise({
-      try: () => contexts.clearProfile(profileId),
+      try: async () => {
+        const existing = clearingBoxProfiles.get(profileId);
+        if (existing) return existing;
+        const pending = [...(boxProfiles.get(profileId)?.values() ?? [])];
+        const clearing = Promise.allSettled([
+          contexts.clearProfile(profileId),
+          ...pending.map(async (opening) => {
+            const context = await opening.catch(() => undefined);
+            await context?.close();
+          }),
+        ]).then((results) => {
+          const failure = results.find((result) => result.status === "rejected");
+          if (failure) throw failure.reason;
+        });
+        clearingBoxProfiles.set(profileId, clearing);
+        try {
+          await clearing;
+        } finally {
+          clearingBoxProfiles.delete(profileId);
+        }
+      },
       catch: (cause) => new PreviewClearProfileError({ profileId, cause }),
     });
 
