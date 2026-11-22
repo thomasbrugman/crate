@@ -1,5 +1,7 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off - Box bootstrap uses promises.
 import * as NodeCrypto from "node:crypto";
+import * as Effect from "effect/Effect";
+
 import { BOX_HOME, quoteShell, requireCommand, type BoxHandle } from "./BoxApi.ts";
 
 const gitDir = "/dev/shm/t3stash-git";
@@ -40,7 +42,25 @@ async function gitHubIdentity(token: string) {
   };
 }
 
-export async function configureBoxGit(box: BoxHandle, rawToken: string | undefined) {
+export const makeBoxGitSetup = Effect.context<never>().pipe(
+  Effect.map((context) => {
+    const runSync = Effect.runSyncWith(context);
+    return (box: BoxHandle, token: string | undefined) =>
+      configureBoxGit(box, token, () =>
+        runSync(
+          Effect.logWarning(
+            "Could not look up the GitHub profile for Box Git; skipping commit identity.",
+          ),
+        ),
+      );
+  }),
+);
+
+async function configureBoxGit(
+  box: BoxHandle,
+  rawToken: string | undefined,
+  warnIdentityUnavailable: () => void,
+) {
   const token = rawToken?.trim() ?? "";
   const legacyCredential = `${BOX_HOME}/.git-credentials`;
   if (!token) {
@@ -66,7 +86,10 @@ export async function configureBoxGit(box: BoxHandle, rawToken: string | undefin
     box,
     `umask 077 && mkdir -p ${gitDir} && test "$(stat -f -c %T ${gitDir})" = tmpfs && rm -f -- ${gitCredential} ${gitConfig} ${gitStamp}`,
   );
-  const { name, email } = await gitHubIdentity(token);
+  const identity = await gitHubIdentity(token).catch(() => {
+    warnIdentityUnavailable();
+    return undefined;
+  });
   const config = `GIT_CONFIG_GLOBAL=${gitConfig} git config --global`;
   const key = "credential.https://github.com.helper";
   const helper = `!f() { if test "$1" = get && test -r ${gitCredential}; then cat ${gitCredential}; fi; }; f`;
@@ -74,8 +97,12 @@ export async function configureBoxGit(box: BoxHandle, rawToken: string | undefin
     box,
     [
       "umask 077",
-      `${config} -- user.name ${quoteShell(name)}`,
-      `${config} -- user.email ${quoteShell(email)}`,
+      ...(identity
+        ? [
+            `${config} -- user.name ${quoteShell(identity.name)}`,
+            `${config} -- user.email ${quoteShell(identity.email)}`,
+          ]
+        : []),
       `${config} --add ${key} ''`,
       `${config} --add ${key} ${quoteShell(helper)}`,
       `{ ${include} || ${global} --add include.path ${gitConfig}; }`,

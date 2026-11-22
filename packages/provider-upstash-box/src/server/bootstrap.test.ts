@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import { Agent, BoxApiKey, BoxError, type BoxConfig } from "@upstash/box";
 import * as Effect from "effect/Effect";
+import * as Logger from "effect/Logger";
 import { vi } from "vite-plus/test";
 
 import { BoxApi, type BoxHandle } from "./BoxApi.ts";
@@ -241,9 +242,15 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
   }),
 );
 
-it.effect.each([undefined, "snapshot-fixture"])(
-  "prepares volatile Git and harness credentials before cloning (snapshot %s)",
-  (snapshotId) =>
+it.effect.each([
+  { snapshotId: undefined, profileStatus: 200 },
+  { snapshotId: "snapshot-fixture", profileStatus: 200 },
+  { snapshotId: undefined, profileStatus: 401 },
+  { snapshotId: "snapshot-fixture", profileStatus: 503 },
+  { snapshotId: undefined, profileStatus: null },
+])(
+  "prepares volatile Git and harness credentials before cloning (snapshot $snapshotId, GitHub profile status $profileStatus)",
+  ({ snapshotId, profileStatus }) =>
     Effect.gen(function* () {
       let created: BoxConfig | undefined;
       let restored: string | undefined;
@@ -251,11 +258,13 @@ it.effect.each([undefined, "snapshot-fixture"])(
       const templateReads: string[] = [];
       const files = new Map<string, string>();
       const volatile = new Map<string, string>();
-      using githubUser = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValue(
-          Response.json({ id: 123, login: "fixture-login", name: "Fixture O'Name", email: null }),
-        );
+      const warnings: unknown[] = [];
+      using githubUser = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+        if (profileStatus === null) throw new Error("fixture-github-token");
+        return profileStatus === 200
+          ? Response.json({ id: 123, login: "fixture-login", name: "Fixture O'Name", email: null })
+          : new Response("fixture-github-token", { status: profileStatus });
+      });
       const box: BoxHandle = {
         id: "shared-box",
         resume: async () => undefined,
@@ -335,13 +344,31 @@ it.effect.each([undefined, "snapshot-fixture"])(
           list: async () => [],
           checkModelKey: async () => 200,
         }),
+        Effect.provide(
+          Logger.layer(
+            [
+              Logger.make(({ logLevel, message }) => {
+                if (logLevel === "Warn") warnings.push(message);
+              }),
+            ],
+            { mergeWithExisting: false },
+          ),
+        ),
       );
       assert.deepEqual(created?.networkPolicy, { mode: "allow-all" });
       assert.equal(restored, snapshotId);
       assert.isUndefined(created?.agent);
       assert.isUndefined(created?.git);
       assert.equal(githubUser.mock.calls[0]?.[0], "https://api.github.com/user");
-      assert.include(commands.join("\n"), "123+fixture-login@users.noreply.github.com");
+      if (profileStatus === 200) {
+        assert.include(commands.join("\n"), "123+fixture-login@users.noreply.github.com");
+        assert.deepEqual(warnings, []);
+      } else {
+        assert.notMatch(commands.join("\n"), /user\.(name|email)/u);
+        assert.deepEqual(warnings, [
+          ["Could not look up the GitHub profile for Box Git; skipping commit identity."],
+        ]);
+      }
       assert.include(commands.join("\n"), "credential.https://github.com.helper");
       assert.notInclude(commands.join("\n"), "fixture-github-token");
       assert.notInclude(JSON.stringify(created), "fixture-github-token");

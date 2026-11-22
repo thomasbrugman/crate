@@ -39,7 +39,7 @@ import {
 import { capabilities as baseCapabilities } from "./capabilities.ts";
 import { harnessCredentialKind } from "./credentials.ts";
 import { execHarness } from "./execHarness.ts";
-import { configureBoxGit } from "./git.ts";
+import { makeBoxGitSetup } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 import { cancelBoxRun } from "./stop.ts";
 import { BoxTurnTranslation } from "./translation.ts";
@@ -197,6 +197,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
     ),
     openSession: Effect.fn("UpstashBox.openSession")(function* (input) {
       const scope = yield* Effect.scope;
+      const configureBoxGit = yield* makeBoxGitSetup;
       const events = yield* Queue.unbounded<Adapter.ProviderAdapterV2Event>();
       const boxes = new Map<string, BoxHandle>();
       const recreatedThreads = new Set<ProviderThreadId>();

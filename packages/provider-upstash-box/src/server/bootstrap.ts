@@ -24,7 +24,7 @@ import {
   harnessCredentialKind,
   type BoxHarnessCredentials,
 } from "./credentials.ts";
-import { configureBoxGit } from "./git.ts";
+import { makeBoxGitSetup } from "./git.ts";
 
 const isBoxRuntimeError = Schema.is(BoxRuntimeError);
 
@@ -62,6 +62,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
 ) {
   const api = yield* BoxApi;
   if (!config.apiKey.trim()) return yield* new BoxRuntimeError({ operation: "authenticate" });
+  const configureBoxGit = yield* makeBoxGitSetup;
   return yield* Effect.tryPromise({
     try: () =>
       shareSetup(
@@ -102,7 +103,9 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
           }
           try {
             if (config.credentials) {
-              await prepareThreadBox(box, config, repositoryUrl, onProgress);
+              await prepareThreadBox(box, config, repositoryUrl, onProgress, () =>
+                configureBoxGit(box, config.githubToken),
+              );
               return box;
             }
             const installHarness = () =>
@@ -298,6 +301,7 @@ async function prepareThreadBox(
   config: BoxRuntimeConfig,
   repositoryUrl: string | undefined,
   onProgress: (step: BoxSetupStep) => void,
+  configureGit: () => Promise<void>,
 ) {
   onProgress("check");
   if (config.snapshotId) {
@@ -313,7 +317,7 @@ async function prepareThreadBox(
     `test -f ${BOOTSTRAPPED_MARKER}${repositoryUrl ? " && test -e /workspace/home/repo/.git" : ""}`,
   );
   await installConnectedHarnesses(box, config, onProgress);
-  await configureBoxGit(box, config.githubToken);
+  await configureGit();
   if (bootstrapped.exitCode === 0) return;
   if (repositoryUrl) {
     onProgress("clone");
