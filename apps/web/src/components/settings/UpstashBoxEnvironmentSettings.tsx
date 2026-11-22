@@ -90,7 +90,8 @@ export function UpstashBoxEnvironmentSettings({
             <SettingsRow
               title={gt("Template Box")}
               description={gt(
-                "New Boxes copy Git configuration from this Box, not harness logins.",
+                "Used to set up legacy {harness} Boxes, not to configure Git credentials.",
+                { harness: BOX_HARNESS_LABELS.commandCode },
               )}
               control={
                 <DraftInput

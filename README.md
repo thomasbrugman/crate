@@ -56,11 +56,15 @@ phone loses the connection, even though the Boxes themselves are in the cloud.
    - **Command Code:** an API key, or the contents of `~/.commandcode/auth.json`
    - **Claude Code:** an Anthropic API key, or a token from `claude setup-token`
    - **Codex:** an OpenAI API key, or the contents of `~/.codex/auth.json`
-3. Add a project. t3stash reads the project's Git remote and clones it into each new Box.
+3. To clone private GitHub repositories or push from a Box, save your github.com token in
+   **Settings → Source control & issues**.
+4. Add a project. t3stash reads the project's Git remote and clones it into each new Box.
    Uncommitted changes on your Mac are not uploaded, so push first.
 
 Agent credentials are encrypted on your Mac and injected into each Box when it starts. They never
-end up in a snapshot.
+end up in a snapshot. New and restored Boxes use your saved GitHub token and GitHub profile
+for Git. The token is kept in memory-backed storage. The **Template Box** setting is only
+used for legacy Command Code setup, not for Git.
 
 ## How it works
 
@@ -72,7 +76,7 @@ end up in a snapshot.
   parent's commit when the task was delegated. Commit work you want the child to see first.
 - **Sizes and snapshots.** Pick small, medium or large per thread. To skip slow installs, set up a
   Box once, snapshot it, and put the snapshot ID in your project defaults. New threads start from
-  it. Use a snapshot that has never had agent credentials in it.
+  it. Use a snapshot of a setup Box that has never contained credentials, not an active thread Box.
 - **Boxes stick around.** Archiving a thread keeps its Box. Deleting the thread deletes it.
 
 ## What's missing

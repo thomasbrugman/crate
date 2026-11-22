@@ -12239,7 +12239,7 @@
   "2dbd2da341f1f37e": "Valfritt. Återställ nya trådars Boxar från en ögonblicksbild skapad utan agenternas inloggningsuppgifter.",
   "276872b1b4120d7a": "Klistra in en Anthropic-API-nyckel eller en token från claude setup-token.",
   "7d49aae75c90c5c6": "Klistra in en OpenAI-API-nyckel eller innehållet i ~/.codex/auth.json när du har loggat in.",
-  "db982190df748359": "Nya Boxes kopierar Git-konfigurationen från denna Box men inte agenternas inloggningsuppgifter.",
+  "7317ccaec18e412a": "Används för att konfigurera äldre {harness}-Boxes, inte för att ställa in Git-inloggningsuppgifter.",
   "3924cab20604eb29": "Anslut dina agenter",
   "c291bdeadbb22b96": "Koppla från"
 }

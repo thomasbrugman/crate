@@ -12232,7 +12232,7 @@
   "2dbd2da341f1f37e": "Facultatif. Restaurez les Boxes des nouveaux fils à partir d’un instantané créé sans identifiants d’agents.",
   "276872b1b4120d7a": "Collez une clé API Anthropic ou un jeton obtenu avec claude setup-token.",
   "7d49aae75c90c5c6": "Collez une clé API OpenAI ou le contenu de ~/.codex/auth.json après vous être connecté.",
-  "db982190df748359": "Les nouvelles Boxes copient la configuration Git de cette Box, mais pas les identifiants des agents.",
+  "7317ccaec18e412a": "Sert à configurer les anciennes Boxes {harness}, pas les identifiants Git.",
   "3924cab20604eb29": "Connectez vos agents",
   "c291bdeadbb22b96": "Déconnecter"
 }

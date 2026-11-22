@@ -6,11 +6,14 @@ import * as Schema from "effect/Schema";
 
 import type { BoxHarness } from "../harnesses.ts";
 import {
+  BOX_HOME,
   BoxApi,
   BoxRuntimeError,
   boxConfig,
   isMissingBox,
   isMissingStoredKey,
+  quoteShell,
+  requireCommand,
   type BoxHandle,
 } from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
@@ -21,6 +24,7 @@ import {
   harnessCredentialKind,
   type BoxHarnessCredentials,
 } from "./credentials.ts";
+import { makeBoxGitSetup } from "./git.ts";
 
 const isBoxRuntimeError = Schema.is(BoxRuntimeError);
 
@@ -33,6 +37,7 @@ export interface BoxRuntimeConfig {
   readonly model: string;
   readonly agentApiKey: string;
   readonly credentials?: BoxHarnessCredentials;
+  readonly githubToken?: string;
   readonly snapshotId?: string;
 }
 
@@ -57,6 +62,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
 ) {
   const api = yield* BoxApi;
   if (!config.apiKey.trim()) return yield* new BoxRuntimeError({ operation: "authenticate" });
+  const configureBoxGit = yield* makeBoxGitSetup;
   return yield* Effect.tryPromise({
     try: () =>
       shareSetup(
@@ -97,7 +103,9 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
           }
           try {
             if (config.credentials) {
-              await prepareThreadBox(box, config, repositoryUrl, onProgress, api);
+              await prepareThreadBox(box, config, repositoryUrl, onProgress, () =>
+                configureBoxGit(box, config.githubToken),
+              );
               return box;
             }
             const installHarness = () =>
@@ -120,27 +128,18 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
             ];
             const ready = await box.exec.command(checks.join(" && "));
             if (ready.exitCode === 0) {
+              await configureBoxGit(box, config.githubToken);
               if (commandCode) await installHarness();
               return box;
             }
-            const template = await api.get(config.templateBoxName, config.apiKey);
             if (commandCode) {
               onProgress("install");
+              const template = await api.get(config.templateBoxName, config.apiKey);
               await installCommandCode(box, template);
               await installHarness();
             }
             onProgress("credentials");
-            for (const file of [".git-credentials", ".gitconfig"]) {
-              const result = await template.exec.command(`test ! -f ~/${file} || cat ~/${file}`);
-              if (result.exitCode !== 0)
-                throw new Error("Template Git configuration is unavailable.");
-              if (result.stdout) {
-                await box.files.write({ path: `/home/boxuser/${file}`, content: result.stdout });
-                const permissions = await box.exec.command(`chmod 600 /home/boxuser/${file}`);
-                if (permissions.exitCode !== 0)
-                  throw new Error("Git credential permissions could not be set.");
-              }
-            }
+            await configureBoxGit(box, config.githubToken);
             if (repositoryUrl) {
               onProgress("clone");
               const quoted = `'${repositoryUrl.replaceAll("'", "'\\''")}'`;
@@ -154,7 +153,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
             return box;
           } catch {
             // SDK errors can include request bodies containing the template credentials.
-            throw new Error("Could not bootstrap the Box from its template.");
+            throw new Error("Could not bootstrap the Box.");
           }
         },
       ),
@@ -170,7 +169,6 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
   });
 });
 
-export const BOX_HOME = "/home/boxuser";
 export const BOX_HARNESS_PATH = `${BOX_HOME}/.local/bin/t3stash-harness.mjs`;
 export const BOX_MANAGED_HARNESS_PATH = `${BOX_HOME}/.local/bin/t3stash-managed.mjs`;
 export const cliPackages = {
@@ -179,8 +177,6 @@ export const cliPackages = {
   codex: { bin: "codex", package: "@openai/codex@0.115.0" },
 } as const;
 
-export const quoteShell = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-
 function credentialSelection(config: BoxRuntimeConfig): BoxHarnessCredentials {
   return {
     ...config.credentials,
@@ -188,11 +184,6 @@ function credentialSelection(config: BoxRuntimeConfig): BoxHarnessCredentials {
       ? { [config.harness]: config.agentApiKey }
       : {}),
   };
-}
-
-export async function requireCommand(box: Pick<BoxHandle, "exec">, command: string): Promise<void> {
-  if ((await box.exec.command(command)).exitCode !== 0)
-    throw new Error("Box setup command failed.");
 }
 
 export function installHarnessCli(box: Pick<BoxHandle, "exec">, harness: BoxHarness) {
@@ -253,7 +244,7 @@ export async function installConnectedHarnesses(
         [
           `mkdir -p ${BOX_HOME}/.commandcode/projects`,
           `rm -f -- ${BOX_HOME}/.commandcode/auth.json`,
-          ...[".commandcode/projects", ".gitconfig", ".git-credentials"].map(
+          ...[".commandcode/projects", ".gitconfig"].map(
             (path) => `ln -sfnT ${BOX_HOME}/${path} ${BOX_COMMAND_CODE_HOME}/${path}`,
           ),
         ].join(" && "),
@@ -310,7 +301,7 @@ async function prepareThreadBox(
   config: BoxRuntimeConfig,
   repositoryUrl: string | undefined,
   onProgress: (step: BoxSetupStep) => void,
-  api: BoxApi["Service"],
+  configureGit: () => Promise<void>,
 ) {
   onProgress("check");
   if (config.snapshotId) {
@@ -326,24 +317,8 @@ async function prepareThreadBox(
     `test -f ${BOOTSTRAPPED_MARKER}${repositoryUrl ? " && test -e /workspace/home/repo/.git" : ""}`,
   );
   await installConnectedHarnesses(box, config, onProgress);
+  await configureGit();
   if (bootstrapped.exitCode === 0) return;
-  if (repositoryUrl && config.templateBoxName) {
-    const template = await api
-      .get(config.templateBoxName, config.apiKey)
-      .catch((error: unknown) => {
-        if (!isMissingBox(error)) throw error;
-        return undefined;
-      });
-    for (const file of [".git-credentials", ".gitconfig"]) {
-      if (!template) break;
-      const result = await template.exec.command(`test ! -f ~/${file} || cat ~/${file}`);
-      if (result.exitCode !== 0) throw new Error("Template Git configuration is unavailable.");
-      if (result.stdout) {
-        await box.files.write({ path: `${BOX_HOME}/${file}`, content: result.stdout });
-        await requireCommand(box, `chmod 600 ${BOX_HOME}/${file}`);
-      }
-    }
-  }
   if (repositoryUrl) {
     onProgress("clone");
     await requireCommand(

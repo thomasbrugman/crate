@@ -1,6 +1,7 @@
 import {
   isSecretReference,
   type SecretReference,
+  type ServerSettings,
   type SettingsSecretValue,
   type UpstashBoxEnvironmentSettings,
 } from "@t3tools/contracts";
@@ -34,6 +35,28 @@ export function readHarnessCredentials(
     claudeCode: readBoxSecret(box.claudeCodeAuth, resolve),
     codex: readBoxSecret(box.codexAuth, resolve),
   });
+}
+
+export function readGitHubToken(
+  settings: ServerSettings,
+  resolve?: (reference: SecretReference) => Effect.Effect<string | undefined>,
+): Effect.Effect<string> {
+  const github = settings.sourceControlHosts.github;
+  const hosts = github?.hosts;
+  const host =
+    typeof hosts === "object" && hosts !== null && "github.com" in hosts
+      ? hosts["github.com"]
+      : undefined;
+  if (typeof host === "object" && host !== null && "enabled" in host && host.enabled === false)
+    return Effect.succeed("");
+  const tokens = github?.tokens;
+  const token =
+    typeof tokens === "object" && tokens !== null && "github.com" in tokens
+      ? tokens["github.com"]
+      : undefined;
+  return typeof token === "string" || isSecretReference(token)
+    ? readBoxSecret(token, resolve)
+    : Effect.succeed("");
 }
 
 export function isAuthJson(value: string): boolean {
