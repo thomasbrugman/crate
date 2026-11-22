@@ -133,7 +133,7 @@ def center(draw, text, y, size, color=INK, kind="sans"):
     draw.text((WIDTH // 2, y), text, anchor="mm", font=font(size, kind), fill=color)
 
 
-def title_card(kind, wordmark=None):
+def title_card(kind, wordmark=None, music_credit=None):
     card = canvas()
     draw = ImageDraw.Draw(card)
     if kind == "camera":
@@ -162,6 +162,8 @@ def title_card(kind, wordmark=None):
             center(draw, "t3stash", 488, 154, kind="bold")
         center(draw, REPO, 668, 43, kind="mono")
         center(draw, "Built on T3 Code and Upstash Box.", 854, 29, MUTED)
+        if music_credit:
+            center(draw, music_credit, 955, 24, MUTED)
     return card
 
 
@@ -315,6 +317,7 @@ def main():
         "--wordmark", type=Path, help="Transparent PNG for the end card"
     )
     parser.add_argument("--music", type=Path, help="Licensed music file for this cut")
+    parser.add_argument("--music-credit", help="Short music credit for the end card")
     parser.add_argument(
         "--music-start",
         type=float,
@@ -330,6 +333,8 @@ def main():
         parser.error("--music-start must be nonnegative and used with --music")
     if args.music and not args.music.is_file():
         parser.error(f"music not found: {args.music}")
+    if args.music_credit and not args.music:
+        parser.error("--music-credit requires --music")
     if args.wordmark and not args.wordmark.is_file():
         parser.error(f"wordmark not found: {args.wordmark}")
     clips_needed = dict.fromkeys(
@@ -376,7 +381,7 @@ def main():
         shots(RESULT)
         title_card("camera").save(plate)
         still(plate, clip_path(), CAMERA_LENGTH)
-        title_card("cta", args.wordmark).save(plate)
+        title_card("cta", args.wordmark, args.music_credit).save(plate)
         still(plate, clip_path(), CTA_LENGTH)
         program = temp / "program.txt"
         program.write_text(

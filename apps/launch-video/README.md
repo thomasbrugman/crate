@@ -51,5 +51,6 @@ reachable t3stash host. Remove credentials and pairing links from the footage be
 
 Without a music file the render includes only sound cues. To audition a licensed track from its
 first beat at the reveal, pass `--music /path/to/track.mp3 --music-start SECONDS`; the offset skips
-into the track, not the video. Make each alternate with the same capture directory. Keep captures,
-music, and exports out of git, and use the license and credit for the final publication.
+into the track, not the video. Add `--music-credit "Track — Artist (Source)"` for an end-card credit.
+This does not replace the library's download credit in the published video description. Make each
+alternate with the same capture directory and keep captures, music, and exports out of git.
