@@ -12241,7 +12241,7 @@
   "2dbd2da341f1f37e": "Optional. Restore new thread Boxes from a snapshot created without harness credentials.",
   "276872b1b4120d7a": "Paste an Anthropic API key or a token from claude setup-token.",
   "7d49aae75c90c5c6": "Paste an OpenAI API key or the contents of ~/.codex/auth.json after signing in.",
-  "db982190df748359": "New Boxes copy Git configuration from this Box, not harness logins.",
+  "7317ccaec18e412a": "Used to set up legacy {harness} Boxes, not to configure Git credentials.",
   "3924cab20604eb29": "Connect your harnesses",
   "c291bdeadbb22b96": "Disconnect"
 }

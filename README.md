@@ -14,8 +14,9 @@ gitignored `.t3` state; read the printed web/server ports and pairing URL. Confi
 Upstash Box during onboarding or in Settings → Providers, or supply
 `UPSTASH_BOX_API_KEY` to the server. Connect Command Code, Claude Code, or Codex by
 pasting a credential or signing in from the temporary Box terminal. Harness credentials
-are encrypted on the server. To clone private GitHub repositories or push from a Box,
-save your github.com token in Settings → Source control & issues.
+are encrypted on the server. The Template Box setting is used only for legacy Command
+Code setup, not for Git. To clone private GitHub repositories or push from a Box, save
+your github.com token in Settings → Source control & issues.
 
 New threads can start from an Upstash snapshot configured in project defaults. Use
 snapshots of setup Boxes, not active thread Boxes. The app installs the currently
