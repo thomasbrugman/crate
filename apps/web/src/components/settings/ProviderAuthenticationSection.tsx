@@ -108,7 +108,8 @@ export function ProviderAuthenticationSection({
           : usesCredentials
             ? gt("Connect on {environment} to load models.", { environment: environmentLabel })
             : gt("Sign in on {environment}.", { environment: environmentLabel });
-  const statusMessage = auth?.phase === "failed" ? auth.message : null;
+  const statusMessage =
+    auth?.phase === "failed" || auth?.phase === "cancelled" ? auth.message : null;
   const disabled = readOnly || pending || query.error !== null || isDiscovering;
   const draftId = `${auth?.flowId ?? ""}:${interaction?.id ?? ""}`;
   const values = draft.id === draftId ? draft.values : {};
@@ -389,6 +390,22 @@ export function ProviderAuthenticationSection({
           ) : null}
           {interaction?.type === "terminal" ? (
             <div className="py-2">
+              {provider.driver === "boxCommandCode" ? (
+                <p className="pb-2 text-sm text-muted-foreground">
+                  <T>
+                    Paste a Command Code API key into the terminal below. Browser sign-in cannot
+                    return to this remote Box.
+                  </T>{" "}
+                  <a
+                    href="https://commandcode.ai/studio/api-keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary underline underline-offset-2"
+                  >
+                    commandcode.ai/studio/api-keys
+                  </a>
+                </p>
+              ) : null}
               <Suspense
                 fallback={
                   <p className="text-xs text-muted-foreground">
