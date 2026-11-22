@@ -348,7 +348,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       }}
       onOpenChangeComplete={(open) => {
         const target = takeOpenTarget(triggerRef.current);
-        if (open && docked && target) openTarget(target);
+        if (open && target) openTarget(target);
       }}
     >
       <PopoverTrigger
@@ -365,7 +365,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             data-chat-provider-model-picker="true"
             data-composer-shortcut={props.triggerShortcuts}
             onClick={(event) => {
-              if (!isMenuOpen || !docked) return;
+              if (!isMenuOpen) return;
               const target = takeOpenTarget(triggerRef.current);
               if (!target) return;
               // A shortcut aimed at the open picker moves within it instead of closing it.
@@ -502,7 +502,10 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             </div>
           </DockedPickerContext>
         ) : (
-          picker
+          <div className="flex max-h-(--available-height) flex-col">
+            {picker}
+            {props.footer}
+          </div>
         )}
         {props.selectedModels === undefined && !docked ? (
           <ChatGptSharingControl provider={activeEntry?.snapshot ?? null} />

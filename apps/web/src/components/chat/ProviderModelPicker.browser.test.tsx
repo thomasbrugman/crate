@@ -3,6 +3,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ModelSelection,
+  type RuntimeMode,
 } from "@t3tools/contracts";
 import { compileResolvedKeybindingsConfig } from "@t3tools/shared/keybindings";
 import { useState } from "react";
@@ -15,6 +16,76 @@ import { render } from "../../../test/render";
 import { __setClientSettingsForTests } from "../../hooks/useSettings";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { ProviderModelPicker } from "./ProviderModelPicker";
+import { ComposerPickerFooter } from "./ComposerModelEffort";
+import { markOpenToPermissions } from "./composerEventScope";
+import { resolveRuntimeModeOption, runtimeModeOptions } from "./runtimeModeConfig";
+
+it.for(["ready", "warning"] as const)(
+  "keeps permissions usable with a %s provider",
+  async (status) => {
+    const instanceId = ProviderInstanceId.make("codex");
+    const entries = deriveProviderInstanceEntries([
+      {
+        instanceId,
+        driver: ProviderDriverKind.make("codex"),
+        enabled: true,
+        installed: true,
+        version: null,
+        status,
+        auth: { status: status === "ready" ? "authenticated" : "unauthenticated" },
+        checkedAt: "2026-01-01T00:00:00.000Z",
+        models: [],
+        slashCommands: [],
+        skills: [],
+      },
+    ]);
+
+    function Picker() {
+      const [mode, setMode] = useState<RuntimeMode>("full-access");
+      return (
+        <ProviderModelPicker
+          environmentId={null}
+          activeInstanceId={instanceId}
+          model="original"
+          lockedProvider={null}
+          instanceEntries={entries}
+          modelOptionsByInstance={new Map()}
+          triggerAriaLabel="Choose model"
+          onInstanceModelChange={() => {}}
+          effortColumn={<p>No effort levels</p>}
+          footer={
+            <ComposerPickerFooter
+              traits={null}
+              runtimeMode={mode}
+              runtimeModeOptions={runtimeModeOptions.map((option) =>
+                resolveRuntimeModeOption(option),
+              )}
+              onRuntimeModeChange={setMode}
+            />
+          }
+        />
+      );
+    }
+
+    await using screen = await render(<Picker />);
+    const trigger = screen.getByRole("button", { name: "Choose model" });
+    await trigger.click();
+    await page.getByRole("button", { name: "Permissions: Full access" }).click();
+    const supervised = page.getByRole("menuitemradio", { name: "Supervised" });
+    await supervised.click();
+    await expect
+      .element(page.getByRole("button", { name: "Permissions: Supervised" }))
+      .toBeVisible();
+
+    markOpenToPermissions(trigger.element() as HTMLElement);
+    (trigger.element() as HTMLElement).click();
+    await expect.element(supervised).toHaveFocus();
+    await userEvent.keyboard("{Escape}{Escape}");
+    markOpenToPermissions(trigger.element() as HTMLElement);
+    (trigger.element() as HTMLElement).click();
+    await expect.element(supervised).toHaveFocus();
+  },
+);
 
 it("keeps each registry image when adding a model from another ACP agent", async () => {
   const icons = [
