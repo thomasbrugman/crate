@@ -21,6 +21,7 @@ import type { BoxHarness } from "../harnesses.ts";
 export type ManagedAgentHarness = Exclude<BoxHarness, "commandCode">;
 import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
 
+export const BOX_HOME = "/home/boxuser";
 export const BOX_WORKSPACE_PATH = "/workspace/home";
 export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
 export const BOX_WORKTREES_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-worktrees`;
@@ -87,13 +88,13 @@ export type BoxSubagentChunk =
 export interface BoxStream extends AsyncIterable<Chunk | BoxSubagentChunk> {
   readonly id: string;
   readonly cancel: () => Promise<void>;
+  readonly ownsProcess?: true;
 }
 
 export interface BoxHandle {
   readonly id: string;
   readonly agent: { readonly stream: (options: StreamOptions) => Promise<BoxStream> };
   readonly exec: {
-    readonly session?: (options: ExecSessionOptions) => Promise<ExecSessionHandle>;
     readonly stream?: (command: string) => Promise<
       {
         readonly id: string;
@@ -105,6 +106,11 @@ export interface BoxHandle {
       readonly stderr?: string;
       readonly exitCode: number | null;
     }>;
+    readonly session?: (options: ExecSessionOptions) => Promise<
+      Pick<ExecSessionHandle, "pid" | "write" | "resize" | "wait" | "close"> & {
+        readonly id: string;
+      }
+    >;
   };
   readonly files: {
     readonly write: (options: { path: string; content: string }) => Promise<unknown>;
@@ -113,6 +119,13 @@ export interface BoxHandle {
   readonly delete: () => Promise<unknown>;
   readonly resume: () => Promise<void>;
   readonly getStatus: () => Promise<{ readonly status: string }>;
+}
+
+export const quoteShell = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+
+export async function requireCommand(box: Pick<BoxHandle, "exec">, command: string): Promise<void> {
+  if ((await box.exec.command(command)).exitCode !== 0)
+    throw new Error("Box setup command failed.");
 }
 
 export class BoxApi extends Context.Service<
@@ -147,7 +160,17 @@ function projectBox(box: Box): BoxHandle {
       },
     },
     exec: {
-      session: (options) => box.exec.session(options),
+      session: async (options) => {
+        const session = await box.exec.session(options);
+        return {
+          id: session.execId,
+          pid: session.pid,
+          write: (data) => session.write(data),
+          resize: (rows, cols) => session.resize(rows, cols),
+          wait: () => session.wait(),
+          close: () => session.close(),
+        };
+      },
       stream: async (command) => {
         const run = await box.exec.stream(command);
         return {

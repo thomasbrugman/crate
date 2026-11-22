@@ -7,7 +7,9 @@ import {
   type OrchestrationV2ThreadProjection,
   type Project,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
+  ProviderThreadId,
   ThreadId,
   WorktreeMcpHandoffInput,
 } from "@t3tools/contracts";
@@ -62,9 +64,13 @@ interface ThreadFixture {
   readonly worktreePath?: string | null;
   readonly archivedAt?: string | null;
   readonly deletedAt?: string | null;
+  readonly box?: boolean;
 }
 
-const makeProjection = (overrides: ThreadFixture = {}): OrchestrationV2ThreadProjection =>
+const makeProjection = ({
+  box,
+  ...overrides
+}: ThreadFixture = {}): OrchestrationV2ThreadProjection =>
   ({
     thread: {
       id: threadId,
@@ -74,9 +80,19 @@ const makeProjection = (overrides: ThreadFixture = {}): OrchestrationV2ThreadPro
       worktreePath: null,
       archivedAt: null,
       deletedAt: null,
+      activeProviderThreadId: box ? ProviderThreadId.make("box-provider-thread") : null,
       ...overrides,
     },
-  }) as OrchestrationV2ThreadProjection;
+    providerThreads: box
+      ? [
+          {
+            id: ProviderThreadId.make("box-provider-thread"),
+            providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+            driver: ProviderDriverKind.make("boxClaudeCode"),
+          },
+        ]
+      : [],
+  }) as unknown as OrchestrationV2ThreadProjection;
 
 const project: Project = {
   id: projectId,
@@ -379,6 +395,16 @@ const runStatus = (harness: ReturnType<typeof makeHarness>) =>
 const decodeHandoffInput = Schema.decodeUnknownEffect(WorktreeMcpHandoffInput);
 
 describe("t3_worktree_handoff", () => {
+  it.effect("does not create a host worktree for a Box caller", () => {
+    const harness = makeHarness({ thread: { box: true } });
+    return Effect.gen(function* () {
+      const result = yield* Effect.exit(runHandoff(harness, { branch: "feature/box" }));
+      expectTypedFailure(result, { _tag: "WorktreeMcpFailure", code: "invalid_request" });
+      expect(harness.localStatus).not.toHaveBeenCalled();
+      expect(harness.createWorktree).not.toHaveBeenCalled();
+    });
+  });
+
   // regression: #22971 a separate send let the detach settle the run before its follow-up existed
   it.effect("commits the continuation with the thread binding", () => {
     const harness = makeHarness();

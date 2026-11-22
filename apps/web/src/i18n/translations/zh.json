@@ -12257,7 +12257,7 @@
   "2dbd2da341f1f37e": "可选。从不含代理凭据的快照恢复新会话的 Box。",
   "276872b1b4120d7a": "粘贴 Anthropic API 密钥或通过 claude setup-token 获取的令牌。",
   "7d49aae75c90c5c6": "粘贴 OpenAI API 密钥，或在登录后粘贴 ~/.codex/auth.json 的内容。",
-  "db982190df748359": "新 Box 仅复制此 Box 的 Git 配置，不复制代理工具的登录凭据。",
+  "7317ccaec18e412a": "用于设置旧版 {harness} Box，不用于配置 Git 凭据。",
   "3924cab20604eb29": "连接你的代理工具",
   "c291bdeadbb22b96": "断开连接"
 }

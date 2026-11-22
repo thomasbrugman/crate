@@ -12231,7 +12231,7 @@
   "2dbd2da341f1f37e": "Opcional. Restaure as Boxes de novas conversas de um snapshot criado sem credenciais de agentes.",
   "276872b1b4120d7a": "Cole uma chave de API da Anthropic ou um token de claude setup-token.",
   "7d49aae75c90c5c6": "Cole uma chave de API da OpenAI ou o conteúdo de ~/.codex/auth.json após entrar.",
-  "db982190df748359": "Novas Boxes copiam a configuração do Git desta Box, mas não as credenciais dos agentes.",
+  "7317ccaec18e412a": "Serve para preparar Boxes legadas do {harness}, não para configurar credenciais do Git.",
   "3924cab20604eb29": "Conecte seus agentes",
   "c291bdeadbb22b96": "Desconectar"
 }

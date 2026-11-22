@@ -56,21 +56,27 @@ phone loses the connection, even though the Boxes themselves are in the cloud.
    - **Command Code:** an API key, or the contents of `~/.commandcode/auth.json`
    - **Claude Code:** an Anthropic API key, or a token from `claude setup-token`
    - **Codex:** an OpenAI API key, or the contents of `~/.codex/auth.json`
-3. Add a project. t3stash reads the project's Git remote and clones it into each new Box.
+3. To clone private GitHub repositories or push from a Box, save your github.com token in
+   **Settings → Source control & issues**.
+4. Add a project. t3stash reads the project's Git remote and clones it into each new Box.
    Uncommitted changes on your Mac are not uploaded, so push first.
 
 Agent credentials are encrypted on your Mac and injected into each Box when it starts. They never
-end up in a snapshot.
+end up in a snapshot. New and restored Boxes use your saved GitHub token and GitHub profile
+for Git. The token is kept in memory-backed storage. The **Template Box** setting is only
+used for legacy Command Code setup, not for Git.
 
 ## How it works
 
 - **One Box per thread.** The Box belongs to the thread, not to the agent. You can switch from Claude
   Code to Codex halfway through and keep the same checkout.
 - **Subagents share the parent's Box.** Claude Code's subagents show up as child threads, but they
-  run in the parent's Box, in their own Git worktree when they write code.
+  run in the parent's Box. All three Box harnesses can also delegate through Orchestration V2.
+  Delegated Box tasks appear as linked child threads and, in Git projects, get a worktree from the
+  parent's commit when the task was delegated. Commit work you want the child to see first.
 - **Sizes and snapshots.** Pick small, medium or large per thread. To skip slow installs, set up a
   Box once, snapshot it, and put the snapshot ID in your project defaults. New threads start from
-  it. Use a snapshot that has never had agent credentials in it.
+  it. Use a snapshot of a setup Box that has never contained credentials, not an active thread Box.
 - **Boxes stick around.** Archiving a thread keeps its Box. Deleting the thread deletes it.
 - **Live terminal.** Once the first agent turn creates the Box, open the terminal drawer or a
   terminal tab. Each terminal runs its own shell in the Box, not on your Mac. If the Box connection
@@ -86,6 +92,8 @@ aren't built yet:
   files or show you a diff.
 - No rollback, approvals, steering an agent mid-turn, file attachments or reasoning streams.
 - Project setup scripts don't run in Boxes. Use a snapshot instead.
+- Box threads cannot hand off to a host worktree. Files saved by the MCP secret tool stay on the
+  server, not in the Box.
 - The phone flow hasn't been tested much yet.
 
 If something breaks, [open an issue](https://github.com/thomasbrugman/t3stash/issues).

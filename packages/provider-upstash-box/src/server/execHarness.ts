@@ -1,6 +1,10 @@
-import type { Chunk } from "@upstash/box";
+// @effect-diagnostics nodeBuiltinImport:off -- Turn the Box SDK's synchronous stdout callbacks into an async iterable.
+import * as NodeStream from "node:stream";
+import type { Chunk, ExecStreamChunk } from "@upstash/box";
+import type { McpProviderSessionConfig } from "@t3tools/provider-core/server/mcpSession";
 
 import type { BoxHandle, BoxStream, BoxSubagentChunk } from "./BoxApi.ts";
+import { makeMcpRelay } from "./mcpRelay.ts";
 
 function decodeFrame(frame: string): Chunk | BoxSubagentChunk | undefined {
   const match = /^event: (\w+)\r?\ndata: (.+)$/su.exec(frame);
@@ -70,14 +74,87 @@ function decodeFrame(frame: string): Chunk | BoxSubagentChunk | undefined {
   if (match[1] === "error") throw new Error("The harness could not complete the turn.");
 }
 
-export async function execHarness(box: BoxHandle, command: string): Promise<BoxStream> {
-  if (!box.exec.stream) throw new Error("Box streaming execution is unavailable.");
-  const run = await box.exec.stream(command);
+async function duplexHarness(box: BoxHandle, command: string, config: McpProviderSessionConfig) {
+  if (!box.exec.session) throw new Error("Box interactive execution is unavailable.");
+  const output = new NodeStream.Readable({ read() {} });
+  output.setEncoding("utf8");
+  const session = await box.exec.session({
+    cmd: command,
+    onStdout: (data) => output.push(data),
+  });
+  const exited = session.wait().then(
+    (code) => {
+      output.push(null);
+      return code;
+    },
+    () => {
+      output.destroy();
+      return -1;
+    },
+  );
+  const mcp = makeMcpRelay(config);
+  let closed = false;
+  const cancel = async () => {
+    if (closed) return;
+    closed = true;
+    output.destroy();
+    session.close();
+    await mcp.close();
+  };
+  return {
+    id: session.id,
+    cancel,
+    onFrame(frame: string) {
+      const match = /^event: (mcp_request|mcp_disconnect)\ndata: (.+)$/su.exec(frame);
+      if (!match) return false;
+      const { client, request } = JSON.parse(match[2]!) as {
+        readonly client: number;
+        readonly request?: unknown;
+      };
+      if (!Number.isSafeInteger(client) || client <= 0) return true;
+      if (match[1] === "mcp_disconnect") {
+        void mcp.disconnect(client);
+        return true;
+      }
+      const reply = (response: object) => {
+        if (!closed) {
+          try {
+            session.write(JSON.stringify({ client, response }) + "\n");
+          } catch {
+            // The Box can exit before a tool call replies.
+          }
+        }
+      };
+      void mcp.handle(client, request, reply).then((response) => {
+        if (response !== undefined) reply(response);
+      });
+      return true;
+    },
+    async *[Symbol.asyncIterator](): AsyncGenerator<ExecStreamChunk> {
+      try {
+        for await (const data of output as AsyncIterable<string>) yield { type: "output", data };
+        yield { type: "exit", exitCode: await exited, cpuNs: 0 };
+      } finally {
+        await cancel();
+      }
+    },
+  };
+}
+
+export async function execHarness(
+  box: BoxHandle,
+  command: string,
+  mcpSession?: McpProviderSessionConfig,
+): Promise<BoxStream> {
+  const duplex = mcpSession && (await duplexHarness(box, command, mcpSession));
+  const run = duplex ?? (await box.exec.stream?.(command));
+  if (!run) throw new Error("Box streaming execution is unavailable.");
   return {
     get id() {
       return run.id;
     },
     cancel: run.cancel,
+    ...(mcpSession === undefined ? {} : { ownsProcess: true }),
     async *[Symbol.asyncIterator]() {
       let buffer = "";
       let finish: Extract<Chunk, { type: "finish" }> | undefined;
@@ -101,8 +178,10 @@ export async function execHarness(box: BoxHandle, command: string): Promise<BoxS
           boundary >= 0;
           boundary = buffer.indexOf("\n\n")
         ) {
-          const frame = decodeFrame(buffer.slice(0, boundary));
+          const payload = buffer.slice(0, boundary);
           buffer = buffer.slice(boundary + 2);
+          if (duplex?.onFrame(payload)) continue;
+          const frame = decodeFrame(payload);
           if (frame?.type === "finish") finish = frame;
           else if (frame !== undefined) yield frame;
         }

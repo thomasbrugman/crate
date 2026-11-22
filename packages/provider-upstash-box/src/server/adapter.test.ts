@@ -30,6 +30,7 @@ import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import { vi } from "vite-plus/test";
 
 import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
@@ -58,6 +59,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   harness: BoxHarness = "commandCode",
   command?: BoxHandle["exec"]["command"],
   apiKey = "test-key",
+  githubToken?: string,
 ) {
   const commands: string[] = [];
   const prompts: string[] = [];
@@ -71,7 +73,8 @@ const setup = Effect.fn("test.setupBox")(function* (
     resumeError?: unknown;
     replacement?: BoxHandle;
     resumes: number;
-  } = { resumes: 0 };
+    gitCredentialWrites: number;
+  } = { resumes: 0, gitCredentialWrites: 0 };
   const createdSizes: BoxConfig["size"][] = [];
   const box: BoxHandle = {
     id: "box-123",
@@ -86,6 +89,8 @@ const setup = Effect.fn("test.setupBox")(function* (
     exec: {
       command: async (text) => {
         commands.push(text);
+        if (githubToken && lookup.resumes && text.startsWith("test -s /dev/shm/t3stash-git/"))
+          return { stdout: "", exitCode: 1 };
         return lookup.exec
           ? lookup.exec(text)
           : command
@@ -96,6 +101,9 @@ const setup = Effect.fn("test.setupBox")(function* (
     files: {
       write: async ({ content }) => {
         harnesses.push(content);
+      },
+      writeVolatile: async (path) => {
+        if (path === "/dev/shm/t3stash-git/credential") lookup.gitCredentialWrites++;
       },
     },
     delete: deleteBox ?? (async () => undefined),
@@ -112,7 +120,12 @@ const setup = Effect.fn("test.setupBox")(function* (
   const adapter = yield* makeUpstashBoxAdapter(
     instanceId,
     { driver: BOX_HARNESS_DRIVER_KINDS[harness], harness, agentApiKey },
-    Effect.succeed({ apiKey, templateBoxName: "cc-harness", size: "small" }),
+    Effect.succeed({
+      apiKey,
+      templateBoxName: "cc-harness",
+      size: "small",
+      ...(githubToken ? { githubToken } : {}),
+    }),
   ).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
@@ -623,6 +636,7 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
       );
       assert.notEqual(switched.loaded.id, main.loaded.id);
       assert.notEqual(linked.loaded.id, switched.loaded.id);
+      const dispatchCommit = "1234567890abcdef1234567890abcdef12345678";
       const { turn } = yield* setup(fakeStream([]));
       for (const [thread, target] of [
         [threadId, switched],
@@ -634,6 +648,13 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
           providerThread: target.loaded,
           modelSelection: target.selected,
           runtimePolicy: target.turnPolicy,
+          appThread: {
+            ...turn.appThread,
+            lineage: {
+              ...turn.appThread.lineage,
+              ...(thread === child ? { boxBaseCommit: dispatchCommit } : {}),
+            },
+          },
           appContext: [{ key: "handoff", text: "Earlier conversation" }],
         });
         yield* collect(target.session.events);
@@ -643,7 +664,9 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
       const worktree = `/workspace/home/.t3stash-worktrees/${Buffer.from(child).toString("hex")}`;
       assert.include(streams[1], `cd ${worktree}`);
       assert.isTrue(
-        commands.some((command) => command.includes(`worktree add --detach -- ${worktree} HEAD`)),
+        commands.some((command) =>
+          command.includes(`worktree add --detach -- ${worktree} '${dispatchCommit}'`),
+        ),
       );
     }),
   ),
@@ -727,6 +750,9 @@ it.effect(
   () =>
     Effect.scoped(
       Effect.gen(function* () {
+        using _githubUser = vi
+          .spyOn(globalThis, "fetch")
+          .mockImplementation(async () => Response.json({ id: 1, login: "fixture" }));
         for (const [status, resumeFails] of [
           [409, false],
           [401, false],
@@ -737,6 +763,9 @@ it.effect(
               fakeStream([finish]),
               undefined,
               harness,
+              undefined,
+              undefined,
+              "fixture-github-token",
             );
             const runtime = yield* adapter.openSession({
               threadId,
@@ -754,6 +783,7 @@ it.effect(
               status === 409 && !resumeFails ? "completed" : "failed",
             );
             assert.equal(lookup.resumes, status === 409 ? 1 : 0);
+            assert.equal(lookup.gitCredentialWrites, status === 409 && !resumeFails ? 1 : 0);
             assert.notInclude(JSON.stringify(events), "private upstream error");
           }
         }

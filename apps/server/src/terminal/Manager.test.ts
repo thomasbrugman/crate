@@ -656,7 +656,7 @@ it.layer(
                         options.onStdout?.(prompt.subarray(-2));
                         return {
                           pid: 10,
-                          execId: String(sessions.length),
+                          id: String(sessions.length),
                           write,
                           resize,
                           endStdin: () => {},
