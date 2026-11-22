@@ -64,7 +64,7 @@ it("counts untracked contents without changing selectable status paths", () => {
     [
       { path: "tracked.ts", insertions: 3, deletions: 2 },
       { path: "new/", insertions: 3, deletions: 0 },
-      files[2],
+      { path: "renamed-from.ts", insertions: 0, deletions: 0 },
     ],
   );
   assert.strictEqual(resolveCommitFiles(files, undefined), files);
