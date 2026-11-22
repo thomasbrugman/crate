@@ -23,8 +23,8 @@ work lives in Git, where it would have ended up anyway.
 
 ### Mac
 
-1. Download the universal ZIP from a successful [t3stash macOS build](https://github.com/thomasbrugman/t3stash/actions/workflows/t3stash-macos.yml).
-   The same ZIP works on Apple Silicon and Intel Macs.
+1. Download the universal ZIP only from a successful [build pushed to `main`](https://github.com/thomasbrugman/t3stash/actions/workflows/t3stash-macos.yml?query=branch%3Amain+event%3Apush).
+   Do not install artifacts from pull request builds. The same ZIP works on Apple Silicon and Intel Macs.
 2. Unzip it and drag **T3 Code (Beta).app** to Applications.
 3. The app isn't signed, so macOS will refuse to open it the first time. Right-click it and choose
    **Open**. On newer macOS versions you may need **System Settings → Privacy & Security → Open

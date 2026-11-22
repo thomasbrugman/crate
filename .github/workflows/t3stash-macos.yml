@@ -2,6 +2,9 @@ name: t3stash macOS
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
   pull_request:
     paths:
       - ".github/workflows/t3stash-macos.yml"
