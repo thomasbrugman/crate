@@ -21,7 +21,7 @@ const thread: BoxExec.BoxExecThread = {
     },
   },
   apiKey: "private-key",
-  repositoryUrl: "https://github.com/owner/repo.git",
+  checkoutRoot: "/workspace/home/repo",
 };
 
 function service(
@@ -64,13 +64,15 @@ function service(
 
 it.effect("uses persisted Box identity, checkout defaults, and literal cwd/arguments", () =>
   Effect.gen(function* () {
-    for (const [repositoryUrl, cwd, expected] of [
-      [thread.repositoryUrl, undefined, "/workspace/home/repo"],
-      [null, undefined, "/workspace/home"],
-      [null, "/work/it's $(not-executed)", "/work/it'\\''s $(not-executed)"],
+    const worktree = BoxApi.boxWorktreePath(threadId);
+    for (const [checkoutRoot, cwd, expected] of [
+      [thread.checkoutRoot, undefined, "/workspace/home/repo"],
+      ["/workspace/home", undefined, "/workspace/home"],
+      [worktree, undefined, worktree],
+      ["/workspace/home", "/work/it's $(not-executed)", "/work/it'\\''s $(not-executed)"],
     ] as const) {
       const exec = yield* service({
-        resolve: () => Effect.succeed({ ...thread, repositoryUrl }),
+        resolve: () => Effect.succeed({ ...thread, checkoutRoot }),
         command: async (command) => {
           assert.equal(command, `cd -- '${expected}' || exit 1\nprintf '%s' 'a'\\''b; $(no)'`);
           return { exitCode: 3, stdout: "output", stderr: "error" };

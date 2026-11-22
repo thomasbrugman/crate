@@ -21,6 +21,10 @@ import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
 
 export const BOX_WORKSPACE_PATH = "/workspace/home";
 export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
+export const BOX_WORKTREES_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-worktrees`;
+
+export const boxWorktreePath = (threadId: string) =>
+  `${BOX_WORKTREES_PATH}/${Buffer.from(threadId).toString("hex")}`;
 
 export const BoxErrorDetails = Schema.Struct({
   message: Schema.String,

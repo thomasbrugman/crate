@@ -112,10 +112,15 @@ export const make = Effect.gen(function* () {
         if (checkout.exitCode !== 0) return null;
         repositories.set(nativeId, checkout.stdout.trim() || null);
       }
+      const checkoutRoot = !repositories.get(nativeId)
+        ? BoxApi.BOX_WORKSPACE_PATH
+        : providerThread.nativeMetadata?.boxOwnerThreadId
+          ? BoxApi.boxWorktreePath(threadId)
+          : BoxApi.BOX_REPOSITORY_PATH;
       return {
         providerThread,
         apiKey,
-        repositoryUrl: repositories.get(nativeId) ?? null,
+        checkoutRoot,
         projectRoot: project.value.workspaceRoot,
       };
     },
@@ -140,7 +145,7 @@ export const make = Effect.gen(function* () {
           Effect.map((value) => ({
             threadId,
             projectRoot: value.projectRoot,
-            checkoutRoot: value.repositoryUrl ? "/workspace/home/repo" : "/workspace/home",
+            checkoutRoot: value.checkoutRoot,
           })),
         ),
       ),

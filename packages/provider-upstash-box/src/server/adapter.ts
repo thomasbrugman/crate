@@ -18,6 +18,8 @@ import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
 import {
   BOX_REPOSITORY_PATH,
   BOX_WORKSPACE_PATH,
+  BOX_WORKTREES_PATH,
+  boxWorktreePath,
   BoxApi,
   BoxRuntimeError,
   isMissingBox,
@@ -86,10 +88,9 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
 const boxStoppedMessage = "This thread's Box stopped mid-turn. Send a message to start a new one.";
 
 async function ensureWorktree(box: BoxHandle, threadId: string): Promise<string> {
-  const root = `${BOX_WORKSPACE_PATH}/.t3stash-worktrees`;
-  const path = `${root}/${Buffer.from(threadId).toString("hex")}`;
+  const path = boxWorktreePath(threadId);
   const { exitCode } = await box.exec.command(
-    `mkdir -p ${root} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} HEAD; }`,
+    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} HEAD; }`,
   );
   if (exitCode !== 0) throw new Error("The Box worktree could not be prepared.");
   return path;
