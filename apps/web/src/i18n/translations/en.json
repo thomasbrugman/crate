@@ -12258,5 +12258,12 @@
   "3477da670fcbde1b": "Enter a replacement key",
   "58f6b6525044d4c8": "Paste your key or token",
   "96115054865561aa": "Saved securely. You can replace it at any time.",
-  "e49f33e233fe5610": "Your key stays private. It is never included in project snapshots."
+  "e49f33e233fe5610": "Your key stays private. It is never included in project snapshots.",
+  "03b099e358af93fd": "Box: {size}",
+  "b535ed7cc16b2dd2": "Use default ({size})",
+  "52278fd875d1a073": "Box workspace details",
+  "0dfc582858939130": "Skipped",
+  "9756b09ffd8a55c6": "In progress",
+  "353b08f4363dbb2c": "Pending",
+  "6796d4f5acef3397": "Setup required"
 }

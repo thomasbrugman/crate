@@ -132,6 +132,7 @@ import {
   useRetainedContextPayloads,
 } from "./composerContextUndo";
 import { ComposerBanner } from "./ComposerBanner";
+import { CloudThreadHelp } from "./CloudThreadHelp";
 import { ComposerSurface } from "./ComposerSurface";
 import { CollapsedComposerPromptPreview } from "./CollapsedComposerPromptPreview";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./ComposerBannerStack";
@@ -3456,13 +3457,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         onRemoveFile={removeComposerFileFromDraft}
       />
     ) : null;
-  const composerAttachButton =
-    showComposerAttachAction && !props.cloudThread ? (
-      <ComposerAttachButton
-        addComposerAttachments={addComposerAttachments}
-        focusComposer={focusComposer}
-      />
-    ) : null;
+  const composerAttachButton = props.cloudThread ? (
+    <CloudThreadHelp />
+  ) : showComposerAttachAction ? (
+    <ComposerAttachButton
+      addComposerAttachments={addComposerAttachments}
+      focusComposer={focusComposer}
+    />
+  ) : null;
   return (
     <form
       ref={composerFormRef}
@@ -3518,16 +3520,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     >
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
-          {props.cloudThread ? (
-            <ComposerBanner.Attachment>
-              <ComposerBanner.Root variant="info" density="spacious">
-                <T>
-                  Attachments and file previews are not available in cloud threads. File mentions
-                  use the server checkout; only pushed files are available in the Box.
-                </T>
-              </ComposerBanner.Root>
-            </ComposerBanner.Attachment>
-          ) : null}
           <ComposerBannerStack items={shelfItems} />
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>

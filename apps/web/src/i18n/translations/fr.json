@@ -12249,5 +12249,12 @@
   "3477da670fcbde1b": "Saisissez une clé de remplacement",
   "58f6b6525044d4c8": "Collez votre clé ou jeton",
   "96115054865561aa": "Enregistré en toute sécurité. Vous pouvez le remplacer à tout moment.",
-  "e49f33e233fe5610": "Votre clé reste privée. Elle n’est jamais incluse dans les instantanés de projet."
+  "e49f33e233fe5610": "Votre clé reste privée. Elle n’est jamais incluse dans les instantanés de projet.",
+  "03b099e358af93fd": "Box : {size}",
+  "b535ed7cc16b2dd2": "Utiliser la valeur par défaut ({size})",
+  "52278fd875d1a073": "Détails de l’espace de travail Box",
+  "0dfc582858939130": "Ignoré",
+  "9756b09ffd8a55c6": "En cours",
+  "353b08f4363dbb2c": "En attente",
+  "6796d4f5acef3397": "Configuration requise"
 }

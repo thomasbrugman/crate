@@ -12249,5 +12249,12 @@
   "3477da670fcbde1b": "Ersatzschlüssel eingeben",
   "58f6b6525044d4c8": "Schlüssel oder Token einfügen",
   "96115054865561aa": "Sicher gespeichert. Du kannst ihn jederzeit ersetzen.",
-  "e49f33e233fe5610": "Dein Schlüssel bleibt privat. Er wird nie in Projekt-Snapshots aufgenommen."
+  "e49f33e233fe5610": "Dein Schlüssel bleibt privat. Er wird nie in Projekt-Snapshots aufgenommen.",
+  "03b099e358af93fd": "Box: {size}",
+  "b535ed7cc16b2dd2": "Standard verwenden ({size})",
+  "52278fd875d1a073": "Details zum Box-Arbeitsbereich",
+  "0dfc582858939130": "Übersprungen",
+  "9756b09ffd8a55c6": "In Bearbeitung",
+  "353b08f4363dbb2c": "Ausstehend",
+  "6796d4f5acef3397": "Einrichtung erforderlich"
 }
