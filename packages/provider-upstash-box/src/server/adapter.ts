@@ -16,6 +16,7 @@ import * as Stream from "effect/Stream";
 
 import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
 import {
+  BOX_HOME,
   BOX_REPOSITORY_PATH,
   BOX_WORKSPACE_PATH,
   BOX_WORKTREES_PATH,
@@ -23,22 +24,22 @@ import {
   BoxApi,
   BoxRuntimeError,
   isMissingBox,
+  quoteShell,
   type BoxHandle,
   type BoxStream,
 } from "./BoxApi.ts";
 import {
   BOX_HARNESS_PATH,
-  BOX_HOME,
   BOX_MANAGED_HARNESS_PATH,
   ensureBox,
   installConnectedHarnesses,
-  quoteShell,
   type BoxRuntimeConfig,
   type BoxSetupStep,
 } from "./bootstrap.ts";
 import { capabilities as baseCapabilities } from "./capabilities.ts";
 import { harnessCredentialKind } from "./credentials.ts";
 import { execHarness } from "./execHarness.ts";
+import { configureBoxGit } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 import { cancelBoxRun } from "./stop.ts";
 import { BoxTurnTranslation } from "./translation.ts";
@@ -46,7 +47,7 @@ import { BoxTurnTranslation } from "./translation.ts";
 /** Where a thread runs, read from the environment's settings each time a Box is reached. */
 export type BoxEnvironmentConfig = Pick<
   BoxRuntimeConfig,
-  "apiKey" | "templateBoxName" | "size" | "credentials"
+  "apiKey" | "templateBoxName" | "size" | "credentials" | "githubToken"
 >;
 
 /** Which agent runs inside the thread's Box. */
@@ -353,6 +354,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 const existing = await api.get(nativeId, config.apiKey);
                 // Lookup by ID also returns deleted Box tombstones; status does not.
                 await existing.getStatus();
+                await configureBoxGit(existing, config.githubToken);
                 if (config.credentials) {
                   await installConnectedHarnesses(existing, config, () => {});
                 } else if (harness === "commandCode") {
@@ -452,7 +454,8 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const providerThread = request.providerThread;
           const box = boxes.get(providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
-          const { credentials } = yield* environment;
+          const config = yield* environment;
+          const { credentials } = config;
           const credential = credentials?.[harness] || agent.agentApiKey;
           const credentialKind = harnessCredentialKind(harness, credential);
           if (credentials && !credentialKind)
@@ -576,6 +579,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   if (!(error instanceof BoxError) || error.statusCode !== 409) throw error;
                   // A cancelled run can leave the Box rejecting work until explicitly resumed.
                   await box.resume();
+                  await configureBoxGit(box, config.githubToken);
                   stream = await start();
                 }
                 turn.stream = stream;

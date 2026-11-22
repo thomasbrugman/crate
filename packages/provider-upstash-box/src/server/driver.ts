@@ -34,7 +34,12 @@ import {
   type ManagedAgentHarness,
 } from "./BoxApi.ts";
 import { boxHarnessModels } from "./models.ts";
-import { harnessCredentialKind, readBoxSecret, readHarnessCredentials } from "./credentials.ts";
+import {
+  harnessCredentialKind,
+  readBoxSecret,
+  readGitHubToken,
+  readHarnessCredentials,
+} from "./credentials.ts";
 
 const MODEL_VENDORS = { claudeCode: "Anthropic", codex: "OpenAI" } as const;
 
@@ -157,19 +162,21 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         inheritedKey;
       // The Box is the thread's environment: its settings belong to the server, not this provider.
       const boxEnvironment = Effect.fn("UpstashBox.readEnvironment")(function* (
-        box: typeof DEFAULT_SERVER_SETTINGS.upstashBox,
+        settings: typeof DEFAULT_SERVER_SETTINGS,
       ) {
+        const box = settings.upstashBox;
         const key = yield* readBoxSecret(box.apiKey, host.settings.resolveSecret);
         return {
           apiKey: box.apiKey === "" ? envKey : key,
           templateBoxName: box.templateBoxName,
           size: box.size,
           credentials: yield* readHarnessCredentials(box, host.settings.resolveSecret),
+          githubToken: yield* readGitHubToken(settings, host.settings.resolveSecret),
         };
       });
       const environment: Effect.Effect<BoxEnvironmentConfig> = host.settings.get.pipe(
         Effect.orElseSucceed(() => DEFAULT_SERVER_SETTINGS),
-        Effect.flatMap((settings) => boxEnvironment(settings.upstashBox)),
+        Effect.flatMap(boxEnvironment),
       );
       const continuationIdentity = defaultProviderContinuationIdentity({ driverKind, instanceId });
       const agent = {
@@ -219,7 +226,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         getSettings: environment.pipe(Effect.map(toProbeSettings)),
         streamSettings: host.settings.changes.pipe(
           Stream.mapEffect((settings) =>
-            boxEnvironment(settings.upstashBox).pipe(Effect.map(toProbeSettings)),
+            boxEnvironment(settings).pipe(Effect.map(toProbeSettings)),
           ),
         ),
         haveSettingsChanged: (previous, next) => !Equal.equals(previous, next),

@@ -7,7 +7,8 @@ import * as Queue from "effect/Queue";
 
 import type { BoxHarness } from "../harnesses.ts";
 import type { BoxEnvironmentConfig } from "./adapter.ts";
-import { BOX_HOME, cliPackages } from "./bootstrap.ts";
+import { BOX_HOME } from "./BoxApi.ts";
+import { cliPackages } from "./bootstrap.ts";
 import { BOX_HARNESS_AUTH_FIELDS, isAuthJson } from "./credentials.ts";
 
 const login = {

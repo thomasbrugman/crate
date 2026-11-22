@@ -19,6 +19,7 @@ import type { BoxHarness } from "../harnesses.ts";
 export type ManagedAgentHarness = Exclude<BoxHarness, "commandCode">;
 import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
 
+export const BOX_HOME = "/home/boxuser";
 export const BOX_WORKSPACE_PATH = "/workspace/home";
 export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
 export const BOX_WORKTREES_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-worktrees`;
@@ -110,6 +111,13 @@ export interface BoxHandle {
   readonly delete: () => Promise<unknown>;
   readonly resume: () => Promise<void>;
   readonly getStatus: () => Promise<{ readonly status: string }>;
+}
+
+export const quoteShell = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+
+export async function requireCommand(box: Pick<BoxHandle, "exec">, command: string): Promise<void> {
+  if ((await box.exec.command(command)).exitCode !== 0)
+    throw new Error("Box setup command failed.");
 }
 
 export class BoxApi extends Context.Service<

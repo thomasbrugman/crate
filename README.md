@@ -14,13 +14,13 @@ gitignored `.t3` state; read the printed web/server ports and pairing URL. Confi
 Upstash Box during onboarding or in Settings → Providers, or supply
 `UPSTASH_BOX_API_KEY` to the server. Connect Command Code, Claude Code, or Codex by
 pasting a credential or signing in from the temporary Box terminal. Harness credentials
-are encrypted on the server; template Boxes are optional and only provide Git
-configuration for new thread Boxes.
+are encrypted on the server. To clone private GitHub repositories or push from a Box,
+save your github.com token in Settings → Source control & issues.
 
 New threads can start from an Upstash snapshot configured in project defaults. Use
-snapshots of setup Boxes that have never contained harness credentials, not snapshots
-of active thread Boxes. The app installs the currently connected harnesses and injects
-their credentials after restoring the snapshot.
+snapshots of setup Boxes, not active thread Boxes. The app installs the currently
+connected harnesses and injects their credentials and the GitHub login after restoring
+the snapshot.
 
 ## Choices
 
@@ -36,9 +36,9 @@ their credentials after restoring the snapshot.
   provider-created child does not. Archiving keeps the Box.
 - **Workspace:** the server reads the project label's Git metadata (including worktree
   pointers) to find its origin, or first remote. A repository URL label also works.
-  Bootstrap copies `.git-credentials` and `.gitconfig` from the template when present
-  and clones the remote into `/workspace/home/repo`. GitHub SSH-style URLs become HTTPS
-  so template credentials work.
+  Bootstrap configures Git from the saved github.com token and GitHub profile before
+  cloning into `/workspace/home/repo`. The GitHub login is kept in memory-backed storage,
+  not in the template or snapshot. GitHub SSH-style URLs become HTTPS.
   Embedded URL credentials are discarded. No host files or uncommitted changes are
   uploaded. Without a remote, the agent starts in `/workspace/home`. Existing Boxes
   are not recloned. The project picker still uses existing folders; URL import retains

@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import { Agent, BoxApiKey, BoxError, type BoxConfig } from "@upstash/box";
 import * as Effect from "effect/Effect";
+import { vi } from "vite-plus/test";
 
 import { BoxApi, type BoxHandle } from "./BoxApi.ts";
 import { ensureBox } from "./bootstrap.ts";
@@ -147,8 +148,7 @@ it.effect(
             "check",
           ]);
           assert.equal(clones, repositoryUrl ? 1 : 0);
-          assert.equal(writes.filter((path) => path.endsWith(".git-credentials")).length, 1);
-          assert.include(commands, "chmod 600 /home/boxuser/.git-credentials");
+          assert.isFalse(writes.some((path) => /\.git(?:-credentials|config)$/u.test(path)));
           assert.deepEqual(harnesses, [commandCodeHarness, commandCodeHarness]);
         }
         assert.equal(
@@ -236,14 +236,13 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
     assert.equal(clones, 1);
     bootstrapped = false;
     yield* bootstrapWithoutRepository;
-    // A Box without a repository still gets the template's Git login for later clones.
-    assert.include(commands, "test ! -f ~/.git-credentials || cat ~/.git-credentials");
+    assert.isFalse(commands.some((command) => command.includes("cat ~/.git")));
     assert.equal(clones, 1);
   }),
 );
 
 it.effect.each([undefined, "snapshot-fixture"])(
-  "prepares connected harnesses without pulling auth from the template (snapshot %s)",
+  "prepares volatile Git and harness credentials before cloning (snapshot %s)",
   (snapshotId) =>
     Effect.gen(function* () {
       let created: BoxConfig | undefined;
@@ -251,6 +250,12 @@ it.effect.each([undefined, "snapshot-fixture"])(
       const commands: string[] = [];
       const templateReads: string[] = [];
       const files = new Map<string, string>();
+      const volatile = new Map<string, string>();
+      using githubUser = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(
+          Response.json({ id: 123, login: "fixture-login", name: "Fixture O'Name", email: null }),
+        );
       const box: BoxHandle = {
         id: "shared-box",
         resume: async () => undefined,
@@ -263,7 +268,15 @@ it.effect.each([undefined, "snapshot-fixture"])(
         exec: {
           command: async (command) => {
             commands.push(command);
-            return { stdout: "", exitCode: command.startsWith("test -f") ? 1 : 0 };
+            if (command.includes("git clone"))
+              assert.equal(
+                volatile.get("/dev/shm/t3stash-git/credential"),
+                "username=x-access-token\npassword=fixture-github-token\n",
+              );
+            return {
+              stdout: "",
+              exitCode: command.startsWith("test -f") || command.startsWith("test -s") ? 1 : 0,
+            };
           },
         },
         files: {
@@ -271,7 +284,7 @@ it.effect.each([undefined, "snapshot-fixture"])(
             files.set(path, content);
           },
           writeVolatile: async (path, content) => {
-            files.set(path, content);
+            volatile.set(path, content);
           },
         },
         delete: async () => undefined,
@@ -290,6 +303,7 @@ it.effect.each([undefined, "snapshot-fixture"])(
           model: "default",
           agentApiKey: "",
           credentials,
+          githubToken: "fixture-github-token",
           ...(snapshotId ? { snapshotId } : {}),
         },
         "thread",
@@ -325,6 +339,13 @@ it.effect.each([undefined, "snapshot-fixture"])(
       assert.deepEqual(created?.networkPolicy, { mode: "allow-all" });
       assert.equal(restored, snapshotId);
       assert.isUndefined(created?.agent);
+      assert.isUndefined(created?.git);
+      assert.equal(githubUser.mock.calls[0]?.[0], "https://api.github.com/user");
+      assert.include(commands.join("\n"), "123+fixture-login@users.noreply.github.com");
+      assert.include(commands.join("\n"), "credential.https://github.com.helper");
+      assert.notInclude(commands.join("\n"), "fixture-github-token");
+      assert.notInclude(JSON.stringify(created), "fixture-github-token");
+      assert.notInclude(JSON.stringify([...files]), "fixture-github-token");
       for (const [pkg, credential] of [
         ["command-code", credentials.commandCode],
         ["@anthropic-ai/claude-code", credentials.claudeCode],
@@ -335,15 +356,15 @@ it.effect.each([undefined, "snapshot-fixture"])(
         assert.notInclude(JSON.stringify(created), credential);
       }
       assert.equal(
-        files.get("/dev/shm/t3stash-auth/command-home/.commandcode/auth.json"),
+        volatile.get("/dev/shm/t3stash-auth/command-home/.commandcode/auth.json"),
         credentials.commandCode,
       );
-      assert.equal(files.get("/dev/shm/t3stash-auth/claudeCode-token"), credentials.claudeCode);
-      assert.include(files.get("/dev/shm/t3stash-auth/codex/auth.json") ?? "", credentials.codex);
-      assert.deepEqual(templateReads, [
-        "test ! -f ~/.git-credentials || cat ~/.git-credentials",
-        "test ! -f ~/.gitconfig || cat ~/.gitconfig",
-      ]);
+      assert.equal(volatile.get("/dev/shm/t3stash-auth/claudeCode-token"), credentials.claudeCode);
+      assert.include(
+        volatile.get("/dev/shm/t3stash-auth/codex/auth.json") ?? "",
+        credentials.codex,
+      );
+      assert.deepEqual(templateReads, []);
     }),
 );
 

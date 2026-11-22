@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 
 import type { BoxHarness } from "../harnesses.ts";
 import { BoxApi } from "./BoxApi.ts";
-import { readHarnessCredentials } from "./credentials.ts";
+import { readGitHubToken, readHarnessCredentials } from "./credentials.ts";
 import { probe } from "./driver.ts";
 
 it.effect("resolves vault-backed harness credentials alongside pasted ones", () =>
@@ -25,6 +25,25 @@ it.effect("resolves vault-backed harness credentials alongside pasted ones", () 
       claudeCode: "fixture-oauth",
       codex: "",
     });
+  }),
+);
+
+it.effect("only uses the saved, enabled github.com token for a Box", () =>
+  Effect.gen(function* () {
+    const provider = SecretProviderId.make("vault");
+    const reference = { provider, reference: "op://fixture/github" };
+    for (const [github, token] of [
+      [{ tokens: { "github.com": reference } }, "vault-token"],
+      [{ tokens: { "github.com": "paste-token" } }, "paste-token"],
+      [{ tokens: { "github.example": "other-token" } }, ""],
+      [{ tokens: { "github.com": reference }, hosts: { "github.com": { enabled: false } } }, ""],
+    ] as const) {
+      const actual = yield* readGitHubToken(
+        { ...DEFAULT_SERVER_SETTINGS, sourceControlHosts: { github } },
+        (ref) => Effect.succeed(ref.reference === reference.reference ? "vault-token" : undefined),
+      );
+      assert.equal(actual, token);
+    }
   }),
 );
 

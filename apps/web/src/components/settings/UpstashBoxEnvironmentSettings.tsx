@@ -10,7 +10,6 @@ import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hook
 import { providersIgnoringCheckedAtAtom } from "../../state/server";
 import { useEnvironmentScope } from "../../state/session";
 import { Button } from "../ui/button";
-import { DraftInput } from "../ui/draft-input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SecretInput } from "./SecretInput";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
@@ -87,24 +86,6 @@ export function UpstashBoxEnvironmentSettings({
         />
         {onboarding ? null : (
           <>
-            <SettingsRow
-              title={gt("Template Box")}
-              description={gt(
-                "New Boxes copy Git configuration from this Box, not harness logins.",
-              )}
-              control={
-                <DraftInput
-                  aria-label={gt("Template Box")}
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  disabled={readOnly}
-                  value={box.templateBoxName}
-                  onCommit={(templateBoxName) =>
-                    update({ templateBoxName: templateBoxName.trim() })
-                  }
-                />
-              }
-            />
             <SettingsRow
               title={gt("Box size")}
               description={gt("Applies to Boxes created for new threads.")}
