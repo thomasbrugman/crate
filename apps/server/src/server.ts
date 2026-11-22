@@ -102,6 +102,7 @@ import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as PreviewTunnel from "./preview/PreviewTunnel.ts";
 import * as ServerBrowser from "./preview/ServerBrowser.ts";
+import * as BoxBrowser from "./preview/BoxBrowser.ts";
 import * as PreviewAgentActivity from "./preview/PreviewAgentActivity.ts";
 import * as DesktopBrowserChannel from "./preview/DesktopBrowserChannel.ts";
 import * as ServerBrowserStream from "./preview/ServerBrowserStream.ts";
@@ -506,6 +507,11 @@ const layerBoxGit = Layer.merge(BoxExec.layer, BoxServers.layer).pipe(
   Layer.provideMerge(layerBoxThreadResolver),
 );
 
+const layerBoxBrowser = BoxBrowser.layer.pipe(
+  Layer.provide(layerBoxThreadResolver),
+  Layer.provide(BoxApi.layer),
+);
+
 const layerVcs = Layer.empty.pipe(
   Layer.provideMerge(VcsProjectConfig.layer),
   Layer.provideMerge(layerVcsDriverRegistry),
@@ -546,7 +552,7 @@ const layerTerminal = TerminalManager.layer.pipe(
 
 const layerPreview = Layer.empty.pipe(
   Layer.provideMerge(PreviewTunnel.layer),
-  Layer.provideMerge(PreviewManager.layer),
+  Layer.provideMerge(PreviewManager.layer.pipe(Layer.provide(layerBoxBrowser))),
   Layer.provideMerge(layerPortScanner),
 );
 
@@ -901,6 +907,7 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.provide(
     ServerBrowser.layer.pipe(
       Layer.provide(Layer.merge(DesktopBrowserChannel.layer, PreviewAgentActivity.layer)),
+      Layer.provide(layerBoxBrowser),
     ),
   ),
   Layer.provide(PreviewBrowser.layer),

@@ -8,14 +8,27 @@ import type {
   PreviewZoomFactor,
   ScopedThreadRef,
 } from "@t3tools/contracts";
+import { PreviewBoxBrowserUnavailableError } from "@t3tools/contracts";
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
+import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
+import { msg } from "gt-react";
 
 import { resolveBrowserDefaults } from "~/browser/browserDefaults";
 import { BrowserSettingsReadError, isBrowserSettingsReadError } from "~/browser/openFileInPreview";
 import { previewRuntimeFor } from "~/browser/previewRuntime";
+import { m } from "~/i18n/messages";
 import { applyPreviewServerSnapshot, rememberPreviewUrl } from "~/previewStateStore";
+
+const isBoxBrowserUnavailable = Schema.is(PreviewBoxBrowserUnavailableError);
+
+export function previewOpenErrorDescription(error: unknown): string | undefined {
+  if (isBoxBrowserUnavailable(error))
+    return m(msg("The managed browser is unavailable for this Box."));
+  if (isBrowserSettingsReadError(error)) return errorDisplayMessage(error, m) ?? error.message;
+}
 
 interface OpenPreviewSessionInput<E> {
   openPreview: (input: {

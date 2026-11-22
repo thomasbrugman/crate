@@ -119,6 +119,7 @@ export interface BoxHandle {
   readonly delete: () => Promise<unknown>;
   readonly resume: () => Promise<void>;
   readonly getStatus: () => Promise<{ readonly status: string }>;
+  readonly browserCdpUrl?: () => Promise<string>;
   /** Password-protected public URLs. Credentials come back only when a URL is created. */
   readonly publicUrls?: {
     readonly create: (port: number) => Promise<BoxPublicUrl>;
@@ -244,6 +245,7 @@ function projectBox(box: Box): BoxHandle {
       await box.resume();
     },
     getStatus: async () => ({ status: (await box.getStatus()).status }),
+    browserCdpUrl: () => box.browser.cdpUrl(),
     publicUrls: {
       create: async (port) => {
         const created = await box.getPublicURL(port, { basicAuth: true });

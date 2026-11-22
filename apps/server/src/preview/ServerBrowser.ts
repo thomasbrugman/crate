@@ -40,6 +40,7 @@ import {
   type PreviewAutomationUploadInput,
   type PreviewAutomationWaitForInput,
   PreviewClearProfileError,
+  PreviewBoxBrowserUnavailableError,
   type PreviewEvent,
   type PreviewNavStatus,
   type PreviewSessionSnapshot,
@@ -87,6 +88,7 @@ import * as ServerConfig from "../config.ts";
 import { resolveRootCliCommand } from "../cli/invocation.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as PreviewAutomationBroker from "../mcp/PreviewAutomationBroker.ts";
+import { BoxBrowser } from "./BoxBrowser.ts";
 import * as DesktopBrowserChannel from "./DesktopBrowserChannel.ts";
 import * as PreviewAgentActivity from "./PreviewAgentActivity.ts";
 import * as PreviewManager from "./Manager.ts";
@@ -576,6 +578,7 @@ const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const host = { platform: yield* HostProcess.Platform, arch: yield* HostProcess.Architecture };
   const manager = yield* PreviewManager.PreviewManager;
+  const boxBrowser = Option.getOrUndefined(yield* Effect.serviceOption(BoxBrowser));
   const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const previewBrowser = yield* PreviewBrowser.PreviewBrowser;
@@ -1095,6 +1098,7 @@ const make = Effect.gen(function* () {
     } catch (cause) {
       // An unpublished tab is in no list, so nothing else would ever close it.
       for (const close of opened.reverse()) await close().catch(constVoid);
+      if (snapshot.boxBrowser) throw new PreviewBoxBrowserUnavailableError();
       throw cause;
     }
   };
@@ -1106,6 +1110,11 @@ const make = Effect.gen(function* () {
   ): Promise<ServerTab> => {
     const adopted = adoptedPages.get(tabKey(snapshot.threadId, snapshot.tabId));
     adoptedPages.delete(tabKey(snapshot.threadId, snapshot.tabId));
+    const managed =
+      snapshot.boxBrowser && !adopted && boxBrowser
+        ? await runPromise(boxBrowser.connect(ThreadId.make(snapshot.threadId), false))
+        : undefined;
+    if (snapshot.boxBrowser && !adopted && !managed) throw new PreviewBoxBrowserUnavailableError();
     const desktop =
       adopted === undefined && (await desktopRenders(snapshot))
         ? await connectDesktop(snapshot)
@@ -1124,11 +1133,13 @@ const make = Effect.gen(function* () {
     const isolatedContext =
       adopted === undefined &&
       desktop === null &&
-      ((snapshot.automationOwner !== undefined && snapshot.profileId === undefined) ||
+      (managed !== undefined ||
+        (snapshot.automationOwner !== undefined && snapshot.profileId === undefined) ||
         snapshot.profileId === INCOGNITO_BROWSER_PROFILE_ID);
     const context =
       adopted?.page.context() ??
       desktop?.page.context() ??
+      (await managed?.newContext()) ??
       (await contexts.contextFor(
         snapshot.profileId ?? "default",
         isolatedContext ? tabKey(snapshot.threadId, snapshot.tabId) : undefined,
@@ -1136,13 +1147,13 @@ const make = Effect.gen(function* () {
     if (isolatedContext) opened.push(() => context.close());
     if (adopted?.page.isClosed()) throw new Error("The popup closed before it opened.");
     if (!desktop) await prepareContext(context);
-    const page = adopted?.page ?? desktop?.page ?? (await context.newPage());
+    const page: Page = adopted?.page ?? desktop?.page ?? (await context.newPage());
     if (!desktop) opened.push(() => page.close());
     const cdp = await context.newCDPSession(page);
     await installPdfDocumentNavigation(cdp);
     // The desktop's page is already a normal browser. A popup's first request
     // precedes this override, so its Sec-CH-UA brands still name HeadlessChrome.
-    if (!desktop) await presentAsChrome(cdp, host);
+    if (!desktop && !snapshot.boxBrowser) await presentAsChrome(cdp, host);
     if (!desktop) await recordCopies(cdp);
     page.setDefaultTimeout(NAVIGATION_TIMEOUT_MS);
     page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
@@ -1370,7 +1381,13 @@ const make = Effect.gen(function* () {
       await control.close().catch(constVoid);
       throw new ServerBrowserTabNotFoundError({ threadId: tab.threadId, tabId: tab.tabId });
     }
-    page.on("close", () => dropTab(tab, true));
+    page.on("close", () => {
+      if (!snapshot.boxBrowser) return dropTab(tab, true);
+      setImmediate(() => {
+        const connected = context.browser()?.isConnected() === true;
+        dropTab(tab, connected, !connected);
+      });
+    });
     page.on("crash", () => reopenCrashedTab(tab));
     tabs.set(key, tab);
     reportLiveTabs();
@@ -1378,7 +1395,8 @@ const make = Effect.gen(function* () {
     if (desktop) void page.waitForLoadState("load").then(() => reportLoaded(tab), constVoid);
     // Existing desktop and popup PDFs can start loading before interception attaches.
     if (
-      snapshot.navStatus._tag === "Loading" &&
+      (snapshot.navStatus._tag === "Loading" ||
+        (snapshot.boxBrowser && !crashedUrl && snapshot.navStatus._tag === "Success")) &&
       ((!adopted && !desktop) || isPdfAssetUrl(snapshot.navStatus.url))
     ) {
       tab.loading = true;
@@ -2555,6 +2573,13 @@ const make = Effect.gen(function* () {
           });
         const open = input as PreviewAutomationOpenInput;
         const url = open.url === undefined ? undefined : normalizePreviewUrl(open.url);
+        if (
+          boxBrowser &&
+          request.tabId !== undefined &&
+          !tabs.has(tabKey(request.threadId, request.tabId))
+        ) {
+          await runPromise(boxBrowser.connect(ThreadId.make(request.threadId), true));
+        }
         const reuse = open.reuseExistingTab ?? true;
         if (
           reuse &&

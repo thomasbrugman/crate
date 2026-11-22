@@ -619,6 +619,7 @@ it.layer(
           BoxPty.layer.pipe(
             Layer.provide(
               Layer.mock(BoxThreadResolver)({
+                resolveBrowser: () => Effect.undefined,
                 resolveTerminal: (threadId) =>
                   Effect.succeed(
                     threadId === "thread-1"

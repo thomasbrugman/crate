@@ -162,6 +162,7 @@ export const PreviewSessionSnapshot = Schema.Struct({
   runtime: Schema.optional(PreviewRuntime),
   /** The server runs this tab in headless Chromium, so the desktop streams it like other clients. */
   headless: Schema.optional(Schema.Boolean),
+  boxBrowser: Schema.optional(Schema.Literal(true)),
   automationOwner: Schema.optional(Schema.String),
   reveal: Schema.optional(Schema.Boolean),
   revealRequest: Schema.optional(Schema.Struct({ id: Schema.String, force: Schema.Boolean })),
@@ -423,6 +424,15 @@ export class PreviewControlRequiredError extends Schema.TaggedError<PreviewContr
   }
 }
 
+export class PreviewBoxBrowserUnavailableError extends Schema.TaggedError<PreviewBoxBrowserUnavailableError>()(
+  "PreviewBoxBrowserUnavailableError",
+  {},
+) {
+  override get message() {
+    return "The managed browser is unavailable for this Box.";
+  }
+}
+
 export class PreviewClearProfileError extends Schema.TaggedError<PreviewClearProfileError>()(
   "PreviewClearProfileError",
   { profileId: Schema.String, cause: Schema.Defect() },
@@ -436,5 +446,6 @@ export const PreviewError = Schema.Union([
   PreviewSessionLookupError,
   PreviewInvalidUrlError,
   PreviewControlRequiredError,
+  PreviewBoxBrowserUnavailableError,
 ]);
 export type PreviewError = typeof PreviewError.Type;

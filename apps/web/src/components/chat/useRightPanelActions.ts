@@ -1,5 +1,5 @@
 import { msg } from "gt-react";
-import { errorDisplayMessage, thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
@@ -23,8 +23,8 @@ import {
 } from "../../rightPanelStore";
 import { requestWorkspaceContentFocus, requestWorkspaceFocus } from "../../lib/workspaceFocus";
 import { setActivePreviewTab } from "../../previewStateStore";
-import { isBrowserSettingsReadError } from "../../browser/openFileInPreview";
 import { addBrowserSurface } from "../preview/addBrowserSurface";
+import { previewOpenErrorDescription } from "../preview/openPreviewSession";
 import { focusActivePanelTerminal, focusTerminal } from "../../lib/terminalFocus";
 import { subscribePreviewAction } from "../preview/previewActionBus";
 import { floatDeviceSurface } from "../preview/agentOpenedPreviews";
@@ -117,13 +117,13 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
       ...(profileId === undefined ? {} : { profileId }),
     }).then((result) => {
       if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
-      const error = squashAtomCommandFailure(result);
-      if (isBrowserSettingsReadError(error)) {
+      const description = previewOpenErrorDescription(squashAtomCommandFailure(result));
+      if (description !== undefined) {
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: m(msg("Unable to open browser")),
-            description: errorDisplayMessage(error, m) ?? error.message,
+            description,
           }),
         );
       }

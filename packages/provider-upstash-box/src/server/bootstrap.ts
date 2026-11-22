@@ -98,7 +98,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
               config.snapshotId
                 ? (api.restore?.(config.snapshotId, createConfig) ??
                   Promise.reject(new BoxRuntimeError({ operation: "create" })))
-                : api.create(createConfig)
+                : api.create({ ...createConfig, browser: true })
             ).catch((createError: unknown) => {
               if (!isMissingStoredKey(createError)) throw createError;
               throw new BoxRuntimeError({

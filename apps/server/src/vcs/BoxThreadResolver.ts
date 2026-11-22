@@ -41,6 +41,12 @@ export class BoxThreadResolver extends Context.Service<
       { readonly nativeId: string; readonly apiKey: string; readonly worktree: boolean } | null,
       BoxExec.BoxExecError
     >;
+    readonly resolveBrowser: (
+      threadId: ThreadId,
+    ) => Effect.Effect<
+      { readonly nativeId: string; readonly apiKey: string } | null | undefined,
+      BoxExec.BoxExecError
+    >;
   }
 >()("t3/vcs/BoxThreadResolver") {}
 
@@ -73,7 +79,10 @@ export const make = Effect.gen(function* () {
       );
       if (
         !providerThread ||
-        (!isUpstashBoxDriver(providerThread.driver) && providerThread.driver !== "upstashBox") ||
+        (!isUpstashBoxDriver(providerThread.driver) && providerThread.driver !== "upstashBox")
+      )
+        return undefined;
+      if (
         providerThread.nativeThreadRef?.driver !== providerThread.driver ||
         !providerThread.nativeThreadRef?.nativeId
       )
@@ -154,14 +163,20 @@ export const make = Effect.gen(function* () {
     target: BoxThreadResolver.of({
       resolveTerminal: Effect.fn("BoxThreadResolver.resolveTerminal")((threadId: ThreadId) =>
         resolveThread(threadId).pipe(
-          Effect.map(
-            (thread) =>
-              thread && {
-                nativeId: thread.nativeId,
-                apiKey: thread.apiKey,
-                worktree: Boolean(thread.providerThread.nativeMetadata?.boxOwnerThreadId),
-              },
+          Effect.map((thread) =>
+            thread
+              ? {
+                  nativeId: thread.nativeId,
+                  apiKey: thread.apiKey,
+                  worktree: Boolean(thread.providerThread.nativeMetadata?.boxOwnerThreadId),
+                }
+              : null,
           ),
+        ),
+      ),
+      resolveBrowser: Effect.fn("BoxThreadResolver.resolveBrowser")((threadId) =>
+        resolveThread(threadId).pipe(
+          Effect.map((thread) => thread && { nativeId: thread.nativeId, apiKey: thread.apiKey }),
         ),
       ),
       resolve: Effect.fn("BoxThreadResolver.target")((threadId) =>

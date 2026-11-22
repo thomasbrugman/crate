@@ -32,12 +32,13 @@ import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import { chromium, type BrowserContext, type Page } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { beforeEach, expect, vi } from "vite-plus/test";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as Broker from "../mcp/PreviewAutomationBroker.ts";
+import { BoxBrowser } from "./BoxBrowser.ts";
 import * as DesktopChannel from "./DesktopBrowserChannel.ts";
 import * as Manager from "./Manager.ts";
 import * as PreviewAgentActivity from "./PreviewAgentActivity.ts";
@@ -562,6 +563,34 @@ const viewerInput = (tabId: string, canOperate: boolean) => ({
   maxWidth: 1280,
   maxHeight: 800,
   quality: 70,
+});
+
+it.effect("opens and streams an agent tab in the Box rather than host Chromium", () => {
+  const remote = makeContext();
+  const browser = {
+    newContext: async () => remote as unknown as BrowserContext,
+    isConnected: () => true,
+  } as unknown as Browser;
+  const managed = Layer.succeed(BoxBrowser, { connect: () => Effect.succeed(browser) });
+  return Effect.gen(function* () {
+    const server = yield* ServerBrowser.ServerBrowser;
+    const broker = yield* Broker.PreviewAutomationBroker;
+    yield* Effect.yieldNow;
+    const opened = yield* broker.invoke<PreviewAutomationStatus>({
+      scope,
+      operation: "open",
+      input: { url: "http://localhost:5161/" },
+    });
+    expect(remote.page.goto).toHaveBeenCalledWith("http://localhost:5161/", expect.anything());
+    const viewer = yield* server.attachViewer(viewerInput(opened.tabId!, true));
+    expect(viewer).toBeDefined();
+    expect(contextRequests).toEqual([]);
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      ServerBrowser.layer.pipe(Layer.provideMerge(dependencies), Layer.provideMerge(managed)),
+    ),
+  );
 });
 /** Fills a viewer's output with frames; resolves once every one of them is acknowledged. */
 const stallViewer = (viewer: ServerBrowser.ServerBrowserViewer) => {
