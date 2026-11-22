@@ -704,22 +704,34 @@ it.layer(
       expect(rejected).toMatchObject({ status: "error", error: expect.stringContaining("No Box") });
 
       const outputSeen = yield* Deferred.make<void>();
-      const restarted = yield* Deferred.make<string>();
+      const restarted = yield* Deferred.make<TerminalEvent>();
       const detach = yield* manager.attachStream(
         input,
         (event) => {
           if (event.type === "output" && event.data === "Live output")
             return Deferred.succeed(outputSeen, undefined).pipe(Effect.asVoid);
-          if (event.type === "restarted")
-            return Deferred.succeed(restarted, event.snapshot.history).pipe(Effect.asVoid);
+          if (event.type === "restarted" || event.type === "exited")
+            return Deferred.succeed(restarted, event).pipe(Effect.asVoid);
           return Effect.void;
         },
         undefined,
         "box-viewer",
       );
       yield* Effect.addFinalizer(() => Effect.sync(detach));
-      const second = yield* manager.open({ ...input, terminalId: "second" });
+      const secondInput = { ...input, terminalId: "second" };
+      const second = yield* manager.open(secondInput);
       expect(second.status).toBe("running");
+      const secondOutputSeen = yield* Deferred.make<void>();
+      const secondRestarted = yield* Deferred.make<TerminalEvent>();
+      const unsubscribe = yield* manager.subscribe((event) => {
+        if (event.terminalId !== secondInput.terminalId) return Effect.void;
+        if (event.type === "output" && event.data === "Second terminal output")
+          return Deferred.succeed(secondOutputSeen, undefined).pipe(Effect.asVoid);
+        if (event.type === "restarted" || event.type === "exited")
+          return Deferred.succeed(secondRestarted, event).pipe(Effect.asVoid);
+        return Effect.void;
+      });
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
       const [firstSession, secondSession] = sessions;
       expect(firstSession!.options).toMatchObject({
         tty: true,
@@ -730,7 +742,9 @@ it.layer(
       });
       expect(firstSession!.options.argv).toContain(BoxApi.boxWorktreePath(input.threadId));
       firstSession!.options.onStdout?.(Buffer.from("Live output"));
+      secondSession!.options.onStdout?.(Buffer.from("Second terminal output"));
       yield* Deferred.await(outputSeen);
+      yield* Deferred.await(secondOutputSeen);
       yield* manager.write({ ...input, data: "\xff", binary: true });
       yield* manager.resize({ ...input, cols: 77, rows: 37 }, "box-viewer");
       expect(firstSession!.write).toHaveBeenCalledWith(Buffer.from([255]));
@@ -740,16 +754,29 @@ it.layer(
 
       status = "paused";
       firstSession!.exit.resolve(-1);
-      const history = yield* Deferred.await(restarted);
-      expect(history).toContain("Box shell 🚀");
-      expect(history).toContain("Box terminal session restarted");
+      secondSession!.exit.resolve(137);
+      expect(yield* Deferred.await(restarted)).toMatchObject({
+        type: "restarted",
+        snapshot: {
+          history: expect.stringMatching(
+            /Box shell 🚀Live output.*Box terminal session restarted/s,
+          ),
+        },
+      });
+      expect(yield* Deferred.await(secondRestarted)).toMatchObject({
+        type: "restarted",
+        terminalId: secondInput.terminalId,
+        snapshot: {
+          history: expect.stringMatching(/Second terminal output.*Box terminal session restarted/s),
+        },
+      });
       expect(resume).toHaveBeenCalledTimes(2);
       yield* manager.write({ ...input, data: "pwd\r" });
-      const replacement = sessions[2]!;
+      const replacement = sessions.slice(2).find(({ options }) => options.rows === 37)!;
       expect(replacement.write).toHaveBeenCalledWith("pwd\r");
       yield* manager.close(input);
       yield* Effect.promise(() => replacement.closed.promise);
-      expect(sessions).toHaveLength(3);
+      expect(sessions).toHaveLength(4);
     }),
   );
 

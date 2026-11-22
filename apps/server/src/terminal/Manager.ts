@@ -397,6 +397,11 @@ function normalizeChildCommandName(raw: string, platform: NodeJS.Platform): stri
   return withoutExe.length > 0 ? withoutExe : null;
 }
 
+function isBoxSessionDisconnect(exitCode: number | null): boolean {
+  // The SDK reports transport loss as -1, but pausing a Box kills its PTYs with SIGKILL.
+  return exitCode === -1 || exitCode === 128 + 9;
+}
+
 function terminalWireLabel(session: TerminalSessionState): string {
   if (session.hasRunningSubprocess && session.childCommandLabel) {
     const trimmed = session.childCommandLabel.trim();
@@ -2624,7 +2629,6 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         session.pid = null;
         session.hasRunningSubprocess = false;
         session.childCommandLabel = null;
-        session.status = "exited";
         session.pendingHistoryControlSequence = "";
         session.pendingProcessEvents = [];
         session.pendingProcessEventIndex = 0;
@@ -2632,6 +2636,8 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         session.exitCode = Number.isInteger(nextEvent.event.exitCode)
           ? nextEvent.event.exitCode
           : null;
+        session.status =
+          options.boxPty && isBoxSessionDisconnect(session.exitCode) ? "starting" : "exited";
         session.exitSignal = Number.isInteger(nextEvent.event.signal)
           ? nextEvent.event.signal
           : null;
@@ -2672,7 +2678,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         threadId: action.threadId,
         terminalId: action.terminalId,
       });
-      if (options.boxPty && action.exitCode === -1) {
+      if (options.boxPty && isBoxSessionDisconnect(action.exitCode)) {
         yield* withThreadLock(action.threadId, reconnectBoxSession(session));
         return;
       }
@@ -3024,15 +3030,16 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     const current = yield* getSession(session.threadId, session.terminalId);
     if (
       Option.getOrUndefined(current) !== session ||
-      session.status !== "exited" ||
-      session.exitCode !== -1
+      session.status !== "starting" ||
+      !isBoxSessionDisconnect(session.exitCode)
     )
       return;
 
-    if (
-      session.canReconnect &&
-      terminalViewers.has(toSessionKey(session.threadId, session.terminalId))
-    ) {
+    const threadSessions = yield* sessionsForThread(session.threadId);
+    const hasViewer = threadSessions.some((candidate) =>
+      terminalViewers.has(toSessionKey(candidate.threadId, candidate.terminalId)),
+    );
+    if (session.canReconnect && hasViewer) {
       // Retry once until the user writes or attaches again, rather than looping on a broken link.
       session.canReconnect = false;
       yield* startSession(session, session, "restarted");
@@ -3502,7 +3509,9 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
 
     if (options.boxPty) session.canReconnect = true;
     const reconnectBox = Boolean(
-      options.boxPty && !session.process && (session.exitCode === -1 || session.status === "error"),
+      options.boxPty &&
+      !session.process &&
+      (isBoxSessionDisconnect(session.exitCode) || session.status === "error"),
     );
     if (!input.resume && !session.process && input.cwd && input.restartIfNotRunning === true) {
       const resolvedInput = yield* resolveLaunchInputEnvironment({
