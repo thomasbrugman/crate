@@ -3,6 +3,27 @@
 Connect a phone, browser, or another desktop app to T3 Code running on a different
 machine. That machine must stay running and reachable while you work.
 
+## Install on iPhone / Android
+
+Run the server on your Mac with `t3 serve --host 0.0.0.0` to allow connections
+from your phone on the same network. Open `http://<Mac-LAN-IP>:3773` in Safari
+on iPhone (Chrome on Android). On iPhone, choose **Share → Add to Home Screen**;
+on Android, choose **Add to Home screen** or **Install app** in Chrome's menu.
+The installed app is named **t3stash**. Keep the Mac and server running.
+
+Open the installed app, then run `t3 pair` on the Mac for a fresh pairing link.
+Paste the link (or just its token) into the **Pairing token** field and choose
+**Continue**. The installed app can have separate cookies from Safari, so pairing
+in Safari first does not replace this step. Treat pairing links as secrets.
+
+Plain HTTP on a LAN lacks secure-context features such as microphone access and
+the clipboard API, and Android may offer only a shortcut rather than installation.
+For HTTPS, run `t3 pair --tailscale` on the Mac and open the HTTPS origin from its
+pairing link on your phone before adding it to the home screen. Both devices need
+access to the same tailnet. Use a fresh pairing link inside the installed app;
+HTTPS via Tailscale enables secure-context features without a native app or an
+Apple developer account.
+
 ## T3 Connect
 
 T3 Connect makes an environment available to your other devices without setting

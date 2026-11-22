@@ -12,6 +12,7 @@ import {
   type VcsListRefsInput,
   type VcsListRefsResult,
 } from "@t3tools/contracts";
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -96,21 +97,23 @@ const make = Effect.gen(function* () {
           failure("capability_denied", "This MCP credential does not grant worktree capabilities."),
         );
 
-  const loadThread = (scope: McpThreadInvocationScope) =>
-    threadManagement.getThreadRecords(scope.thread.threadId, []).pipe(
-      Effect.mapError((error) =>
-        error._tag === "OrchestratorProjectionError"
-          ? failure("thread_not_found", `Thread '${scope.thread.threadId}' was not found.`)
-          : failure(
-              "operation_failed",
-              `Unable to read thread ${scope.thread.threadId}: ${errorMessage(error)}`,
-            ),
-      ),
-      Effect.filterOrFail(
-        (projection) => projection.thread.deletedAt === null,
-        () => failure("thread_not_found", `Thread '${scope.thread.threadId}' was not found.`),
-      ),
-    );
+  const loadThread = (scope: McpThreadInvocationScope, includeProviderThreads = false) =>
+    threadManagement
+      .getThreadRecords(scope.thread.threadId, includeProviderThreads ? ["providerThreads"] : [])
+      .pipe(
+        Effect.mapError((error) =>
+          error._tag === "OrchestratorProjectionError"
+            ? failure("thread_not_found", `Thread '${scope.thread.threadId}' was not found.`)
+            : failure(
+                "operation_failed",
+                `Unable to read thread ${scope.thread.threadId}: ${errorMessage(error)}`,
+              ),
+        ),
+        Effect.filterOrFail(
+          (projection) => projection.thread.deletedAt === null,
+          () => failure("thread_not_found", `Thread '${scope.thread.threadId}' was not found.`),
+        ),
+      );
 
   const loadProject = (scope: McpThreadInvocationScope, projectId: ProjectId) =>
     projects.getById(projectId).pipe(
@@ -163,7 +166,18 @@ const make = Effect.gen(function* () {
         `Thread '${scope.thread.threadId}' is already attached to worktree '${worktreePath}'.`,
       );
 
-    const projection = yield* loadThread(scope);
+    const projection = yield* loadThread(scope, true);
+    const caller = projection.providerThreads.find(
+      (thread) =>
+        thread.id === projection.thread.activeProviderThreadId &&
+        thread.providerInstanceId === scope.thread.providerInstanceId,
+    );
+    if (isUpstashBoxDriver(caller?.driver) || caller?.driver === "upstashBox") {
+      return yield* failure(
+        "invalid_request",
+        "Box threads cannot hand off to a host worktree. Delegate to a Box harness for a separate checkout in the Box.",
+      );
+    }
     if (projection.thread.worktreePath !== null) {
       return yield* alreadyInWorktree(projection.thread.worktreePath);
     }

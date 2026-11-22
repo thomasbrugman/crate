@@ -7,6 +7,7 @@ import {
   type ProviderThreadId,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import type { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
 import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
@@ -16,6 +17,7 @@ import * as Stream from "effect/Stream";
 
 import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
 import {
+  BOX_HOME,
   BOX_REPOSITORY_PATH,
   BOX_WORKSPACE_PATH,
   BOX_WORKTREES_PATH,
@@ -23,22 +25,22 @@ import {
   BoxApi,
   BoxRuntimeError,
   isMissingBox,
+  quoteShell,
   type BoxHandle,
   type BoxStream,
 } from "./BoxApi.ts";
 import {
   BOX_HARNESS_PATH,
-  BOX_HOME,
   BOX_MANAGED_HARNESS_PATH,
   ensureBox,
   installConnectedHarnesses,
-  quoteShell,
   type BoxRuntimeConfig,
   type BoxSetupStep,
 } from "./bootstrap.ts";
 import { capabilities as baseCapabilities } from "./capabilities.ts";
 import { harnessCredentialKind } from "./credentials.ts";
 import { execHarness } from "./execHarness.ts";
+import { makeBoxGitSetup } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 import { cancelBoxRun } from "./stop.ts";
 import { BoxTurnTranslation } from "./translation.ts";
@@ -46,7 +48,7 @@ import { BoxTurnTranslation } from "./translation.ts";
 /** Where a thread runs, read from the environment's settings each time a Box is reached. */
 export type BoxEnvironmentConfig = Pick<
   BoxRuntimeConfig,
-  "apiKey" | "templateBoxName" | "size" | "credentials"
+  "apiKey" | "templateBoxName" | "size" | "credentials" | "githubToken"
 >;
 
 /** Which agent runs inside the thread's Box. */
@@ -110,10 +112,14 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
 
 const boxStoppedMessage = "This thread's Box stopped mid-turn. Send a message to start a new one.";
 
-async function ensureWorktree(box: BoxHandle, threadId: string): Promise<string> {
+async function ensureWorktree(
+  box: BoxHandle,
+  threadId: string,
+  baseCommit = "HEAD",
+): Promise<string> {
   const path = boxWorktreePath(threadId);
   const { exitCode } = await box.exec.command(
-    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} HEAD; }`,
+    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} ${quoteShell(baseCommit)}; }`,
   );
   if (exitCode !== 0) throw new Error("The Box worktree could not be prepared.");
   return path;
@@ -123,20 +129,22 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   instanceId: ProviderInstanceId,
   agent: BoxAgentConfig,
   environment: Effect.Effect<BoxEnvironmentConfig>,
+  mcpSessions?: McpProviderSessions["Service"],
 ) {
   const { driver, harness } = agent;
-  const capabilities =
-    harness === "claudeCode"
-      ? {
-          ...baseCapabilities,
-          subagents: {
+  const capabilities = {
+    ...baseCapabilities,
+    tools: { ...baseCapabilities.tools, supportsMcpTools: mcpSessions !== undefined },
+    subagents:
+      harness === "claudeCode"
+        ? {
             ...baseCapabilities.subagents,
             supportsSubagents: true,
             exposesSubagentThreadIds: true,
             emitsSubagentLifecycle: true,
-          },
-        }
-      : baseCapabilities;
+          }
+        : baseCapabilities.subagents,
+  };
   const ids = yield* IdAllocator.IdAllocatorV2;
   const api = yield* BoxApi;
   const authenticationCause = (error: BoxRuntimeError, apiKey: string) => {
@@ -196,6 +204,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
     ),
     openSession: Effect.fn("UpstashBox.openSession")(function* (input) {
       const scope = yield* Effect.scope;
+      const configureBoxGit = yield* makeBoxGitSetup;
       const events = yield* Queue.unbounded<Adapter.ProviderAdapterV2Event>();
       const boxes = new Map<string, BoxHandle>();
       const recreatedThreads = new Set<ProviderThreadId>();
@@ -353,6 +362,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 const existing = await api.get(nativeId, config.apiKey);
                 // Lookup by ID also returns deleted Box tombstones; status does not.
                 await existing.getStatus();
+                await configureBoxGit(existing, config.githubToken);
                 if (config.credentials) {
                   await installConnectedHarnesses(existing, config, () => {});
                 } else if (harness === "commandCode") {
@@ -452,7 +462,8 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const providerThread = request.providerThread;
           const box = boxes.get(providerThread.nativeThreadRef?.nativeId ?? "");
           if (!box) return yield* new Adapter.ProviderAdapterSessionStoppedError({ driver });
-          const { credentials } = yield* environment;
+          const config = yield* environment;
+          const { credentials } = config;
           const credential = credentials?.[harness] || agent.agentApiKey;
           const credentialKind = harnessCredentialKind(harness, credential);
           if (credentials && !credentialKind)
@@ -460,6 +471,11 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               driver,
               detail: "Connect this harness in Settings → Providers.",
             });
+          const mcp =
+            credentials && box.exec.session && mcpSessions
+              ? yield* mcpSessions.read(request.threadId)
+              : undefined;
+          const mcpSession = mcp?.providerInstanceId === instanceId ? mcp : undefined;
           // Managed agents start in the Box workspace, so they are told where the clone is.
           const prompt = [
             ...(request.appContext ?? []).map(({ text }) => text),
@@ -538,7 +554,11 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   if (!credentials) return box.agent.stream({ prompt: streamPrompt });
                   const cwd = request.runtimePolicy.repositoryUrl
                     ? providerThread.nativeMetadata?.boxOwnerThreadId
-                      ? await ensureWorktree(box, request.threadId)
+                      ? await ensureWorktree(
+                          box,
+                          request.threadId,
+                          request.appThread.lineage.boxBaseCommit,
+                        )
                       : BOX_REPOSITORY_PATH
                     : BOX_WORKSPACE_PATH;
                   const model = request.modelSelection.model.replace(
@@ -556,6 +576,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                           "--explicit-session",
                           ...(model === "default" ? [] : ["--model", model]),
                           ...(session ? ["--session", session] : []),
+                          ...(mcpSession === undefined ? [] : ["--t3-mcp-relay"]),
                         ]
                       : [
                           BOX_MANAGED_HARNESS_PATH,
@@ -564,10 +585,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                           model,
                           session,
                           credentialKind ?? "",
+                          ...(mcpSession === undefined ? [] : ["relay"]),
                         ];
                   return execHarness(
                     box,
                     `cd ${cwd} && PATH=${BOX_HOME}/.local/bin:$PATH BOXJOB_CC_CWD=${cwd} exec node ${args.map(quoteShell).join(" ")}`,
+                    mcpSession,
                   );
                 };
                 try {
@@ -576,6 +599,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   if (!(error instanceof BoxError) || error.statusCode !== 409) throw error;
                   // A cancelled run can leave the Box rejecting work until explicitly resumed.
                   await box.resume();
+                  await configureBoxGit(box, config.githubToken);
                   stream = await start();
                 }
                 turn.stream = stream;
