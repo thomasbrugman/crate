@@ -143,7 +143,7 @@ function boxSetupLabel(key: string | undefined) {
     case "upstash-box.setup.check":
       return msg("Checking the Box setup");
     case "upstash-box.setup.install":
-      return msg("Installing Command Code");
+      return msg("Installing the agent");
     case "upstash-box.setup.credentials":
       return msg("Copying credentials from the template Box");
     case "upstash-box.setup.clone":
