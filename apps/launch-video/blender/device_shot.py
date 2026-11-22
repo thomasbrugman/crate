@@ -85,6 +85,8 @@ def build_scene(work_dir, laptop_model, laptop_screen_name, phone_model,
                     item.matrix_world = correction @ item.matrix_world
         for ob in meshes:
             world = ob.matrix_world.copy()
+            if ob.data.users > 1:
+                ob.data = ob.data.copy()
             for vertex in ob.data.vertices:
                 vertex.co = Vector(transform(world @ vertex.co)) * scale
             ob.parent = parent
