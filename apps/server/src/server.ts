@@ -107,7 +107,7 @@ import * as DesktopBrowserChannel from "./preview/DesktopBrowserChannel.ts";
 import * as ServerBrowserStream from "./preview/ServerBrowserStream.ts";
 import * as PreviewBrowser from "./preview/PreviewBrowser.ts";
 import * as ProcessRunner from "./processRunner.ts";
-import { BoxApi, BoxExec } from "@t3tools/provider-upstash-box/server";
+import { BoxApi, BoxExec, BoxServers } from "@t3tools/provider-upstash-box/server";
 import * as BoxThreadResolver from "./vcs/BoxThreadResolver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
@@ -502,7 +502,9 @@ const layerBoxThreadResolver = BoxThreadResolver.layer.pipe(
   Layer.provide(layerServerSettings),
 );
 
-const layerBoxGit = BoxExec.layer.pipe(Layer.provideMerge(layerBoxThreadResolver));
+const layerBoxGit = Layer.merge(BoxExec.layer, BoxServers.layer).pipe(
+  Layer.provideMerge(layerBoxThreadResolver),
+);
 
 const layerVcs = Layer.empty.pipe(
   Layer.provideMerge(VcsProjectConfig.layer),
