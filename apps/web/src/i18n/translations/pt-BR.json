@@ -12248,5 +12248,12 @@
   "3477da670fcbde1b": "Insira uma chave de substituição",
   "58f6b6525044d4c8": "Cole sua chave ou token",
   "96115054865561aa": "Salvo com segurança. Você pode substituir a qualquer momento.",
-  "e49f33e233fe5610": "Sua chave permanece privada. Ela nunca é incluída nos snapshots do projeto."
+  "e49f33e233fe5610": "Sua chave permanece privada. Ela nunca é incluída nos snapshots do projeto.",
+  "03b099e358af93fd": "Box: {size}",
+  "b535ed7cc16b2dd2": "Usar padrão ({size})",
+  "52278fd875d1a073": "Detalhes do espaço de trabalho Box",
+  "0dfc582858939130": "Ignorado",
+  "9756b09ffd8a55c6": "Em andamento",
+  "353b08f4363dbb2c": "Pendente",
+  "6796d4f5acef3397": "Configuração necessária"
 }

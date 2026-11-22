@@ -18,7 +18,14 @@ import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { workEntryDisplayIndicatesToolFailure } from "../../session-logic";
 import ChatMarkdown from "../ChatMarkdown";
 import { assetMediaActionsSource } from "./ChatMarkdownMedia";
-import { Minimize2Icon, XIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CircleDotIcon,
+  CircleIcon,
+  MinusIcon,
+  Minimize2Icon,
+  XIcon,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import {
@@ -455,8 +462,8 @@ export function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind:
     return (
       <div className="w-full max-w-sm rounded-lg border border-border px-3 py-2 text-xs text-foreground">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <span>{gt("Setting up Box")}</span>
-          <span className="text-muted-foreground">
+          <span className="font-medium">{gt("Setting up Box")}</span>
+          <span className="text-muted-foreground tabular-nums">
             {
               boxSetupChecklist.filter((step) => step.state === "done" || step.state === "skipped")
                 .length
@@ -464,54 +471,47 @@ export function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind:
             /{boxSetupChecklist.length}
           </span>
         </div>
-        <div className="flex flex-col gap-1.5">
+        <ol className="flex flex-col gap-1.5" aria-label={gt("Setting up Box")}>
           {boxSetupChecklist.map((step) => (
-            <div
+            <li
               key={step.key}
-              className="flex items-center gap-2"
+              className={cn(
+                "flex items-start gap-2",
+                step.state === "active" ? "font-medium text-foreground" : "text-muted-foreground",
+              )}
               aria-current={step.state === "active" ? "step" : undefined}
             >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 14 14"
-                className={
-                  step.state === "done" || step.state === "active"
-                    ? "size-3.5 shrink-0 text-foreground"
-                    : "size-3.5 shrink-0 text-muted-foreground"
-                }
-              >
-                <circle
-                  cx="7"
-                  cy="7"
-                  r="6"
-                  fill={step.state === "done" ? "currentColor" : "none"}
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  strokeDasharray={step.state === "active" ? "2 2" : undefined}
-                />
-                {step.state === "done" && (
-                  <path
-                    d="m4 7 2 2 4-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    className="text-background"
-                  />
-                )}
-                {step.state === "skipped" && <path d="m3 11 8-8" stroke="currentColor" />}
-              </svg>
               <span
-                className={
-                  step.state === "done" || step.state === "skipped"
-                    ? "text-muted-foreground line-through"
-                    : "text-foreground"
-                }
+                aria-hidden="true"
+                className="flex h-4 items-center [&>svg]:size-3.5 [&>svg]:shrink-0"
               >
-                {m(step.labelMsg)}
+                {step.state === "done" ? (
+                  <CheckIcon />
+                ) : step.state === "active" ? (
+                  <CircleDotIcon />
+                ) : step.state === "skipped" ? (
+                  <MinusIcon />
+                ) : (
+                  <CircleIcon />
+                )}
               </span>
-            </div>
+              <span>
+                {m(step.labelMsg)}
+                {step.state === "skipped" ? (
+                  <span className="ms-2">{gt("Skipped")}</span>
+                ) : (
+                  <span className="sr-only">
+                    {step.state === "done"
+                      ? gt("Completed")
+                      : step.state === "active"
+                        ? gt("In progress")
+                        : gt("Pending")}
+                  </span>
+                )}
+              </span>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     );
   }

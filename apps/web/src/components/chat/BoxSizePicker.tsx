@@ -42,7 +42,7 @@ export function BoxSizePicker(props: {
         }
       >
         <ComposerControlIcon icon={BoxIcon} size="xs" />
-        <ComposerContextLabel>{sizeLabel}</ComposerContextLabel>
+        <ComposerContextLabel>{gt("Box: {size}", { size: sizeLabel })}</ComposerContextLabel>
         <ChevronDownIcon aria-hidden="true" className="size-3" data-composer-control-chevron />
       </MenuTrigger>
       <MenuPopup side="top" align="start" {...menuProps}>
@@ -56,7 +56,7 @@ export function BoxSizePicker(props: {
         >
           <MenuRadioItem value="default" closeOnClick>
             <span className="flex items-center justify-between gap-3">
-              {gt("Use default")}
+              {gt("Use default ({size})", { size: m(UPSTASH_BOX_SIZE_LABELS[props.defaultSize]) })}
               <MenuRadioItemIndicator />
             </span>
           </MenuRadioItem>

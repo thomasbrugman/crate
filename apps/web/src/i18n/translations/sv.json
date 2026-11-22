@@ -12256,5 +12256,12 @@
   "3477da670fcbde1b": "Ange en ersättningsnyckel",
   "58f6b6525044d4c8": "Klistra in din nyckel eller token",
   "96115054865561aa": "Säkert sparad. Du kan ersätta den när som helst.",
-  "e49f33e233fe5610": "Din nyckel förblir privat. Den ingår aldrig i projektögonblicksbilder."
+  "e49f33e233fe5610": "Din nyckel förblir privat. Den ingår aldrig i projektögonblicksbilder.",
+  "03b099e358af93fd": "Box: {size}",
+  "b535ed7cc16b2dd2": "Använd standard ({size})",
+  "52278fd875d1a073": "Information om Box-arbetsytan",
+  "0dfc582858939130": "Överhoppat",
+  "9756b09ffd8a55c6": "Pågår",
+  "353b08f4363dbb2c": "Väntar",
+  "6796d4f5acef3397": "Konfiguration krävs"
 }
