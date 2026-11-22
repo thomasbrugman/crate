@@ -133,6 +133,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       }),
     );
   const removeBox = (thread: OrchestrationV2ProviderThread, keepUnsavedWork: boolean) => {
+    if (thread.nativeMetadata?.boxOwnerThreadId) return Effect.succeed(false);
     const nativeId =
       thread.nativeThreadRef?.nativeId ??
       (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
@@ -299,7 +300,9 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             forkedFrom: null,
             pendingBackgroundTasks: [],
             contextUsage: null,
-            nativeMetadata: null,
+            nativeMetadata: request.runtimePolicy.boxOwnerThreadId
+              ? { boxOwnerThreadId: request.runtimePolicy.boxOwnerThreadId }
+              : null,
             goal: null,
             createdAt: at,
             updatedAt: at,
@@ -311,6 +314,8 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const nativeId = previous.nativeThreadRef?.nativeId;
           if (!nativeId) return yield* unsupported("Resuming a thread without a Box identity");
           const runtimePolicy = request.runtimePolicy ?? input.runtimePolicy;
+          const boxOwnerThreadId =
+            previous.nativeMetadata?.boxOwnerThreadId ?? runtimePolicy.boxOwnerThreadId;
           const config: BoxRuntimeConfig = {
             ...(yield* environment),
             harness,
@@ -365,7 +370,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 size: runtimePolicy.boxSize ?? config.size,
                 ...(runtimePolicy.boxSnapshotId ? { snapshotId: runtimePolicy.boxSnapshotId } : {}),
               },
-              `t3-${Buffer.from(runtimePolicy.boxOwnerThreadId ?? threadId).toString("hex")}`,
+              `t3-${Buffer.from(boxOwnerThreadId ?? threadId).toString("hex")}`,
               runtimePolicy.repositoryUrl,
               showSetupStep,
             ).pipe(
@@ -390,7 +395,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 nativeConversationHeadRef: null,
                 pendingBackgroundTasks: [],
                 contextUsage: null,
-                nativeMetadata: null,
+                nativeMetadata: boxOwnerThreadId ? { boxOwnerThreadId } : null,
                 status: "idle",
                 updatedAt: yield* DateTime.now,
               },
@@ -508,7 +513,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 const start = async () => {
                   if (!credentials) return box.agent.stream({ prompt: streamPrompt });
                   const cwd = request.runtimePolicy.repositoryUrl
-                    ? request.runtimePolicy.boxOwnerThreadId
+                    ? providerThread.nativeMetadata?.boxOwnerThreadId
                       ? await ensureWorktree(box, request.threadId)
                       : BOX_REPOSITORY_PATH
                     : BOX_WORKSPACE_PATH;

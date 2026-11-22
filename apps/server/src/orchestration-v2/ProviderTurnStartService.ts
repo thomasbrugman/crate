@@ -905,20 +905,30 @@ export const layer: Layer.Layer<
       }
       let resolvedRuntimePolicy = resolvedPolicy.success;
       if (isUpstashBoxDriver(providerThread.driver)) {
-        let owner = projection.thread;
-        const visited = new Set([owner.id]);
+        let boxOwnerThreadId: ThreadId | undefined;
+        let current = projection.thread;
+        const visited = new Set([current.id]);
         while (
-          owner.lineage.relationshipToParent === "subagent" &&
-          owner.lineage.parentThreadId !== null
+          current.lineage.relationshipToParent === "subagent" &&
+          current.lineage.parentThreadId !== null
         ) {
-          const parentId = owner.lineage.parentThreadId;
+          const parentId = current.lineage.parentThreadId;
           if (visited.has(parentId)) break;
           visited.add(parentId);
-          owner = yield* projectionStore.getThread(parentId);
+          const parent = yield* projectionStore.getThreadRecords(parentId, ["providerThreads"]);
+          const box = parent.providerThreads.find(
+            (candidate) =>
+              (isUpstashBoxDriver(candidate.driver) || candidate.driver === "upstashBox") &&
+              candidate.nativeThreadRef?.nativeId,
+          );
+          if (box) {
+            boxOwnerThreadId = box.nativeMetadata?.boxOwnerThreadId ?? parent.thread.id;
+            break;
+          }
+          current = parent.thread;
         }
-        if (owner.id !== projection.thread.id) {
-          resolvedRuntimePolicy = { ...resolvedRuntimePolicy, boxOwnerThreadId: owner.id };
-        }
+        if (boxOwnerThreadId)
+          resolvedRuntimePolicy = { ...resolvedRuntimePolicy, boxOwnerThreadId };
       }
       if (!(yield* isCurrentAttemptInStatus("starting"))) return;
       const existingSessionProjection = projection.providerSessions.find(

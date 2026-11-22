@@ -69,6 +69,9 @@ it.effect(
             );
           yield* cleanup([]);
           yield* cleanup([{ ...providerThread, driver: ProviderDriverKind.make("codex") }]);
+          yield* cleanup([
+            { ...providerThread, nativeMetadata: { boxOwnerThreadId: ThreadId.make("parent") } },
+          ]);
           assert.isEmpty(removed);
           const result = yield* cleanup([
             {
@@ -157,6 +160,9 @@ it.effect("deletes Boxes of threads settled and quiet for three days unless they
         driver: threadId === "codex" ? ProviderDriverKind.make("codex") : driver,
         providerInstanceId: instanceId,
         appThreadId: threadId,
+        ...(threadId === "child"
+          ? { nativeMetadata: { boxOwnerThreadId: ThreadId.make("due") } }
+          : {}),
       }) as OrchestrationV2ProviderThread;
     const checked: string[] = [];
     const adapter = Adapter.ProviderAdapterV2.of({

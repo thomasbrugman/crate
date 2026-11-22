@@ -39,7 +39,9 @@ export const cleanupBoxThreads = Effect.fn("ResourceCleanupService.cleanupBoxThr
     const cleanup = yield* BoxThreadCleanup.BoxThreadCleanup;
     const [, failures] = yield* Effect.partition(
       input.providerThreads.filter(
-        (thread) => isUpstashBoxDriver(thread.driver) || thread.driver === "upstashBox",
+        (thread) =>
+          !thread.nativeMetadata?.boxOwnerThreadId &&
+          (isUpstashBoxDriver(thread.driver) || thread.driver === "upstashBox"),
       ),
       (providerThread) => cleanup.remove({ threadId: input.threadId, providerThread }),
       { concurrency: 1 },
@@ -72,9 +74,7 @@ export const layerBoxCleanup = Layer.effect(
       );
       yield* cleanupBoxThreads({
         threadId,
-        deleted:
-          records.thread.deletedAt !== null &&
-          records.thread.lineage.relationshipToParent !== "subagent",
+        deleted: records.thread.deletedAt !== null,
         providerThreads: records.providerThreads,
       }).pipe(Effect.provideService(BoxThreadCleanup.BoxThreadCleanup, boxes));
     });
@@ -134,14 +134,19 @@ export const cleanupSettledBoxes = Effect.fn("ResourceCleanupService.cleanupSett
       }
     }
     for (const shell of snapshot.threads) {
-      if (shell.lineage.relationshipToParent === "subagent" || busyOwners.has(shell.id)) continue;
+      if (busyOwners.has(shell.id)) continue;
       const quietSince = settledBoxQuietSince(shell, now);
       if (quietSince === null || now - quietSince < Duration.toMillis(SETTLED_BOX_RETENTION))
         continue;
       const records = yield* projections.getThreadRecords(shell.id, ["providerThreads"]);
       for (const thread of records.providerThreads) {
         const key = `${thread.id}@${quietSince}`;
-        if (!isUpstashBoxDriver(thread.driver) || released.has(key)) continue;
+        if (
+          !isUpstashBoxDriver(thread.driver) ||
+          thread.nativeMetadata?.boxOwnerThreadId ||
+          released.has(key)
+        )
+          continue;
         yield* dispatch
           .withLock(
             shell.id,

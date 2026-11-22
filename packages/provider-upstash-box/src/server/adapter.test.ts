@@ -593,6 +593,8 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
         main.loaded.nativeThreadRef?.nativeId,
       );
       assert.equal(linked.loaded.nativeThreadRef?.nativeId, main.loaded.nativeThreadRef?.nativeId);
+      assert.equal(linked.loaded.nativeMetadata?.boxOwnerThreadId, threadId);
+      assert.isUndefined(manual.loaded.nativeMetadata?.boxOwnerThreadId);
       assert.notEqual(
         manual.loaded.nativeThreadRef?.nativeId,
         main.loaded.nativeThreadRef?.nativeId,
