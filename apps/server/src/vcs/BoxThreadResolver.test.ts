@@ -94,7 +94,12 @@ it.effect.each(cases)("resolves persisted Box identity and project context: %j",
         branch: null,
         worktreePath: null,
         activeProviderThreadId: providerThreadId,
-        lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+        lineage: {
+          parentThreadId: null,
+          relationshipToParent: null,
+          rootThreadId: threadId,
+          ...(scenario.sharedBox ? { boxBaseCommit: "abc123" } : {}),
+        },
         forkedFrom: null,
         createdAt: now,
         updatedAt: now,
@@ -182,6 +187,7 @@ it.effect.each(cases)("resolves persisted Box identity and project context: %j",
       assert.deepEqual(yield* target.resolve(threadId), {
         threadId,
         projectRoot: "/explicit/project",
+        ...(scenario.sharedBox ? { comparisonBaseRef: "abc123" } : {}),
         checkoutRoot: scenario.noRepository
           ? "/workspace/home"
           : scenario.sharedBox

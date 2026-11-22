@@ -88,7 +88,7 @@ export function RightPanelSurfaceContent(props: {
   const { surface, threadRef, visible, onCloseSurface } = props;
   const gt = useGT();
   if (surface === null) return null;
-  if (["diff", "files", "file", "file-preview", "device"].includes(surface.kind))
+  if (["files", "file", "file-preview", "device"].includes(surface.kind))
     return <CloudUnavailable />;
   switch (surface.kind) {
     case "preview":

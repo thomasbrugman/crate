@@ -652,6 +652,30 @@ export type ChangesLineTotals = {
   readonly breakdown: PullRequestChangeBreakdown;
 };
 
+export function resolveCommitFiles(
+  files: VcsStatusResult["workingTree"]["files"],
+  previewFiles: ReviewDiffPreviewSource["files"],
+) {
+  if (!previewFiles) return files;
+  const totals = new Map<string, { insertions: number; deletions: number }>();
+  for (const file of previewFiles) {
+    const stat = { insertions: file.additions, deletions: file.deletions };
+    totals.set(file.path, stat);
+    for (let end = file.path.indexOf("/"); end !== -1; end = file.path.indexOf("/", end + 1)) {
+      const directory = file.path.slice(0, end + 1);
+      const previous = totals.get(directory);
+      totals.set(directory, {
+        insertions: (previous?.insertions ?? 0) + stat.insertions,
+        deletions: (previous?.deletions ?? 0) + stat.deletions,
+      });
+    }
+  }
+  return files.map((file) => ({
+    path: file.path,
+    ...(totals.get(file.path) ?? { insertions: 0, deletions: 0 }),
+  }));
+}
+
 // `branchChanges ?? workingTree` treats `{0,0}` as present, so a zero branch total hid a dirty
 // working tree and the Changes row read +0 while Diff still showed the work.
 // The Diff panel's branch comparison wins when it has file stats, so a remembered base or

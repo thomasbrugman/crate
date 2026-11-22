@@ -243,10 +243,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 </ThreadDetailsSection>
               ) : null}
 
-              {show.branch ||
-              show.pullRequests ||
-              show.git ||
-              (props.cloudThread && visible.changes) ? (
+              {show.branch || show.pullRequests || show.git ? (
                 <ThreadDetailsSection
                   headingId="thread-details-version-control-heading"
                   title={gt("Version Control")}
@@ -254,14 +251,6 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                   separated={density === "full"}
                 >
                   <div className="flex flex-col">
-                    {props.cloudThread && visible.changes ? (
-                      <div className="flex flex-col gap-1 p-2 text-sm">
-                        <T>Changes</T>
-                        <span className="text-muted-foreground">
-                          <T>Not available in cloud threads. Ask the agent to use its Box tools.</T>
-                        </span>
-                      </div>
-                    ) : null}
                     {show.branch ? (
                       <BranchToolbar layout="panel" panelSection="branch" {...branchToolbarProps} />
                     ) : null}
@@ -276,7 +265,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                       <GitActionsControl
                         compact={density !== "full"}
                         showActions={visible.gitActions}
-                        showChanges={visible.changes && !props.cloudThread}
+                        showChanges={visible.changes}
                         openInEditorAvailable={!props.cloudThread}
                         canGenerateText={!props.cloudThread}
                         gitCwd={props.gitCwd}
