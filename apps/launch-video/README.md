@@ -57,3 +57,24 @@ first beat at the reveal, pass `--music /path/to/track.mp3 --music-start SECONDS
 into the track, not the video. Add `--music-credit "Track — Artist (Source)"` for an end-card credit.
 This does not replace the library's download credit in the published video description. Make each
 alternate with the same capture directory and keep captures, music, and exports out of git.
+
+## 3D device shot
+
+`blender/device_shot.py` builds a Blender scene with a laptop and a phone on a dark studio floor,
+plays real captures on both screens, and moves the camera in a 5-second arc and push-in
+(1080p, 60 fps, Cycles on CPU). It was written for Blender 4.2 LTS.
+
+Extract the screen frames into a work directory, then build and render:
+
+```sh
+mkdir -p work/tex/laptop work/tex/phone
+ffmpeg -ss 5.5 -t 6 -i clips/readme.mp4 -vf fps=60 -q:v 2 work/tex/laptop/%04d.jpg
+ffmpeg -i clips/t3stash-readme-phone-60fps.mp4 -vf fps=60 -q:v 2 work/tex/phone/%04d.jpg
+blender -b -P apps/launch-video/blender/device_shot.py -- work
+blender -b work/scene.blend -o //out/f_#### -a
+ffmpeg -framerate 60 -i work/out/f_%04d.png -c:v libx264 -pix_fmt yuv420p -crf 16 device-shot.mp4
+```
+
+Pass `preview` after the work directory for a half-resolution, low-sample scene. On an 8-core CPU
+a full frame takes about 10 seconds. The laptop needs at least 300 frames for the whole shot; the
+phone holds its last frame. Keep work directories and renders out of git.
