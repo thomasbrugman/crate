@@ -16,7 +16,7 @@ WIDTH, HEIGHT, FPS = 1920, 1080, 30
 REPO = "github.com/thomasbrugman/t3stash"
 REVEAL_AT = 7
 REVEAL_LENGTH = 1.6
-CAMERA_LENGTH = 3.3
+CAMERA_LENGTH = 103 / FPS
 CTA_LENGTH = 3.6
 SCREEN = (1656, 896)
 PAPER = "#f2f1ee"
@@ -48,48 +48,51 @@ class Shot:
     crop: tuple[int, int, int, int] | None = None  # width, height, x, y
     note: str = ""
     taps: tuple[float, ...] = ()
+    pan_y: tuple[int, float] | None = None
 
 
 SHOTS = (
     Shot(
         "onboarding.mp4",
-        2.3,
+        2.5,
         "CONNECT",
         "Connect your agent once.",
         0.1,
         crop=(800, 610, 320, 115),
-        taps=(0.65,),
+        taps=(0.74,),
     ),
     Shot(
         "snapshot-setting.mp4",
-        1.5,
+        47 / FPS,
         "PREPARE",
         "Start new threads from a prepared snapshot.",
         3.6,
-        crop=(970, 430, 365, 365),
+        crop=(870, 252, 404, 526),
     ),
     Shot(
         "box-size.mp4",
-        2.2,
+        56 / FPS,
         "START A THREAD",
         "Pick a Box size.",
-        0.8,
+        0.85,
+        1.3,
         crop=(680, 330, 407, 263),
-        taps=(0.54, 1.74),
+        taps=(0.31, 1.61),
     ),
     Shot(
         "readme.mp4",
-        3.5,
+        3.6,
         "START A THREAD",
         "Send a task to its own Box.",
         2.1,
         1.55,
-        crop=(830, 580, 332, 38),
+        crop=(830, 340, 332, 225),
         note="FOOTAGE SPED UP",
-        taps=(2.4,),
+        taps=(2.45,),
+        pan_y=(34, 2.43),
     ),
 )
-PARALLEL_LENGTH = 3.8
+PARALLEL_LENGTH = 3.9
 PARALLEL = (
     ("readme.mp4", 6.25, "README edit"),
     ("install.mp4", 5.0, "Install review"),
@@ -107,7 +110,7 @@ RESULT = (
     ),
     Shot(
         "recut-workspace.mp4",
-        3.2,
+        89 / FPS,
         "CHECK THE WORK",
         "The README diff, straight from the Box.",
         11.3,
@@ -183,8 +186,8 @@ def shot_card(shot):
     return card
 
 
-def still(image, output, length, fade_in=0):
-    fade = ["-vf", f"fade=t=in:d={fade_in}:color=0x131313"] if fade_in else []
+def still(image, output, length, *, filters=""):
+    vf = ["-vf", filters] if filters else []
     ffmpeg(
         "-loop",
         "1",
@@ -192,9 +195,9 @@ def still(image, output, length, fade_in=0):
         FPS,
         "-i",
         image,
-        *fade,
-        "-t",
-        length,
+        *vf,
+        "-frames:v",
+        round(length * FPS),
         *ENCODE,
         output,
     )
@@ -202,13 +205,20 @@ def still(image, output, length, fade_in=0):
 
 def footage(shot, inputs, plate, output):
     path = inputs / shot.file
-    crop = "" if shot.crop is None else f"crop={':'.join(map(str, shot.crop))},"
     frames = round(shot.length * FPS)
-    width, height = shot.crop[:2] if shot.crop else (1440, 810)
+    crop = ""
+    if shot.crop:
+        width, height, x, y = shot.crop
+        if shot.pan_y:
+            end_y, at = shot.pan_y
+            y = f"'{y}+({end_y - y})*(1-cos(PI*clip((t-{at})/0.23,0,1)))/2'"
+        crop = f"crop={width}:{height}:{x}:{y},"
+    else:
+        width, height = 1440, 810
     scale = min(SCREEN[0] / width, SCREEN[1] / height)
     width, height = (2 * round(d * scale / 2) for d in (width, height))
     graph = (
-        f"[0:v]{crop}setpts=(PTS-STARTPTS)/{shot.speed},fps={FPS},"
+        f"[0:v]setpts=(PTS-STARTPTS)/{shot.speed},fps={FPS},{crop}"
         f"tpad=stop_mode=clone:stop_duration={shot.length},"
         f"scale={width * 2}:{height * 2},"
         f"zoompan=z='1+0.065*(1-cos(PI*min(on/{frames - 1},1)))/2':"
@@ -296,7 +306,7 @@ def parallel(inputs, plate, output):
     )
 
 
-def sound(output, length, title_at, cta_at, taps):
+def sound(output, length, title_at, diff_at, cta_at, taps):
     rate = 24000
     rng = random.Random(24)
     low_noise = 0.0
@@ -313,7 +323,11 @@ def sound(output, length, title_at, cta_at, taps):
                 * (2.8 * low_noise + math.sin(2 * math.pi * (64 * t + 2.2 * t * t)))
             )
         cue = 0.0
-        for when, root, gain in ((title_at, 55, 0.17), (cta_at, 165, 0.07)):
+        for when, root, gain in (
+            (title_at, 55, 0.17),
+            (diff_at, 330, 0.045),
+            (cta_at, 165, 0.07),
+        ):
             age = t - when
             if 0 <= age < 1.6:
                 cue += (
@@ -401,7 +415,9 @@ def main():
             clip_path(),
         )
         title_card("intro").save(plate)
-        still(plate, clip_path(), REVEAL_LENGTH, fade_in=0.23)
+        still(
+            plate, clip_path(), REVEAL_LENGTH, filters="fade=t=in:d=0.23:color=0x131313"
+        )
 
         def shots(sequence):
             for shot in sequence:
@@ -415,7 +431,16 @@ def main():
         title_card("camera").save(plate)
         still(plate, clip_path(), CAMERA_LENGTH)
         title_card("cta", args.wordmark, args.music_credit).save(plate)
-        still(plate, clip_path(), CTA_LENGTH)
+        still(
+            plate,
+            clip_path(),
+            CTA_LENGTH,
+            filters=(
+                "scale=3840:2160,zoompan=z='1+0.035*pow(max(1-on/14,0),3)':"
+                f"x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=1:s={WIDTH}x{HEIGHT}:fps={FPS},"
+                "setsar=1"
+            ),
+        )
         program = temp / "program.txt"
         program.write_text(
             "".join(f"file {clip.name}\n" for clip in clips), encoding="utf-8"
@@ -428,9 +453,10 @@ def main():
         cta_at = (
             elapsed + PARALLEL_LENGTH + sum(s.length for s in RESULT) + CAMERA_LENGTH
         )
+        diff_at = cta_at - CAMERA_LENGTH - RESULT[-1].length
         length = cta_at + CTA_LENGTH
         audio = temp / "sound.wav"
-        sound(audio, length, REVEAL_AT, cta_at, taps)
+        sound(audio, length, REVEAL_AT, diff_at, cta_at, taps)
         if args.music:
             music = [
                 "-ss",
