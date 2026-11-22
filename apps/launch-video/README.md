@@ -59,26 +59,91 @@ into the track, not the video. Add `--music-credit "Track — Artist (Source)"` 
 This does not replace the library's download credit in the published video description. Make each
 alternate with the same capture directory and keep captures, music, and exports out of git.
 
-## 3D device shot
+## Full 3D launch cut
 
-`blender/device_shot.py` builds a Blender scene with a laptop and a phone on a dark studio floor,
-plays real captures on both screens, and moves the camera in a 5-second arc and push-in
-(1080p, 60 fps, Cycles on CPU). It was written for Blender 4.2 LTS.
+The Blender 4.2 LTS pipeline in `blender/` renders six independent device shots and a
+credited end card: 30.5 seconds at 1080p/60 fps. Use Python 3.10+, Pillow, FFmpeg,
+Blender with Cycles/OpenImageDenoise, DejaVu Sans fonts (for the existing end card),
+and an [Inter variable TTF](https://github.com/google/fonts/tree/main/ofl/inter)
+(optical-size and weight axes). Keep **all assets and outputs outside the checkout**.
 
-Extract the screen frames into a work directory, then build and render:
+### Get the models
+
+Models are not included. The four source/download links for the two models are:
+
+| Model                         | Original source / author                                                                                                                   | Download                                                                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MacBook Neo                   | [Ranguel on Sketchfab](https://sketchfab.com/3d-models/macbook-neo-f3dd26684f114b1baffd1b0800876627)                                       | [Sketchfab download API](https://api.sketchfab.com/v3/models/f3dd26684f114b1baffd1b0800876627/download), authenticated with your own `SKETCHFAB_API_TOKEN` |
+| Apple iPhone 15 Pro Max Black | [polyman Studio (Polyman_3D) on Sketchfab](https://sketchfab.com/3d-models/apple-iphone-15-pro-max-black-df17520841214c1792fb8a44c6783ee7) | [Direct GLB](https://raw.githubusercontent.com/adrianhajdin/iphone/main/public/models/scene.glb)                                                           |
+
+Use `curl -fsS -H "Authorization: Token ${SKETCHFAB_API_TOKEN:?Set your own token}"`
+with the Neo download endpoint. Read the returned `glb.url` (or `gltf.url` for a
+ZIP), then download it before its signed URL expires. Never log/commit the token or
+signed URLs. If only glTF is available, extract its ZIP and import/export it as GLB
+in Blender, preserving mesh names. No token is needed for the iPhone direct URL.
+
+Place the GLBs at `WORK/models/macbook-neo-ranguel/model.glb` and
+`WORK/models/iphone-15-pro-max-polyman/model.glb`. Displays are `Object_23` and
+`xXDHkMplTIDAXLN`, respectively. The shared `device_shot.build_scene` contains the
+generic import/normalization/UV helpers; there is no second scene copy or source
+rewriting. A different open, Z-up/X-wide laptop can use `--laptop-model`,
+`--laptop-screen` and `--lid-tilt 0` (the Neo defaults to -12 degrees).
+Keep the default-model credits only when those are the models actually used.
+
+Both models allow commercial use under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Publish these credits with the video (also generated in `WORK/model_credits.txt`):
+
+> "MacBook Neo" by Ranguel; "Apple iPhone 15 Pro Max Black" by polyman Studio
+> (Polyman_3D), CC BY 4.0. Sources: the original Sketchfab links above.
+> Adaptations: lid pose, scale/orientation, screen footage/UVs, materials,
+> studio lighting and animation.
+
+### Prepare, preview, render
+
+Stage `onboarding.mp4`, `snapshot-setting.mp4`, `readme.mp4`,
+`recut-workspace.mp4`, `t3stash-readme-phone-60fps.mp4` (1206×2622 portrait) and
+`wordmark.png` in `WORK/clips/`. Supply your licensed music separately.
+The track credit is “Music: Bridge of Roses by Ian Aisling”.
+Masks and in-points match the audited launch captures: **inspect every new source
+segment for credentials and raw Upstash data before rendering**. Fixed pixel masks
+are not automatic redaction and must be adjusted if captures/layouts change.
+
+Run from the repo root, substituting your own paths:
 
 ```sh
-mkdir -p work/tex/laptop work/tex/phone
-ffmpeg -ss 5.5 -t 6 -i clips/readme.mp4 -vf fps=60 -q:v 2 work/tex/laptop/%04d.jpg
-ffmpeg -i clips/t3stash-readme-phone-60fps.mp4 \
-  -vf "fps=60,crop=1206:1780:0:0,pad=1206:2622:0:0:color=0xfafafa,drawbox=x=453:y=2566:w=300:h=14:color=black@0.85:t=fill" \
-  -q:v 2 work/tex/phone/%04d.jpg
-blender -b -P apps/launch-video/blender/device_shot.py -- work
-blender -b work/scene.blend -o //out/f_#### -a
-ffmpeg -framerate 60 -i work/out/f_%04d.png -c:v libx264 -pix_fmt yuv420p -crf 16 device-shot.mp4
+WORK=/path/outside/repo/launch-work
+TOOLS=apps/launch-video/blender
+python3 "$TOOLS/prepare.py" "$WORK" --font /path/to/Inter-variable.ttf
+blender -b -t 12 --python-exit-code 1 -P "$TOOLS/render_shots.py" -- "$WORK" --mode animatic
+python3 "$TOOLS/assemble.py" "$WORK" --music /path/to/bridge-of-roses.mp3
+blender -b -t 12 --python-exit-code 1 -P "$TOOLS/render_shots.py" -- "$WORK" --mode benchmark
 ```
 
-Pass `preview` after the work directory for a half-resolution, low-sample scene. On an 8-core CPU
-a full frame takes about 10 seconds. The laptop needs at least 300 frames for the whole shot; the
-phone holds its last frame. The phone filter crops the composer and the Safari bar off the
-1206×2622 capture and fills the space with the thread background and a home indicator. Keep work directories and renders out of git.
+The animatic is `WORK/animatic.mp4` (30 fps, 50% device renders, two samples).
+Inspect `WORK/contact_sheet.jpg` and the full-quality midpoint PNGs in
+`WORK/benchmarks/<shot>/`; measured timings are printed as `FRAME_TIME`.
+Use `--shot 1` through `--shot 6` to select a shot. Final quality uses 20 samples,
+16 for the phone, with denoising and motion blur. The silver finish is default;
+`--finish yellow` restores the model's body color while keeping dark matte keys.
+
+Once previews are approved:
+
+```sh
+nohup python3 "$TOOLS/run_final.py" "$WORK" --blender blender --threads 12 \
+  --music /path/to/bridge-of-roses.mp3 > "$WORK/runner.log" 2>&1 < /dev/null &
+```
+
+This POSIX runner locks the work directory, appends progress to
+`WORK/final_render.log`, then automatically writes
+`WORK/t3stash-launch-3d.mp4` and `WORK/final_contact_sheet.jpg`.
+Rerun the same command after interruption: completed PNGs are skipped and frame
+writes are atomic. Use a **new work directory** after changing models, cameras,
+finish or render settings; existing frames are not invalidated automatically.
+Caption-only updates can use `prepare.py ... --graphics-only` while rendering;
+assembly reads the updated overlays afterwards. Phone text is right of the device;
+other captions are top-left, with 0.3-second fades. The end card is unchanged.
+
+`--music-start SECONDS` is accepted by assembly and the final runner; default 0,
+normal playback speed, with fade-in/out. The cut contains 1,590 rendered frames plus
+240 end-card frames; budget roughly 6–7 hours on a comparable 12-thread CPU, but
+benchmark on your own machine. No render starts merely by importing the scene helper.
