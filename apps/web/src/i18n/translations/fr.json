@@ -3151,7 +3151,6 @@
   "cbcae4b40060acdb": "Appairage avec cet environnement",
   "664b42ae92488743": "Validation du lien d’appairage et préparation de votre session.",
   "eb3a33756e51cba8": "Appairer avec cet environnement",
-  "55c59743f7fdd7fa": "Collez un jeton à usage unique ou un secret d’appairage",
   "ca6a0c94398d763d": "Appairage...",
   "989f56b8297dd684": "Ce jeton d’appairage à usage unique a déjà été envoyé. Demandez un nouveau lien d’appairage.",
   "db3dcafc90d10405": "{environment} est enregistré dans ce navigateur.",
@@ -12237,5 +12236,17 @@
   "c291bdeadbb22b96": "Déconnecter",
   "e8b8d88e81f256e3": "Localhost uniquement",
   "091a80ec142d96ab": "Écoutez sur 0.0.0.0 pour ouvrir ce serveur depuis l'extérieur de la Box",
-  "eaa1803222a89c7f": "Ouvrir dans votre navigateur avec son mot de passe. Il redémarre au réveil de la Box."
+  "eaa1803222a89c7f": "Ouvrir dans votre navigateur avec son mot de passe. Il redémarre au réveil de la Box.",
+  "3191e0587dbf0ef6": "Collez un lien ou un jeton d’association",
+  "801953ffd2f798dc": "Utilisez le lien d’association affiché au démarrage du serveur ou demandez un nouveau lien à son propriétaire.",
+  "d124de267e018b32": "Aucun projet précédent trouvé. Ajoutez un dossier local ou clonez un dépôt pour commencer.",
+  "7116a71118d36e60": "Connecter Upstash Box",
+  "bcc9784feace8d81": "Chaque fil s’exécute dans son propre environnement isolé dans le cloud. Ajoutez votre clé API Box pour commencer.",
+  "902e9588633eb6e8": "Obtenir une clé API Box",
+  "e6eac98bbbedcf8a": "Choisissez votre agent de programmation",
+  "4c408e98d79c9128": "Connectez-en un pour commencer. Vous pourrez en ajouter d’autres dans les paramètres.",
+  "3477da670fcbde1b": "Saisissez une clé de remplacement",
+  "58f6b6525044d4c8": "Collez votre clé ou jeton",
+  "96115054865561aa": "Enregistré en toute sécurité. Vous pouvez le remplacer à tout moment.",
+  "e49f33e233fe5610": "Votre clé reste privée. Elle n’est jamais incluse dans les instantanés de projet."
 }

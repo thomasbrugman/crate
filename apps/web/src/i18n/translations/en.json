@@ -3151,7 +3151,6 @@
   "cbcae4b40060acdb": "Pairing with this environment",
   "664b42ae92488743": "Validating the pairing link and preparing your session.",
   "eb3a33756e51cba8": "Pair with this environment",
-  "55c59743f7fdd7fa": "Paste a one-time token or pairing secret",
   "ca6a0c94398d763d": "Pairing...",
   "989f56b8297dd684": "This one-time pairing token was already submitted. Request a new pairing link.",
   "db3dcafc90d10405": "{environment} is saved in this browser.",
@@ -12246,5 +12245,17 @@
   "c291bdeadbb22b96": "Disconnect",
   "e8b8d88e81f256e3": "Localhost only",
   "091a80ec142d96ab": "Listen on 0.0.0.0 to open this server from outside the Box",
-  "eaa1803222a89c7f": "Open in your browser with its password. It restarts when the Box wakes."
+  "eaa1803222a89c7f": "Open in your browser with its password. It restarts when the Box wakes.",
+  "3191e0587dbf0ef6": "Paste a pairing link or token",
+  "801953ffd2f798dc": "Use the pairing link printed when your server starts, or request a new link from its owner.",
+  "d124de267e018b32": "No previous projects found. Add a local folder or clone a repository to begin.",
+  "7116a71118d36e60": "Connect Upstash Box",
+  "bcc9784feace8d81": "Each thread runs in its own cloud sandbox. Add your Box API key to get started.",
+  "902e9588633eb6e8": "Get a Box API key",
+  "e6eac98bbbedcf8a": "Choose your coding agent",
+  "4c408e98d79c9128": "Connect one to start. You can add more later in Settings.",
+  "3477da670fcbde1b": "Enter a replacement key",
+  "58f6b6525044d4c8": "Paste your key or token",
+  "96115054865561aa": "Saved securely. You can replace it at any time.",
+  "e49f33e233fe5610": "Your key stays private. It is never included in project snapshots."
 }

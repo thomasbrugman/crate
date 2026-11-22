@@ -3152,7 +3152,6 @@
   "cbcae4b40060acdb": "Kopplung mit dieser Umgebung",
   "664b42ae92488743": "Der Kopplungslink wird geprüft und deine Sitzung vorbereitet.",
   "eb3a33756e51cba8": "Mit dieser Umgebung koppeln",
-  "55c59743f7fdd7fa": "Einmaltoken oder Kopplungsgeheimnis einfügen",
   "ca6a0c94398d763d": "Wird gekoppelt...",
   "989f56b8297dd684": "Dieses einmalige Kopplungstoken wurde bereits übermittelt. Fordere einen neuen Kopplungslink an.",
   "db3dcafc90d10405": "{environment} ist in diesem Browser gespeichert.",
@@ -12237,5 +12236,17 @@
   "c291bdeadbb22b96": "Trennen",
   "e8b8d88e81f256e3": "Nur localhost",
   "091a80ec142d96ab": "Auf 0.0.0.0 lauschen, um diesen Server von außerhalb der Box zu öffnen",
-  "eaa1803222a89c7f": "Mit Passwort im Browser öffnen. Startet neu, wenn die Box aufwacht."
+  "eaa1803222a89c7f": "Mit Passwort im Browser öffnen. Startet neu, wenn die Box aufwacht.",
+  "3191e0587dbf0ef6": "Kopplungslink oder Token einfügen",
+  "801953ffd2f798dc": "Verwende den Kopplungslink, der beim Start deines Servers ausgegeben wird, oder bitte dessen Besitzer um einen neuen Link.",
+  "d124de267e018b32": "Keine bisherigen Projekte gefunden. Füge einen lokalen Ordner hinzu oder klone ein Repository, um zu beginnen.",
+  "7116a71118d36e60": "Upstash Box verbinden",
+  "bcc9784feace8d81": "Jeder Thread läuft in seiner eigenen Cloud-Sandbox. Füge deinen Box-API-Schlüssel hinzu, um zu beginnen.",
+  "902e9588633eb6e8": "Box-API-Schlüssel holen",
+  "e6eac98bbbedcf8a": "Wähle deinen Coding-Agenten",
+  "4c408e98d79c9128": "Verbinde einen Agenten, um zu beginnen. Weitere kannst du später in den Einstellungen hinzufügen.",
+  "3477da670fcbde1b": "Ersatzschlüssel eingeben",
+  "58f6b6525044d4c8": "Schlüssel oder Token einfügen",
+  "96115054865561aa": "Sicher gespeichert. Du kannst ihn jederzeit ersetzen.",
+  "e49f33e233fe5610": "Dein Schlüssel bleibt privat. Er wird nie in Projekt-Snapshots aufgenommen."
 }

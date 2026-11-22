@@ -102,16 +102,25 @@ export function PairingRouteSurface({
           </label>
           <Input
             id="pairing-token"
+            type="password"
             autoCapitalize="none"
             autoComplete="off"
             autoCorrect="off"
             disabled={isSubmitting}
             nativeInput
             onChange={(event) => setCredential(event.currentTarget.value)}
-            placeholder={gt("Paste a one-time token or pairing secret")}
+            placeholder={gt("Paste a pairing link or token")}
+            aria-invalid={!!errorMessage}
+            aria-describedby="pairing-token-help"
             spellCheck={false}
             value={credential}
           />
+          <p id="pairing-token-help" className="text-xs leading-relaxed text-muted-foreground">
+            <T>
+              Use the pairing link printed when your server starts, or request a new link from its
+              owner.
+            </T>
+          </p>
         </div>
 
         {errorMessage ? (
@@ -121,14 +130,14 @@ export function PairingRouteSurface({
         ) : null}
 
         <div className="flex flex-wrap gap-2">
-          <Button disabled={isSubmitting} size="sm" type="submit">
+          <Button disabled={isSubmitting || !credential.trim()} size="sm" type="submit">
             {isSubmitting ? gt("Pairing...") : gt("Continue")}
           </Button>
           <Button
             disabled={isSubmitting}
             onClick={() => window.location.reload()}
             size="sm"
-            variant="outline"
+            variant="ghost-muted"
           >
             <T>Reload app</T>
           </Button>

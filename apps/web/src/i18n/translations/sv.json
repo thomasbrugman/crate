@@ -3151,7 +3151,6 @@
   "cbcae4b40060acdb": "Parkopplar med den här miljön",
   "664b42ae92488743": "Validerar parkopplingslänken och förbereder din session.",
   "eb3a33756e51cba8": "Parkoppla med den här miljön",
-  "55c59743f7fdd7fa": "Klistra in en engångstoken eller en parkopplingshemlighet",
   "ca6a0c94398d763d": "Parkopplar...",
   "989f56b8297dd684": "Den här engångstoken för parkoppling har redan skickats. Begär en ny parkopplingslänk.",
   "db3dcafc90d10405": "{environment} är sparad i den här webbläsaren.",
@@ -12244,5 +12243,17 @@
   "c291bdeadbb22b96": "Koppla från",
   "e8b8d88e81f256e3": "Endast localhost",
   "091a80ec142d96ab": "Lyssna på 0.0.0.0 för att öppna servern utanför Boxen",
-  "eaa1803222a89c7f": "Öppna i webbläsaren med lösenordet. Startar om när Boxen vaknar."
+  "eaa1803222a89c7f": "Öppna i webbläsaren med lösenordet. Startar om när Boxen vaknar.",
+  "3191e0587dbf0ef6": "Klistra in en parkopplingslänk eller token",
+  "801953ffd2f798dc": "Använd parkopplingslänken som visas när servern startar, eller be ägaren om en ny länk.",
+  "d124de267e018b32": "Inga tidigare projekt hittades. Lägg till en lokal mapp eller klona ett arkiv för att börja.",
+  "7116a71118d36e60": "Anslut Upstash Box",
+  "bcc9784feace8d81": "Varje tråd körs i sin egen molnsandlåda. Lägg till din Box-API-nyckel för att börja.",
+  "902e9588633eb6e8": "Hämta en Box-API-nyckel",
+  "e6eac98bbbedcf8a": "Välj din kodningsagent",
+  "4c408e98d79c9128": "Anslut en för att börja. Du kan lägga till fler senare i Inställningar.",
+  "3477da670fcbde1b": "Ange en ersättningsnyckel",
+  "58f6b6525044d4c8": "Klistra in din nyckel eller token",
+  "96115054865561aa": "Säkert sparad. Du kan ersätta den när som helst.",
+  "e49f33e233fe5610": "Din nyckel förblir privat. Den ingår aldrig i projektögonblicksbilder."
 }
