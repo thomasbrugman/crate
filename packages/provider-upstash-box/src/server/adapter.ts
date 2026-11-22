@@ -67,14 +67,37 @@ interface ActiveTurn {
 // Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
 // untracked or ignored files, stashes, commits missing from the remote, or files beside the repository.
 // Every Box starts with the agent configuration directories below in its workspace.
-const SAVED_WORK_CHECK = [
-  "cd /workspace/home && entries=$(ls -A) &&",
-  'extra=$(printf "%s\\n" "$entries" | grep -vxF -e repo -e .claude -e .codex -e .cursor -e .local || true) &&',
-  'test -z "$extra" && { test ! -e repo || { cd repo && test -d .git &&',
-  'status=$(git -c status.showUntrackedFiles=all status --porcelain --ignored) && test -z "$status" &&',
-  'stash=$(git stash list) && test -z "$stash" &&',
-  'unpushed=$(git rev-list --count HEAD --branches --not --remotes) && test "$unpushed" = 0; }; }',
-].join(" ");
+const SAVED_WORK_CHECK = String.raw`
+cd /workspace/home || exit 1
+home=$(pwd -P) || exit 1
+clean_checkout() (
+  cd -- "$1" &&
+  test "$(git rev-parse --show-toplevel)" = "$1" &&
+  test "$(git rev-parse --path-format=absolute --git-common-dir)" = "$home/repo/.git" &&
+  status=$(git -c status.showUntrackedFiles=all status --porcelain --ignored) &&
+  test -z "$status" &&
+  unpushed=$(git rev-list --count HEAD --branches --not --remotes) &&
+  test "$unpushed" = 0
+)
+for path in ./* ./.[!.]* ./..?*; do
+  test -e "$path" || test -L "$path" || continue
+  case "$path" in
+    ./repo|./.t3stash-worktrees|./.claude|./.codex|./.cursor|./.local) ;;
+    *) exit 1 ;;
+  esac
+done
+if test -e repo || test -L repo; then
+  test ! -L repo && test -d repo/.git && clean_checkout "$home/repo" || exit 1
+  stash=$(git -C repo stash list) && test -z "$stash" || exit 1
+fi
+if test -e .t3stash-worktrees || test -L .t3stash-worktrees; then
+  test ! -L .t3stash-worktrees && test -d .t3stash-worktrees || exit 1
+  for path in "$home"/.t3stash-worktrees/* "$home"/.t3stash-worktrees/.[!.]* "$home"/.t3stash-worktrees/..?*; do
+    test -e "$path" || test -L "$path" || continue
+    test ! -L "$path" && test -f "$path/.git" && clean_checkout "$path" || exit 1
+  done
+fi
+`;
 
 const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
   connect: "Connecting to the Box",

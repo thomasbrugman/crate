@@ -256,7 +256,7 @@ it.effect("uses the saved Box size for provisioning and reprovisioning", () =>
   ),
 );
 
-it.live("retains idle Boxes containing only gitignored work", () =>
+it.live("releases idle Boxes only when all their checkouts contain no unsaved work", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const home = yield* Effect.acquireRelease(
@@ -273,9 +273,10 @@ it.live("retains idle Boxes containing only gitignored work", () =>
       yield* Effect.promise(() =>
         NodeFSP.writeFile(NodePath.join(repo, ".gitignore"), ".env\n*.sqlite\n"),
       );
+      const worktree = NodePath.join(home, ".t3stash-worktrees", "6368696c64");
+      const git = (...args: string[]) =>
+        NodeChildProcess.execFileSync("git", args, { cwd: repo, stdio: "pipe" });
       yield* Effect.sync(() => {
-        const git = (...args: string[]) =>
-          NodeChildProcess.execFileSync("git", args, { cwd: repo, stdio: "pipe" });
         git("init");
         git("add", ".gitignore");
         git(
@@ -288,6 +289,7 @@ it.live("retains idle Boxes containing only gitignored work", () =>
           "initial",
         );
         git("update-ref", "refs/remotes/origin/main", "HEAD");
+        git("worktree", "add", "--detach", worktree, "HEAD");
       });
       let deleted = 0;
       const { adapter, turn } = yield* setup(
@@ -297,7 +299,7 @@ it.live("retains idle Boxes containing only gitignored work", () =>
         },
         "commandCode",
         async (command) => {
-          if (!command.includes("git stash")) return { stdout: "", exitCode: 0 };
+          if (!command.includes("clean_checkout")) return { stdout: "", exitCode: 0 };
           const result = NodeChildProcess.spawnSync(
             "sh",
             ["-c", command.replaceAll("/workspace/home", home)],
@@ -308,13 +310,30 @@ it.live("retains idle Boxes containing only gitignored work", () =>
       );
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.equal(deleted, 1);
-      for (const name of [".env", "local.sqlite"]) {
-        const path = NodePath.join(repo, name);
+      for (const checkout of [repo, worktree]) {
+        const path = NodePath.join(checkout, ".env");
         yield* Effect.promise(() => NodeFSP.writeFile(path, "fixture"));
         assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
         assert.equal(deleted, 1);
         yield* Effect.promise(() => NodeFSP.unlink(path));
       }
+      yield* Effect.sync(() =>
+        git(
+          "-C",
+          worktree,
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.invalid",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "unpushed child work",
+        ),
+      );
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 1);
+      yield* Effect.sync(() => git("worktree", "remove", worktree));
       yield* Effect.promise(() => NodeFSP.rm(repo, { recursive: true }));
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(home, "notes.txt"), "fixture"));
@@ -335,7 +354,10 @@ it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitiz
           deleted++;
         },
         "commandCode",
-        async (command) => ({ stdout: "", exitCode: command.includes("git stash") ? exitCode : 0 }),
+        async (command) => ({
+          stdout: "",
+          exitCode: command.includes("clean_checkout") ? exitCode : 0,
+        }),
       );
       yield* adapter.deleteThread!(turn.providerThread);
       assert.equal(deleted, 1);
@@ -361,7 +383,7 @@ it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitiz
       lookup.error = new BoxError("private upstream body", 404);
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.lengthOf(
-        commands.filter((text) => text.includes("git stash")),
+        commands.filter((text) => text.includes("clean_checkout")),
         2,
       );
     }),
