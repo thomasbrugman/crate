@@ -152,6 +152,7 @@ it.effect(
           assert.isFalse(writes.some((path) => /\.git(?:-credentials|config)$/u.test(path)));
           assert.deepEqual(harnesses, [commandCodeHarness, commandCodeHarness]);
         }
+        assert.isTrue(created[0]?.browser);
         assert.equal(
           created[0]?.env?.BOXJOB_CC_CWD,
           repositoryUrl ? "/workspace/home/repo" : "/workspace/home",
@@ -232,6 +233,7 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
       apiKey: BoxApiKey.StoredKey,
     });
     assert.equal(created[0]?.size, "medium");
+    assert.isTrue(created[0]?.browser);
     assert.isUndefined(created[0]?.env);
     assert.isFalse(commands.some((command) => command.includes("command-code")));
     assert.equal(clones, 1);
@@ -365,6 +367,7 @@ it.effect.each([
       yield* prepareBox;
       assert.deepEqual(created?.networkPolicy, { mode: "allow-all" });
       assert.equal(restored, snapshotId);
+      assert.equal(created?.browser, snapshotId === undefined ? true : undefined);
       assert.isUndefined(created?.agent);
       assert.isUndefined(created?.git);
       assert.equal(githubUser.mock.calls[0]?.[0], "https://api.github.com/user");

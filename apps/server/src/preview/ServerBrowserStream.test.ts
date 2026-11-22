@@ -8,6 +8,7 @@ import {
   AuthPreviewOperateScope,
   AuthSessionId,
   PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE,
+  PreviewBoxBrowserUnavailableError,
   PreviewStreamHostSetup,
   type AuthEnvironmentScope,
 } from "@t3tools/contracts";
@@ -412,7 +413,11 @@ it.effect.each([
     }),
     need: "libraries",
   },
-])("tells viewers the command that sets up the host ($need)", ({ error, need }) =>
+  {
+    error: new PreviewBoxBrowserUnavailableError(),
+    need: "reconnect",
+  },
+])("tells viewers how to recover from an unavailable browser ($need)", ({ error, need }) =>
   Effect.gen(function* () {
     const browser = ServerBrowser.ServerBrowser.of({
       clearProfile: () => Effect.void,
@@ -449,6 +454,10 @@ it.effect.each([
       (socket) => Effect.sync(() => socket.close()),
     );
     const { code, reason } = yield* Effect.promise(() => closed.promise);
+    if (need === "reconnect") {
+      expect({ code, reason }).toEqual({ code: 1012, reason: "reconnect" });
+      return;
+    }
     expect(code).toBe(PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE);
     expect(yield* decodeHostSetup(reason)).toEqual({
       need,

@@ -40,6 +40,7 @@ import {
   type PreviewAutomationUploadInput,
   type PreviewAutomationWaitForInput,
   PreviewClearProfileError,
+  PreviewBoxBrowserUnavailableError,
   type PreviewEvent,
   type PreviewNavStatus,
   type PreviewSessionSnapshot,
@@ -71,8 +72,10 @@ import * as Semaphore from "effect/Semaphore";
 import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as Mime from "effect/http/Mime";
 import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import type {
+  Browser,
   BrowserContext,
   CDPSession,
   Dialog,
@@ -87,6 +90,7 @@ import * as ServerConfig from "../config.ts";
 import { resolveRootCliCommand } from "../cli/invocation.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as PreviewAutomationBroker from "../mcp/PreviewAutomationBroker.ts";
+import { BoxBrowser } from "./BoxBrowser.ts";
 import * as DesktopBrowserChannel from "./DesktopBrowserChannel.ts";
 import * as PreviewAgentActivity from "./PreviewAgentActivity.ts";
 import * as PreviewManager from "./Manager.ts";
@@ -360,6 +364,7 @@ interface ServerTab {
   readonly isolatedContext: boolean;
 
   readonly desktop: { readonly close: () => Promise<void> } | null;
+  readonly boxBrowser: boolean;
   readonly profileId: string | undefined;
   readonly openerTabId: string | undefined;
 
@@ -576,6 +581,7 @@ const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const host = { platform: yield* HostProcess.Platform, arch: yield* HostProcess.Architecture };
   const manager = yield* PreviewManager.PreviewManager;
+  const boxBrowser = Option.getOrUndefined(yield* Effect.serviceOption(BoxBrowser));
   const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const previewBrowser = yield* PreviewBrowser.PreviewBrowser;
@@ -594,6 +600,29 @@ const make = Effect.gen(function* () {
   const launchersDir = NodePath.join(config.stateDir, "server-browser", "launchers");
 
   const tabs = new Map<string, ServerTab>();
+  const boxProfiles = new Map<string, Map<Browser, Promise<BrowserContext>>>();
+  const clearingBoxProfiles = new Map<string, Promise<void>>();
+  const boxProfileContext = async (browser: Browser, profileId: string) => {
+    const clearing = clearingBoxProfiles.get(profileId);
+    if (clearing) await clearing.catch(constVoid);
+    let profile = boxProfiles.get(profileId);
+    if (profile === undefined) {
+      profile = new Map();
+      boxProfiles.set(profileId, profile);
+    }
+    const existing = profile.get(browser);
+    if (existing !== undefined) return existing;
+    const cache = profile;
+    const pending = browser.newContext();
+    const evict = () => {
+      if (cache.get(browser) !== pending) return;
+      cache.delete(browser);
+      if (cache.size === 0) boxProfiles.delete(profileId);
+    };
+    cache.set(browser, pending);
+    void pending.then((context) => context.once("close", evict), evict);
+    return pending;
+  };
   const pendingTabs = new Map<
     string,
     { readonly agentId: string | null; promise?: Promise<ServerTab> }
@@ -1095,6 +1124,7 @@ const make = Effect.gen(function* () {
     } catch (cause) {
       // An unpublished tab is in no list, so nothing else would ever close it.
       for (const close of opened.reverse()) await close().catch(constVoid);
+      if (snapshot.boxBrowser) throw new PreviewBoxBrowserUnavailableError();
       throw cause;
     }
   };
@@ -1106,6 +1136,11 @@ const make = Effect.gen(function* () {
   ): Promise<ServerTab> => {
     const adopted = adoptedPages.get(tabKey(snapshot.threadId, snapshot.tabId));
     adoptedPages.delete(tabKey(snapshot.threadId, snapshot.tabId));
+    const managed =
+      snapshot.boxBrowser && !adopted && boxBrowser
+        ? await runPromise(boxBrowser.connect(ThreadId.make(snapshot.threadId), false))
+        : undefined;
+    if (snapshot.boxBrowser && !adopted && !managed) throw new PreviewBoxBrowserUnavailableError();
     const desktop =
       adopted === undefined && (await desktopRenders(snapshot))
         ? await connectDesktop(snapshot)
@@ -1129,20 +1164,24 @@ const make = Effect.gen(function* () {
     const context =
       adopted?.page.context() ??
       desktop?.page.context() ??
-      (await contexts.contextFor(
-        snapshot.profileId ?? "default",
-        isolatedContext ? tabKey(snapshot.threadId, snapshot.tabId) : undefined,
-      ));
+      (await (managed
+        ? isolatedContext
+          ? managed.newContext()
+          : boxProfileContext(managed, snapshot.profileId ?? "default")
+        : contexts.contextFor(
+            snapshot.profileId ?? "default",
+            isolatedContext ? tabKey(snapshot.threadId, snapshot.tabId) : undefined,
+          )));
     if (isolatedContext) opened.push(() => context.close());
     if (adopted?.page.isClosed()) throw new Error("The popup closed before it opened.");
     if (!desktop) await prepareContext(context);
-    const page = adopted?.page ?? desktop?.page ?? (await context.newPage());
+    const page: Page = adopted?.page ?? desktop?.page ?? (await context.newPage());
     if (!desktop) opened.push(() => page.close());
     const cdp = await context.newCDPSession(page);
     await installPdfDocumentNavigation(cdp);
     // The desktop's page is already a normal browser. A popup's first request
     // precedes this override, so its Sec-CH-UA brands still name HeadlessChrome.
-    if (!desktop) await presentAsChrome(cdp, host);
+    if (!desktop && !snapshot.boxBrowser) await presentAsChrome(cdp, host);
     if (!desktop) await recordCopies(cdp);
     page.setDefaultTimeout(NAVIGATION_TIMEOUT_MS);
     page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
@@ -1175,6 +1214,7 @@ const make = Effect.gen(function* () {
       },
       isolatedContext,
       desktop: desktop === null ? null : { close: desktop.close },
+      boxBrowser: snapshot.boxBrowser === true,
       profileId: snapshot.profileId,
       openerTabId: adopted?.openerTabId,
       downloads: [],
@@ -1370,7 +1410,13 @@ const make = Effect.gen(function* () {
       await control.close().catch(constVoid);
       throw new ServerBrowserTabNotFoundError({ threadId: tab.threadId, tabId: tab.tabId });
     }
-    page.on("close", () => dropTab(tab, true));
+    page.on("close", () => {
+      if (!snapshot.boxBrowser) return dropTab(tab, true);
+      setImmediate(() => {
+        const connected = context.browser()?.isConnected() === true;
+        dropTab(tab, connected, !connected);
+      });
+    });
     page.on("crash", () => reopenCrashedTab(tab));
     tabs.set(key, tab);
     reportLiveTabs();
@@ -1378,7 +1424,8 @@ const make = Effect.gen(function* () {
     if (desktop) void page.waitForLoadState("load").then(() => reportLoaded(tab), constVoid);
     // Existing desktop and popup PDFs can start loading before interception attaches.
     if (
-      snapshot.navStatus._tag === "Loading" &&
+      (snapshot.navStatus._tag === "Loading" ||
+        (snapshot.boxBrowser && !crashedUrl && snapshot.navStatus._tag === "Success")) &&
       ((!adopted && !desktop) || isPdfAssetUrl(snapshot.navStatus.url))
     ) {
       tab.loading = true;
@@ -1588,13 +1635,34 @@ const make = Effect.gen(function* () {
     return true;
   };
   const uploadFiles = async (tab: ServerTab, input: PreviewAutomationUploadInput) => {
-    const relative = input.paths.find((path) => !NodePath.isAbsolute(path));
+    const pathApi = tab.boxBrowser ? NodePath.posix : NodePath;
+    const relative = input.paths.find((path) => !pathApi.isAbsolute(path));
     if (relative !== undefined)
       throw new ServerBrowserPage.ServerBrowserOperationError({
         tag: "PreviewAutomationExecutionError",
         message: `Upload paths must be absolute: ${relative}`,
       });
-    if (await ServerBrowserPage.setInputFiles(tab.page, input)) return undefined;
+    const files = async (): Promise<ServerBrowserPage.UploadFiles> => {
+      if (!tab.boxBrowser || input.paths.length === 0) return [...input.paths];
+      const browser = tab.page.context().browser();
+      if (!boxBrowser || !browser) throw new PreviewBoxBrowserUnavailableError();
+      let remaining = PROVIDER_SEND_TURN_MAX_FILE_BYTES - 1;
+      const payloads: Array<{ name: string; mimeType: string; buffer: Buffer }> = [];
+      for (const path of input.paths) {
+        const buffer = await runPromise(boxBrowser.readFile(browser, path, remaining));
+        if (buffer === null)
+          throw new ServerBrowserPage.ServerBrowserOperationError({
+            tag: "PreviewAutomationExecutionError",
+            message: "Upload files must total less than 50 MiB.",
+          });
+        remaining -= buffer.byteLength;
+        const name = pathApi.basename(path);
+        const mimeType = Option.getOrElse(Mime.getType(name), () => "application/octet-stream");
+        payloads.push({ name, mimeType, buffer });
+      }
+      return payloads;
+    };
+    if (await ServerBrowserPage.setInputFiles(tab.page, input, files)) return undefined;
     const open = tab.fileChooser;
     if (!open)
       throw new ServerBrowserPage.ServerBrowserOperationError({
@@ -1608,7 +1676,7 @@ const make = Effect.gen(function* () {
         message: "This file picker accepts one file.",
       });
     if (input.paths.length > 0)
-      await open.chooser.setFiles([...input.paths], {
+      await open.chooser.setFiles(await files(), {
         timeout: input.timeoutMs ?? NAVIGATION_TIMEOUT_MS,
       });
     if (tab.fileChooser === open) closeFileChooser(tab);
@@ -2555,6 +2623,13 @@ const make = Effect.gen(function* () {
           });
         const open = input as PreviewAutomationOpenInput;
         const url = open.url === undefined ? undefined : normalizePreviewUrl(open.url);
+        if (
+          boxBrowser &&
+          request.tabId !== undefined &&
+          !tabs.has(tabKey(request.threadId, request.tabId))
+        ) {
+          await runPromise(boxBrowser.connect(ThreadId.make(request.threadId), true));
+        }
         const reuse = open.reuseExistingTab ?? true;
         if (
           reuse &&
@@ -3531,7 +3606,27 @@ const make = Effect.gen(function* () {
 
   const clearProfile = (profileId: string) =>
     Effect.tryPromise({
-      try: () => contexts.clearProfile(profileId),
+      try: async () => {
+        const existing = clearingBoxProfiles.get(profileId);
+        if (existing) return existing;
+        const pending = [...(boxProfiles.get(profileId)?.values() ?? [])];
+        const clearing = Promise.allSettled([
+          contexts.clearProfile(profileId),
+          ...pending.map(async (opening) => {
+            const context = await opening.catch(() => undefined);
+            await context?.close();
+          }),
+        ]).then((results) => {
+          const failure = results.find((result) => result.status === "rejected");
+          if (failure) throw failure.reason;
+        });
+        clearingBoxProfiles.set(profileId, clearing);
+        try {
+          await clearing;
+        } finally {
+          clearingBoxProfiles.delete(profileId);
+        }
+      },
       catch: (cause) => new PreviewClearProfileError({ profileId, cause }),
     });
 

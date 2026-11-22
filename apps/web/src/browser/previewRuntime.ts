@@ -48,9 +48,10 @@ export function alternatePreviewRuntime(
   primaryEnvironmentId: EnvironmentId | null,
   serverBrowser: boolean,
   desktopLoadsLoopback: boolean,
-  snapshot: Pick<PreviewSessionSnapshot, "runtime"> | null | undefined,
+  snapshot: Pick<PreviewSessionSnapshot, "runtime" | "boxBrowser"> | null | undefined,
 ): PreviewRuntime | null {
-  if (!snapshot || !serverBrowser || !isPreviewSupportedInRuntime()) return null;
+  if (!snapshot || snapshot.boxBrowser || !serverBrowser || !isPreviewSupportedInRuntime())
+    return null;
   if (environmentId === primaryEnvironmentId) return null;
   if (snapshot.runtime === "server") return desktopLoadsLoopback ? "desktop" : null;
   return "server";

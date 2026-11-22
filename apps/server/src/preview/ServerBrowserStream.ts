@@ -3,6 +3,7 @@ import {
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
   PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE,
+  PreviewBoxBrowserUnavailableError,
   PreviewStreamHostSetup,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -97,6 +98,8 @@ const makeHandler = Effect.fnUntraced(function* (browser: ServerBrowser.ServerBr
           Effect.catchTags({
             ServerBrowserTabNotFoundError: () => Effect.succeed({ _tag: "gone" as const }),
             ServerBrowserLaunchError: (error) => {
+              if (isBoxBrowserUnavailable(error.cause))
+                return Effect.succeed({ _tag: "reconnect" as const });
               const setup = hostSetup(error.cause);
               return setup === undefined
                 ? Effect.fail(error)
@@ -117,6 +120,11 @@ const makeHandler = Effect.fnUntraced(function* (browser: ServerBrowser.ServerBr
       const gone = writer.write(new Socket.CloseEvent(TAB_GONE_CODE, "tab closed"));
       if (attached._tag === "gone") {
         yield* gone;
+        return HttpServerResponse.empty();
+      }
+      const reconnect = writer.write(new Socket.CloseEvent(1012, "reconnect"));
+      if (attached._tag === "reconnect") {
+        yield* reconnect;
         return HttpServerResponse.empty();
       }
       if (attached._tag === "hostSetup") {
@@ -172,9 +180,7 @@ const makeHandler = Effect.fnUntraced(function* (browser: ServerBrowser.ServerBr
             case "gone":
               return gone.pipe(Effect.andThen(Effect.interrupt));
             case "reconnect":
-              return writer
-                .write(new Socket.CloseEvent(1012, "reconnect"))
-                .pipe(Effect.andThen(Effect.interrupt));
+              return reconnect.pipe(Effect.andThen(Effect.interrupt));
           }
         }),
       );
@@ -233,6 +239,7 @@ const hostSetup = (cause: unknown): PreviewStreamHostSetup | undefined =>
       : undefined;
 const isSandboxError = Schema.is(PreviewBrowserHost.PreviewBrowserSandboxError);
 const isLibrariesError = Schema.is(PreviewBrowserHost.PreviewBrowserLibrariesError);
+const isBoxBrowserUnavailable = Schema.is(PreviewBoxBrowserUnavailableError);
 const encodeHostSetup = Schema.encodeSync(Schema.fromJsonString(PreviewStreamHostSetup));
 
 // The request span already covers this download route.

@@ -42,12 +42,14 @@ it.effect("projects SDK handles and responses without retaining credential metad
         yield { type: "text-delta" as const, text: "hello" };
       },
     };
+    const read = vi.fn(async () => "AAE=");
     const native = {
       ...metadata,
       id: "box",
       agent: { stream: async () => stream },
       exec: { command: async () => ({ ...metadata, stdout: "safe", stderr: "", exitCode: 0 }) },
-      files: { write: async () => metadata },
+      files: { read, write: async () => metadata },
+      browser: { cdpUrl: async () => "wss://browser.fixture/?token=fixture" },
       delete: async () => metadata,
       resume: async () => undefined,
       getStatus: async () => ({ ...metadata, status: "running" }),
@@ -70,5 +72,11 @@ it.effect("projects SDK handles and responses without retaining credential metad
     assert.isTrue((yield* Effect.promise(() => api.list(sentinel))) === undefined);
     assert.equal(command.stdout, "safe");
     assert.equal(status.status, "running");
+    assert.equal(yield* Effect.promise(() => box.files.readBase64!("/file", 7, 2)), "AAE=");
+    assert.deepEqual(read.mock.calls, [["/file", { encoding: "base64", offset: 7, length: 2 }]]);
+    assert.equal(
+      yield* Effect.promise(() => box.browserCdpUrl!()),
+      "wss://browser.fixture/?token=fixture",
+    );
   }).pipe(Effect.provide(layer)),
 );

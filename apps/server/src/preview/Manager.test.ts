@@ -1,14 +1,16 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
-import { type PreviewEvent, ThreadId } from "@t3tools/contracts";
+import { PreviewBoxBrowserUnavailableError, type PreviewEvent, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import { expect } from "vite-plus/test";
+import type { Browser } from "playwright-core";
 
 import * as ServerConfig from "../config.ts";
 import * as PreviewManager from "./Manager.ts";
+import { BoxBrowser } from "./BoxBrowser.ts";
 
 const DRAIN_LIMIT = 100;
 
@@ -34,6 +36,34 @@ const layer = PreviewManager.layer.pipe(
   Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-preview-manager-" })),
   Layer.provide(NodeCrypto.layer),
   Layer.provide(NodeServices.layer),
+);
+
+it.effect("uses the server stream for Box tabs and refuses unavailable Boxes", () =>
+  Effect.gen(function* () {
+    const manager = yield* PreviewManager.PreviewManager;
+    const threadId = ThreadId.make("box-ready");
+    const snapshot = yield* manager.open({ threadId, runtime: "desktop" });
+    expect(snapshot).toMatchObject({ runtime: "server", headless: true, boxBrowser: true });
+
+    const unavailableThreadId = ThreadId.make("box-unavailable");
+    const error = yield* manager.open({ threadId: unavailableThreadId }).pipe(Effect.flip);
+    expect(error).toBeInstanceOf(PreviewBoxBrowserUnavailableError);
+    expect((yield* manager.list({ threadId: unavailableThreadId })).sessions).toEqual([]);
+  }).pipe(
+    Effect.provide(
+      layer.pipe(
+        Layer.provide(
+          Layer.succeed(BoxBrowser, {
+            readFile: () => Effect.succeed(null),
+            connect: (threadId) =>
+              threadId === "box-ready"
+                ? Effect.succeed({} as Browser)
+                : Effect.fail(new PreviewBoxBrowserUnavailableError()),
+          }),
+        ),
+      ),
+    ),
+  ),
 );
 
 it.layer(layer)("PreviewManager", (it) => {

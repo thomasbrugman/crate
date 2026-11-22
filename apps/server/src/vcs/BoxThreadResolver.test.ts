@@ -166,6 +166,15 @@ it.effect.each(cases)("resolves persisted Box identity and project context: %j",
         }),
       ),
     );
+    const browserTarget = yield* target.resolveBrowser(threadId);
+    if (scenario.driver === "codex") {
+      assert.isUndefined(browserTarget);
+    } else if (scenario.deleted || scenario.noNativeId) {
+      assert.isNull(browserTarget);
+    } else {
+      assert.deepEqual(browserTarget, { nativeId: "persisted-box", apiKey: "box-api-key" });
+    }
+    assert.deepEqual(calls, []);
     if (scenario.reason) {
       assert.equal((yield* target.resolve(threadId).pipe(Effect.flip)).reason, scenario.reason);
       assert.equal(calls.length, scenario.unavailable ? 1 : 0);

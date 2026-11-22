@@ -32,12 +32,13 @@ import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import { chromium, type BrowserContext, type Page } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { beforeEach, expect, vi } from "vite-plus/test";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as Broker from "../mcp/PreviewAutomationBroker.ts";
+import { BoxBrowser } from "./BoxBrowser.ts";
 import * as DesktopChannel from "./DesktopBrowserChannel.ts";
 import * as Manager from "./Manager.ts";
 import * as PreviewAgentActivity from "./PreviewAgentActivity.ts";
@@ -81,6 +82,7 @@ vi.mock("./ServerBrowserContexts.ts", () => ({
     async close() {
       for (const context of contexts) await context.close();
     }
+    async clearProfile(_profileId: string) {}
   },
 }));
 
@@ -292,6 +294,7 @@ function makeContext(onClose?: (context: BrowserContext) => void, initialUrl = "
     page,
     sessions,
     cssViewport,
+    once: (name: string, callback: () => void) => events.once(`context:${name}`, callback),
     newPage: async () => page as unknown as Page,
     grantPermissions: vi.fn(async () => {}),
     newCDPSession: async (target: unknown) => {
@@ -306,6 +309,7 @@ function makeContext(onClose?: (context: BrowserContext) => void, initialUrl = "
     close: vi.fn(async () => {
       if (contextClosed) return;
       contextClosed = true;
+      events.emit("context:close");
       context.closing.resolve();
       await page.close();
       onClose?.(context as unknown as BrowserContext);
@@ -562,6 +566,107 @@ const viewerInput = (tabId: string, canOperate: boolean) => ({
   maxWidth: 1280,
   maxHeight: 800,
   quality: 70,
+});
+
+it.effect("shares a Box profile's context without closing it when a tab closes", () => {
+  const remote = makeContext();
+  const other = makeContext();
+  const fresh = makeContext();
+  fresh.newPage = vi.fn(fresh.newPage);
+  other.page.context = () => remote;
+  const newSession = remote.newCDPSession;
+  remote.newCDPSession = (target) =>
+    target === other.page ? other.newCDPSession(target) : newSession(target);
+  remote.newPage = vi.fn().mockResolvedValueOnce(remote.page).mockResolvedValueOnce(other.page);
+  const newContext = vi
+    .fn<Browser["newContext"]>()
+    .mockResolvedValueOnce(remote as unknown as BrowserContext)
+    .mockResolvedValueOnce(fresh as unknown as BrowserContext);
+  const browser = { newContext, isConnected: () => true } as unknown as Browser;
+  Object.assign(remote, { browser: () => browser });
+  Object.assign(fresh, { browser: () => browser });
+  const managed = Layer.succeed(BoxBrowser, {
+    connect: () => Effect.succeed(browser),
+    readFile: () => Effect.succeed(null),
+  });
+  return Effect.gen(function* () {
+    const server = yield* ServerBrowser.ServerBrowser;
+    const manager = yield* Manager.PreviewManager;
+    const threadId = scope.thread.threadId;
+    const first = yield* manager.open({ threadId, profileId: "default" });
+    yield* server.attachViewer(viewerInput(first.tabId, true));
+    const second = yield* manager.open({ threadId, profileId: "default" });
+    yield* server.attachViewer(viewerInput(second.tabId, true));
+    expect(newContext).toHaveBeenCalledTimes(1);
+    yield* manager.close({ threadId, tabId: first.tabId });
+    expect(remote.page.close).toHaveBeenCalled();
+    expect(remote.close).not.toHaveBeenCalled();
+    expect(other.page.close).not.toHaveBeenCalled();
+    yield* manager.close({ threadId, tabId: second.tabId });
+    expect(remote.close).not.toHaveBeenCalled();
+    yield* server.clearProfile("default");
+    expect(remote.close).toHaveBeenCalledOnce();
+    const reopened = yield* manager.open({ threadId, profileId: "default" });
+    yield* server.attachViewer(viewerInput(reopened.tabId, true));
+    expect(newContext).toHaveBeenCalledTimes(2);
+    expect(fresh.newPage).toHaveBeenCalledOnce();
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      ServerBrowser.layer.pipe(Layer.provideMerge(dependencies), Layer.provideMerge(managed)),
+    ),
+  );
+});
+
+it.effect("opens and streams an agent tab in the Box rather than host Chromium", () => {
+  const remote = makeContext();
+  const setInputFiles = vi.fn(async (_files: unknown) => {});
+  remote.page.locator.mockReturnValue({ setInputFiles });
+  const browser = {
+    newContext: async () => remote as unknown as BrowserContext,
+    isConnected: () => true,
+  } as unknown as Browser;
+  Object.assign(remote, { browser: () => browser });
+  const buffer = Buffer.from("fixture,from-box\n");
+  const readFile = vi.fn((_browser: Browser, _path: string, _limit: number) =>
+    Effect.succeed(buffer),
+  );
+  const boxBrowser = { connect: () => Effect.succeed(browser), readFile };
+  const managed = Layer.succeed(BoxBrowser, boxBrowser);
+  return Effect.gen(function* () {
+    const server = yield* ServerBrowser.ServerBrowser;
+    const broker = yield* Broker.PreviewAutomationBroker;
+    yield* Effect.yieldNow;
+    const opened = yield* broker.invoke<PreviewAutomationStatus>({
+      scope,
+      operation: "open",
+      input: { url: "http://localhost:5161/" },
+    });
+    expect(remote.page.goto).toHaveBeenCalledWith("http://localhost:5161/", expect.anything());
+    const viewer = yield* server.attachViewer(viewerInput(opened.tabId!, true));
+    expect(viewer).toBeDefined();
+    expect(contextRequests).toEqual([]);
+    yield* broker.invoke<void>({
+      scope,
+      operation: "upload",
+      tabId: PreviewTabId.make(opened.tabId!),
+      input: { selector: "input[type=file]", paths: ["/workspace/home/only-in-box.csv"] },
+    });
+    expect(setInputFiles).toHaveBeenCalledWith(
+      [{ name: "only-in-box.csv", mimeType: "text/csv", buffer }],
+      expect.anything(),
+    );
+    expect(readFile).toHaveBeenCalledWith(
+      browser,
+      "/workspace/home/only-in-box.csv",
+      expect.any(Number),
+    );
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      ServerBrowser.layer.pipe(Layer.provideMerge(dependencies), Layer.provideMerge(managed)),
+    ),
+  );
 });
 /** Fills a viewer's output with frames; resolves once every one of them is acknowledged. */
 const stallViewer = (viewer: ServerBrowser.ServerBrowserViewer) => {
