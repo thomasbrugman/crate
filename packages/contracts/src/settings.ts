@@ -2059,12 +2059,17 @@ export function requiredScopesForServerSettingsPatch(
     if (value === undefined) continue;
     if (key === "requireConnectDeviceApproval" || key === "enablePreviewTunnel") {
       changesAccess = true;
+    } else if (key === "upstashBox") {
+      for (const [field, entry] of Object.entries(patch.upstashBox ?? {})) {
+        if (entry === undefined) continue;
+        if (field === "snapshotNames") changesSettings = true;
+        else changesProviders = true;
+      }
     } else if (
       key === "providers" ||
       key === "providerInstances" ||
       key === "usageLimitSources" ||
       key === "textGenerators" ||
-      key === "upstashBox" ||
       key === "secretProviders"
     ) {
       changesProviders = true;

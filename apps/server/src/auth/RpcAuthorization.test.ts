@@ -325,6 +325,12 @@ describe("settings mutation authorization", () => {
         }).pipe(Effect.flip),
       ).toMatchObject({ requiredPermission: AuthSettingsWriteScope });
       expect(handled).toBe(2);
+      expect(
+        yield* client[WS_METHODS.serverUpdateSettings]({
+          patch: { upstashBox: { snapshotNames: { ready: "Dependencies installed" } } },
+        }).pipe(Effect.flip),
+      ).toMatchObject({ requiredPermission: AuthSettingsWriteScope });
+      expect(handled).toBe(2);
     }),
   );
 
@@ -384,6 +390,16 @@ describe("settings mutation authorization", () => {
           }).pipe(Effect.flip),
         ).toMatchObject({ requiredPermission: AuthProvidersManageScope });
         expect(handled).toBe(false);
+        expect(
+          yield* client[WS_METHODS.serverUpdateSettings]({
+            patch: { upstashBox: { apiKey: "replacement", snapshotNames: { ready: "Ready" } } },
+          }).pipe(Effect.flip),
+        ).toMatchObject({ requiredPermission: AuthProvidersManageScope });
+        expect(handled).toBe(false);
+        yield* client[WS_METHODS.serverUpdateSettings]({
+          patch: { upstashBox: { snapshotNames: { ready: "Dependencies installed" } } },
+        });
+        expect(handled).toBe(true);
       }),
   );
 
