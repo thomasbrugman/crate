@@ -113,7 +113,7 @@ function ThreadBoxServersList(props: ThreadBoxServersPanelProps) {
                     variant="ghost"
                     part="row"
                     multiline
-                    disabled={server.url === null}
+                    aria-disabled={server.url === null || undefined}
                     onClick={() => open(server)}
                   />
                 }
