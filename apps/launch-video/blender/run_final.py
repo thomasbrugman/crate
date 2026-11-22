@@ -30,10 +30,12 @@ with (D/'final_render.log').open('a', buffering=1) as log:
     try:
         subprocess.run([args.blender, '-b', '-t', str(args.threads), '--python-exit-code', '1',
                         '--python', str(SCRIPTS/'render_shots.py'), '--', str(D), '--mode', 'final',
-                        *options], check=True, stdout=log, stderr=subprocess.STDOUT)
+                        *options], check=True, stdout=log, stderr=subprocess.STDOUT,
+                       pass_fds=(lock.fileno(),))
         subprocess.run([sys.executable, str(SCRIPTS/'assemble.py'), str(D), '--final',
                         '--music', str(args.music.resolve()), '--music-start', str(args.music_start)],
-                       check=True, stdout=log, stderr=subprocess.STDOUT)
+                       check=True, stdout=log, stderr=subprocess.STDOUT,
+                       pass_fds=(lock.fileno(),))
     except Exception as error:
         print('FINAL_FAILED', repr(error), file=log)
         raise
