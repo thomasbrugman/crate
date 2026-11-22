@@ -54,6 +54,7 @@ it.effect("uses the server stream for Box tabs and refuses unavailable Boxes", (
       layer.pipe(
         Layer.provide(
           Layer.succeed(BoxBrowser, {
+            readFile: () => Effect.succeed(null),
             connect: (threadId) =>
               threadId === "box-ready"
                 ? Effect.succeed({} as Browser)

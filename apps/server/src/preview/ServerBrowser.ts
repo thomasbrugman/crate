@@ -72,6 +72,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as Mime from "effect/http/Mime";
 import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import type {
   Browser,
@@ -363,6 +364,7 @@ interface ServerTab {
   readonly isolatedContext: boolean;
 
   readonly desktop: { readonly close: () => Promise<void> } | null;
+  readonly boxBrowser: boolean;
   readonly profileId: string | undefined;
   readonly openerTabId: string | undefined;
 
@@ -1205,6 +1207,7 @@ const make = Effect.gen(function* () {
       },
       isolatedContext,
       desktop: desktop === null ? null : { close: desktop.close },
+      boxBrowser: snapshot.boxBrowser === true,
       profileId: snapshot.profileId,
       openerTabId: adopted?.openerTabId,
       downloads: [],
@@ -1625,13 +1628,34 @@ const make = Effect.gen(function* () {
     return true;
   };
   const uploadFiles = async (tab: ServerTab, input: PreviewAutomationUploadInput) => {
-    const relative = input.paths.find((path) => !NodePath.isAbsolute(path));
+    const pathApi = tab.boxBrowser ? NodePath.posix : NodePath;
+    const relative = input.paths.find((path) => !pathApi.isAbsolute(path));
     if (relative !== undefined)
       throw new ServerBrowserPage.ServerBrowserOperationError({
         tag: "PreviewAutomationExecutionError",
         message: `Upload paths must be absolute: ${relative}`,
       });
-    if (await ServerBrowserPage.setInputFiles(tab.page, input)) return undefined;
+    const files = async (): Promise<ServerBrowserPage.UploadFiles> => {
+      if (!tab.boxBrowser || input.paths.length === 0) return [...input.paths];
+      const browser = tab.page.context().browser();
+      if (!boxBrowser || !browser) throw new PreviewBoxBrowserUnavailableError();
+      let remaining = PROVIDER_SEND_TURN_MAX_FILE_BYTES - 1;
+      const payloads: Array<{ name: string; mimeType: string; buffer: Buffer }> = [];
+      for (const path of input.paths) {
+        const buffer = await runPromise(boxBrowser.readFile(browser, path, remaining));
+        if (buffer === null)
+          throw new ServerBrowserPage.ServerBrowserOperationError({
+            tag: "PreviewAutomationExecutionError",
+            message: "Upload files must total less than 50 MiB.",
+          });
+        remaining -= buffer.byteLength;
+        const name = pathApi.basename(path);
+        const mimeType = Option.getOrElse(Mime.getType(name), () => "application/octet-stream");
+        payloads.push({ name, mimeType, buffer });
+      }
+      return payloads;
+    };
+    if (await ServerBrowserPage.setInputFiles(tab.page, input, files)) return undefined;
     const open = tab.fileChooser;
     if (!open)
       throw new ServerBrowserPage.ServerBrowserOperationError({
@@ -1645,7 +1669,7 @@ const make = Effect.gen(function* () {
         message: "This file picker accepts one file.",
       });
     if (input.paths.length > 0)
-      await open.chooser.setFiles([...input.paths], {
+      await open.chooser.setFiles(await files(), {
         timeout: input.timeoutMs ?? NAVIGATION_TIMEOUT_MS,
       });
     if (tab.fileChooser === open) closeFileChooser(tab);

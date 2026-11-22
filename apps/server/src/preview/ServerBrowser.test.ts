@@ -580,6 +580,7 @@ it.effect("shares a Box profile's context without closing it when a tab closes",
   Object.assign(remote, { browser: () => browser });
   const managed = Layer.succeed(BoxBrowser, {
     connect: () => Effect.succeed(browser),
+    readFile: () => Effect.succeed(null),
   });
   return Effect.gen(function* () {
     const server = yield* ServerBrowser.ServerBrowser;
@@ -604,11 +605,19 @@ it.effect("shares a Box profile's context without closing it when a tab closes",
 
 it.effect("opens and streams an agent tab in the Box rather than host Chromium", () => {
   const remote = makeContext();
+  const setInputFiles = vi.fn(async (_files: unknown) => {});
+  remote.page.locator.mockReturnValue({ setInputFiles });
   const browser = {
     newContext: async () => remote as unknown as BrowserContext,
     isConnected: () => true,
   } as unknown as Browser;
-  const managed = Layer.succeed(BoxBrowser, { connect: () => Effect.succeed(browser) });
+  Object.assign(remote, { browser: () => browser });
+  const buffer = Buffer.from("fixture,from-box\n");
+  const readFile = vi.fn((_browser: Browser, _path: string, _limit: number) =>
+    Effect.succeed(buffer),
+  );
+  const boxBrowser = { connect: () => Effect.succeed(browser), readFile };
+  const managed = Layer.succeed(BoxBrowser, boxBrowser);
   return Effect.gen(function* () {
     const server = yield* ServerBrowser.ServerBrowser;
     const broker = yield* Broker.PreviewAutomationBroker;
@@ -622,6 +631,21 @@ it.effect("opens and streams an agent tab in the Box rather than host Chromium",
     const viewer = yield* server.attachViewer(viewerInput(opened.tabId!, true));
     expect(viewer).toBeDefined();
     expect(contextRequests).toEqual([]);
+    yield* broker.invoke<void>({
+      scope,
+      operation: "upload",
+      tabId: PreviewTabId.make(opened.tabId!),
+      input: { selector: "input[type=file]", paths: ["/workspace/home/only-in-box.csv"] },
+    });
+    expect(setInputFiles).toHaveBeenCalledWith(
+      [{ name: "only-in-box.csv", mimeType: "text/csv", buffer }],
+      expect.anything(),
+    );
+    expect(readFile).toHaveBeenCalledWith(
+      browser,
+      "/workspace/home/only-in-box.csv",
+      expect.any(Number),
+    );
   }).pipe(
     Effect.scoped,
     Effect.provide(

@@ -1063,10 +1063,16 @@ export const drag = async (
   if (failure) throw failure.error;
 };
 
-export const setInputFiles = async (page: Page, input: PreviewAutomationUploadInput) => {
+export type UploadFiles = Array<string> | Array<{ name: string; mimeType: string; buffer: Buffer }>;
+
+export const setInputFiles = async (
+  page: Page,
+  input: PreviewAutomationUploadInput,
+  files: () => Promise<UploadFiles>,
+) => {
   const locator = targetLocator(page, input);
   if (locator === null) return false;
-  await locator.setInputFiles([...input.paths], { timeout: input.timeoutMs ?? DEFAULT_TIMEOUT_MS });
+  await locator.setInputFiles(await files(), { timeout: input.timeoutMs ?? DEFAULT_TIMEOUT_MS });
   return true;
 };
 

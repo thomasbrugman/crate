@@ -113,6 +113,7 @@ export interface BoxHandle {
     >;
   };
   readonly files: {
+    readonly readBase64?: (path: string, offset: number, length: number) => Promise<string>;
     readonly write: (options: { path: string; content: string }) => Promise<unknown>;
     readonly writeVolatile?: (path: string, content: string) => Promise<void>;
   };
@@ -209,6 +210,8 @@ function projectBox(box: Box): BoxHandle {
       },
     },
     files: {
+      readBase64: (path, offset, length) =>
+        box.files.read(path, { encoding: "base64", offset, length }),
       write: async (options) => {
         await box.files.write(options);
       },
