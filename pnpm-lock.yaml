@@ -539,6 +539,10 @@ importers:
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.6.0
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
 
   apps/marketing:
     dependencies:

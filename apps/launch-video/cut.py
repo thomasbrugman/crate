@@ -13,8 +13,15 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFont
 
 WIDTH, HEIGHT, FPS = 1920, 1080, 30
-MARK = Path(__file__).resolve().parents[2] / "assets/prod/black-universal-1024.png"
 REPO = "github.com/thomasbrugman/t3stash"
+REVEAL_AT = 7
+REVEAL_LENGTH = 1.8
+CAMERA_LENGTH = 3.3
+CTA_LENGTH = 4
+SCREEN = (1656, 896)
+PAPER = "#f2f1ee"
+INK = "#191918"
+MUTED = "#545351"
 ENCODE = [
     "-r",
     str(FPS),
@@ -39,110 +46,65 @@ class Shot:
     start: float = 0
     speed: float = 1
     crop: tuple[int, int, int, int] | None = None  # width, height, x, y
-    note: str = "LIVE T3STASH"
+    note: str = ""
 
 
 SHOTS = (
     Shot(
         "onboarding.mp4",
-        2.6,
-        "01 / CONNECT",
+        3.2,
+        "CONNECT",
         "Connect your agent once.",
-        0.1,
-        0.45,
-        (820, 580, 308, 72),
-    ),
-    Shot(
-        "stage.mp4",
-        3.8,
-        "02 / PREPARE",
-        "Set up the repo on a large Box.",
-        0.5,
-        1,
-        (1220, 580, 32, 42),
-        "UPSTASH BOX SDK LOG",
+        0.25,
     ),
     Shot(
         "snapshot-setting.mp4",
-        3.4,
-        "02 / PREPARE",
-        "Use that snapshot for new threads.",
-        4.7,
-        0.72,
-        (890, 280, 388, 491),
+        3.2,
+        "PREPARE",
+        "Start new threads from a prepared snapshot.",
+        3.6,
+        crop=(984, 468, 350, 320),
     ),
     Shot(
         "box-size.mp4",
-        2.8,
-        "03 / START A THREAD",
-        "Pick a Box size for the job.",
-        0.15,
-        0.83,
-        (790, 325, 366, 226),
-    ),
-    Shot(
-        "readme.mp4",
         3.5,
-        "03 / START A THREAD",
-        "Give the agent a task.",
-        2.0,
-        1.37,
-        (1040, 486, 238, 148),
+        "START A THREAD",
+        "Pick a Box size.",
+        crop=(884, 452, 354, 175),
     ),
     Shot(
         "readme.mp4",
-        3.1,
-        "03 / START A THREAD",
-        "t3stash starts its own Box.",
-        6.6,
-        5.5,
-        (810, 438, 345, 65),
-        "SETUP SPED UP",
+        4.8,
+        "START A THREAD",
+        "Send a task to its own Box.",
+        1.35,
+        1.6,
+        note="FOOTAGE SPED UP",
     ),
+)
+PARALLEL_LENGTH = 4.2
+PARALLEL = (
+    ("readme.mp4", 6.25, "README EDIT"),
+    ("install.mp4", 5.0, "INSTALL REVIEW"),
+    ("phone.mp4", 4.35, "PHONE PAIRING"),
+)
+RESULT = (
     Shot(
-        "install.mp4",
-        2.5,
-        "04 / RUN IN PARALLEL",
-        "Start a second job while it works.",
-        2.0,
-        2.5,
+        "recut-workspace.mp4",
+        5.4,
+        "CHECK THE WORK",
+        "Switch between threads.",
+        1.15,
+        1.7,
         note="FOOTAGE SPED UP",
     ),
     Shot(
-        "phone.mp4",
-        2.6,
-        "04 / RUN IN PARALLEL",
-        "And a third.",
-        2.0,
-        2.7,
-        note="FOOTAGE SPED UP",
-    ),
-    Shot(
-        "inventory.mp4",
-        4.2,
-        "04 / RUN IN PARALLEL",
-        "Three tasks. Three separate machines.",
-        0.5,
-        1,
-        (1220, 580, 32, 42),
-        "LIVE UPSTASH BOX SDK",
-    ),
-    Shot(
-        "return-to-readme.mp4",
-        2.1,
-        "05 / CHECK THE WORK",
-        "Come back to the first thread.",
-        0.0,
-        1,
-    ),
-    Shot(
-        "result.mp4",
-        5.2,
-        "05 / CHECK THE WORK",
-        "The README edit, straight from the Box.",
-        0,
-        1,
-        (800, 326, 360, 165),
+        "recut-workspace.mp4",
+        3.4,
+        "CHECK THE WORK",
+        "The README diff, straight from the Box.",
+        10.35,
+        crop=(886, 435, 350, 130),
     ),
 )
 
@@ -164,65 +126,53 @@ def font(size, kind="sans"):
 
 
 def canvas():
-    gradient = Image.new("RGB", (192, 108))
-    gradient.putdata(
-        [
-            (v, v, v + 2)
-            for y in range(108)
-            for x in range(192)
-            for v in [
-                9 + round(13 * max(0, 1 - math.hypot((x - 96) / 145, (y - 32) / 88)))
-            ]
-        ]
-    )
-    return gradient.resize((WIDTH, HEIGHT), Image.Resampling.BICUBIC)
+    return Image.new("RGB", (WIDTH, HEIGHT), PAPER)
 
 
-def center(draw, text, y, size, color="#f4f3f1", kind="sans"):
+def center(draw, text, y, size, color=INK, kind="sans"):
     draw.text((WIDTH // 2, y), text, anchor="mm", font=font(size, kind), fill=color)
 
 
-def title_card(kind):
+def title_card(kind, wordmark=None, music_credit=None):
     card = canvas()
     draw = ImageDraw.Draw(card)
     if kind == "camera":
-        draw.rectangle((395, 220, 1525, 745), outline="#4a4a50", width=2)
-        center(draw, "CAMERA INSERT", 364, 23, "#aaaab1", "mono")
-        center(draw, "Close the lid. Check your phone.", 474, 52, kind="bold")
-        center(draw, "Thomas’s shot goes here", 560, 32, "#babac0")
+        center(draw, "CAMERA INSERT", 360, 24, MUTED, "mono")
+        center(draw, "Same thread. Now on your phone.", 475, 70, kind="bold")
+        center(draw, "Thomas’s lid-and-phone shot goes here", 575, 34, MUTED)
         center(
             draw,
             "Phone access needs an awake, reachable t3stash host.",
-            873,
+            755,
             32,
-            "#d2d1d1",
+            MUTED,
         )
         return card
 
-    logo = Image.open(MARK).convert("RGBA").resize((120, 120), Image.Resampling.LANCZOS)
-    card.paste(logo, ((WIDTH - 120) // 2, 288), logo)
-    center(draw, "t3stash", 522, 146, kind="bold")
     if kind == "intro":
-        center(
-            draw, "T3 Code threads run in their own cloud Boxes.", 662, 43, "#d7d6d3"
-        )
+        center(draw, "t3stash", 488, 154, kind="bold")
+        center(draw, "T3 Code threads in their own cloud Boxes.", 662, 47)
     else:
+        if wordmark:
+            with Image.open(wordmark) as source:
+                logo = source.convert("RGBA")
+            logo.thumbnail((710, 175), Image.Resampling.LANCZOS)
+            card.paste(logo, ((WIDTH - logo.width) // 2, 488 - logo.height // 2), logo)
+        else:
+            center(draw, "t3stash", 488, 154, kind="bold")
         center(draw, REPO, 668, 43, kind="mono")
-        center(draw, "Built on T3 Code and Upstash Box.", 854, 27, "#a5a4a8")
+        center(draw, "Built on T3 Code and Upstash Box.", 854, 29, MUTED)
+        if music_credit:
+            center(draw, music_credit, 955, 24, MUTED)
     return card
 
 
 def shot_card(shot):
     card = canvas()
     draw = ImageDraw.Draw(card)
-    draw.text(
-        (88, 65), shot.section, anchor="lm", font=font(24, "mono"), fill="#d4d3d0"
-    )
-    draw.text((1832, 65), shot.note, anchor="rm", font=font(21, "mono"), fill="#a5a4a8")
-    draw.rectangle((87, 113, 1832, 882), fill="#070708", outline="#333338", width=2)
-    draw.text(
-        (88, 970), shot.caption, anchor="lm", font=font(50, "bold"), fill="#f4f3f1"
-    )
+    if shot.note:
+        draw.text((1792, 46), shot.note, anchor="rm", font=font(21, "mono"), fill=MUTED)
+    draw.text((960, 1022), shot.caption, anchor="mm", font=font(49, "bold"), fill=INK)
     return card
 
 
@@ -234,12 +184,17 @@ def footage(shot, inputs, plate, output):
     path = inputs / shot.file
     crop = "" if shot.crop is None else f"crop={':'.join(map(str, shot.crop))},"
     frames = round(shot.length * FPS)
+    width, height = shot.crop[:2] if shot.crop else (1440, 810)
+    scale = min(SCREEN[0] / width, SCREEN[1] / height)
+    width, height = (2 * round(d * scale / 2) for d in (width, height))
     graph = (
         f"[0:v]{crop}setpts=(PTS-STARTPTS)/{shot.speed},fps={FPS},"
         f"tpad=stop_mode=clone:stop_duration={shot.length},"
-        "scale=1742:766:force_original_aspect_ratio=decrease:force_divisible_by=2,"
-        "pad=1742:766:(ow-iw)/2:(oh-ih)/2:color=0x070708,setsar=1[screen];"
-        "[1:v][screen]overlay=89:115[out]"
+        f"scale={width * 2}:{height * 2},"
+        f"zoompan=z='1+0.065*(1-cos(PI*min(on/{frames - 1},1)))/2':"
+        f"x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=1:s={width}x{height}:fps={FPS},"
+        "setsar=1[screen];"
+        "[1:v][screen]overlay=(W-w)/2:(H-h)/2[out]"
     )
     ffmpeg(
         "-ss",
@@ -260,6 +215,58 @@ def footage(shot, inputs, plate, output):
         "[out]",
         "-frames:v",
         frames,
+        *ENCODE,
+        output,
+    )
+
+
+def parallel(inputs, plate, output):
+    card = shot_card(
+        Shot(
+            "",
+            PARALLEL_LENGTH,
+            "RUN IN PARALLEL",
+            "Three tasks. Three separate Boxes.",
+            note="THREE REAL THREADS · MONTAGE",
+        )
+    )
+    draw = ImageDraw.Draw(card)
+    args = ["-loop", "1", "-framerate", FPS, "-i", plate]
+    graph = []
+    for i, (name, start, label) in enumerate(PARALLEL):
+        delay = i * 0.58
+        x, y = 460 + i * 165, 170 + i * 258
+        draw.text(
+            (x - 24, y + 114),
+            f"0{i + 1} / {label}",
+            anchor="rm",
+            font=font(23, "mono"),
+            fill=INK,
+        )
+        args += ["-ss", start, "-i", inputs / name]
+        graph.append(
+            f"[{i + 1}:v]crop=1000:236:275:28,fps={FPS},setsar=1,"
+            "drawbox=c=0x484854:w=iw:h=ih:t=2,"
+            f"tpad=stop_mode=clone:stop_duration={PARALLEL_LENGTH},"
+            f"setpts=PTS-STARTPTS+{delay}/TB[clip{i}]"
+        )
+        base = "0:v" if i == 0 else f"row{i - 1}"
+        graph.append(
+            f"[{base}][clip{i}]overlay="
+            f"x='{x}+220*pow(max(0,1-(t-{delay})/0.48),3)':"
+            f"y={y}:enable='gte(t,{delay})'[row{i}]"
+        )
+    card.save(plate)
+    ffmpeg(
+        *args,
+        "-filter_complex_threads",
+        1,
+        "-filter_complex",
+        ";".join(graph),
+        "-map",
+        f"[row{len(PARALLEL) - 1}]",
+        "-frames:v",
+        round(PARALLEL_LENGTH * FPS),
         *ENCODE,
         output,
     )
@@ -306,12 +313,38 @@ def main():
         "footage", type=Path, help="Directory containing the recorded MP4s"
     )
     parser.add_argument("output", type=Path)
+    parser.add_argument(
+        "--wordmark", type=Path, help="Transparent PNG for the end card"
+    )
+    parser.add_argument("--music", type=Path, help="Licensed music file for this cut")
+    parser.add_argument("--music-credit", help="Short music credit for the end card")
+    parser.add_argument(
+        "--music-start",
+        type=float,
+        default=0,
+        help="Skip this many seconds into the music",
+    )
     args = parser.parse_args()
-    missing = [
-        name
-        for name in dict.fromkeys(["opener.mp4", *(shot.file for shot in SHOTS)])
-        if not (args.footage / name).is_file()
-    ]
+    if (
+        not math.isfinite(args.music_start)
+        or args.music_start < 0
+        or (args.music_start and not args.music)
+    ):
+        parser.error("--music-start must be nonnegative and used with --music")
+    if args.music and not args.music.is_file():
+        parser.error(f"music not found: {args.music}")
+    if args.music_credit and not args.music:
+        parser.error("--music-credit requires --music")
+    if args.wordmark and not args.wordmark.is_file():
+        parser.error(f"wordmark not found: {args.wordmark}")
+    clips_needed = dict.fromkeys(
+        [
+            "opener.mp4",
+            *(shot.file for shot in SHOTS + RESULT),
+            *(row[0] for row in PARALLEL),
+        ]
+    )
+    missing = [name for name in clips_needed if not (args.footage / name).is_file()]
     if missing:
         parser.error("missing footage: " + ", ".join(missing))
     with tempfile.TemporaryDirectory(prefix="t3stash-launch-") as temp:
@@ -328,29 +361,61 @@ def main():
             "-i",
             args.footage / "opener.mp4",
             "-vf",
-            "scale=1920:1080,setsar=1,tpad=stop_mode=clone:stop_duration=7",
+            f"scale=1920:1080,setsar=1,tpad=stop_mode=clone:stop_duration={REVEAL_AT}",
             "-t",
-            7,
+            REVEAL_AT,
             *ENCODE,
             clip_path(),
         )
         title_card("intro").save(plate)
-        still(plate, clip_path(), 3)
-        for shot in SHOTS:
-            print(shot.section, shot.caption, flush=True)
-            shot_card(shot).save(plate)
-            footage(shot, args.footage, plate, clip_path())
+        still(plate, clip_path(), REVEAL_LENGTH)
+
+        def shots(sequence):
+            for shot in sequence:
+                print(shot.section, shot.caption, flush=True)
+                shot_card(shot).save(plate)
+                footage(shot, args.footage, plate, clip_path())
+
+        shots(SHOTS)
+        parallel(args.footage, plate, clip_path())
+        shots(RESULT)
         title_card("camera").save(plate)
-        still(plate, clip_path(), 6)
-        title_card("cta").save(plate)
-        still(plate, clip_path(), 5)
+        still(plate, clip_path(), CAMERA_LENGTH)
+        title_card("cta", args.wordmark, args.music_credit).save(plate)
+        still(plate, clip_path(), CTA_LENGTH)
         program = temp / "program.txt"
         program.write_text(
             "".join(f"file {clip.name}\n" for clip in clips), encoding="utf-8"
         )
-        cta_at = 16 + sum(s.length for s in SHOTS)
+        cta_at = (
+            REVEAL_AT
+            + REVEAL_LENGTH
+            + PARALLEL_LENGTH
+            + CAMERA_LENGTH
+            + sum(s.length for s in SHOTS + RESULT)
+        )
+        length = cta_at + CTA_LENGTH
         audio = temp / "sound.wav"
-        sound(audio, cta_at + 5, 7, cta_at)
+        sound(audio, length, REVEAL_AT, cta_at)
+        if args.music:
+            music = [
+                "-ss",
+                args.music_start,
+                "-i",
+                args.music,
+                "-filter_complex",
+                f"[2:a]aresample=48000,volume=0.48,afade=t=in:d=0.08,"
+                f"afade=t=out:st={length - REVEAL_AT - 1.4}:d=1.4,"
+                f"adelay={REVEAL_AT * 1000}:all=1[music];"
+                "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[sfx];"
+                "[sfx][music]amix=inputs=2:duration=first:normalize=0[a]",
+                "-map",
+                "0:v",
+                "-map",
+                "[a]",
+            ]
+        else:
+            music = ["-map", "0:v", "-map", "1:a"]
         ffmpeg(
             "-f",
             "concat",
@@ -360,6 +425,7 @@ def main():
             program,
             "-i",
             audio,
+            *music,
             "-c:v",
             "copy",
             "-c:a",

@@ -8,7 +8,12 @@
     "allowSyntheticDefaultImports": true,
     "noEmit": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "~/lib/utils": ["./src/classNames.ts"],
+      "gt-react": ["./src/translations.ts"],
+      "~/*": ["../web/src/*"]
+    }
   },
   "include": ["src", "remotion.config.ts"]
 }
