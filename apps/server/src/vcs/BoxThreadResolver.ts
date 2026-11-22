@@ -35,6 +35,12 @@ export class BoxThreadResolver extends Context.Service<
     readonly resolve: (
       threadId: ThreadId,
     ) => Effect.Effect<VcsThreadTarget.Target, BoxExec.BoxExecError>;
+    readonly resolveTerminal: (
+      threadId: ThreadId,
+    ) => Effect.Effect<
+      { readonly nativeId: string; readonly apiKey: string; readonly worktree: boolean } | null,
+      BoxExec.BoxExecError
+    >;
   }
 >()("t3/vcs/BoxThreadResolver") {}
 
@@ -58,7 +64,7 @@ export const make = Effect.gen(function* () {
             ),
           )
       : Effect.succeed(value);
-  const resolve = Effect.fn("BoxThreadResolver.resolve")(
+  const resolveThread = Effect.fn("BoxThreadResolver.resolveThread")(
     function* (threadId: ThreadId) {
       const context = yield* projection.getThreadRecords(threadId, ["providerThreads"]);
       if (context.thread.deletedAt !== null) return null;
@@ -95,32 +101,10 @@ export const make = Effect.gen(function* () {
           ? yield* Config.String("UPSTASH_BOX_API_KEY").pipe(Config.withDefault(""))
           : yield* readSecret(envValue, threadId));
       if (!apiKey) return null;
-      const nativeId = providerThread.nativeThreadRef.nativeId;
-      if (!repositories.has(nativeId)) {
-        const unavailable = () => new BoxExec.BoxExecError({ threadId, reason: "box_unavailable" });
-        const box = yield* Effect.tryPromise({
-          try: () => api.get(nativeId, apiKey),
-          catch: unavailable,
-        });
-        const checkout = yield* Effect.tryPromise({
-          try: () =>
-            box.exec.command(
-              "if test -d /workspace/home/repo; then git -C /workspace/home/repo config --get remote.origin.url || printf '%s' box-checkout; fi",
-            ),
-          catch: unavailable,
-        });
-        if (checkout.exitCode !== 0) return null;
-        repositories.set(nativeId, checkout.stdout.trim() || null);
-      }
-      const checkoutRoot = !repositories.get(nativeId)
-        ? BoxApi.BOX_WORKSPACE_PATH
-        : providerThread.nativeMetadata?.boxOwnerThreadId
-          ? BoxApi.boxWorktreePath(threadId)
-          : BoxApi.BOX_REPOSITORY_PATH;
       return {
         providerThread,
+        nativeId: providerThread.nativeThreadRef.nativeId,
         apiKey,
-        checkoutRoot,
         projectRoot: project.value.workspaceRoot,
       };
     },
@@ -133,9 +117,53 @@ export const make = Effect.gen(function* () {
         ),
       ),
   );
+  const resolve = Effect.fn("BoxThreadResolver.resolve")(function* (threadId: ThreadId) {
+    const thread = yield* resolveThread(threadId);
+    if (!thread) return null;
+    const { providerThread, nativeId, apiKey, projectRoot } = thread;
+    if (!repositories.has(nativeId)) {
+      const unavailable = () => new BoxExec.BoxExecError({ threadId, reason: "box_unavailable" });
+      const box = yield* Effect.tryPromise({
+        try: () => api.get(nativeId, apiKey),
+        catch: unavailable,
+      });
+      const checkout = yield* Effect.tryPromise({
+        try: () =>
+          box.exec.command(
+            "if test -d /workspace/home/repo; then git -C /workspace/home/repo config --get remote.origin.url || printf '%s' box-checkout; fi",
+          ),
+        catch: unavailable,
+      });
+      if (checkout.exitCode !== 0) return null;
+      repositories.set(nativeId, checkout.stdout.trim() || null);
+    }
+    const checkoutRoot = !repositories.get(nativeId)
+      ? BoxApi.BOX_WORKSPACE_PATH
+      : providerThread.nativeMetadata?.boxOwnerThreadId
+        ? BoxApi.boxWorktreePath(threadId)
+        : BoxApi.BOX_REPOSITORY_PATH;
+    return {
+      providerThread,
+      apiKey,
+      checkoutRoot,
+      projectRoot,
+    };
+  });
   return {
     exec: BoxExec.BoxExecThreadResolver.of({ resolve }),
     target: BoxThreadResolver.of({
+      resolveTerminal: Effect.fn("BoxThreadResolver.resolveTerminal")((threadId: ThreadId) =>
+        resolveThread(threadId).pipe(
+          Effect.map(
+            (thread) =>
+              thread && {
+                nativeId: thread.nativeId,
+                apiKey: thread.apiKey,
+                worktree: Boolean(thread.providerThread.nativeMetadata?.boxOwnerThreadId),
+              },
+          ),
+        ),
+      ),
       resolve: Effect.fn("BoxThreadResolver.target")((threadId) =>
         resolve(threadId).pipe(
           Effect.filterOrFail(

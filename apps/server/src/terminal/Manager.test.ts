@@ -17,6 +17,7 @@ import {
   terminalSequenceStateAfter,
   TerminalProviderInstanceNotFoundError,
 } from "@t3tools/contracts";
+import { BoxApi } from "@t3tools/provider-upstash-box/server";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 import * as NodePtyAdapter from "./NodePtyAdapter.ts";
@@ -49,6 +50,8 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as TerminalManager from "./Manager.ts";
+import * as BoxPty from "./BoxPty.ts";
+import { BoxThreadResolver } from "../vcs/BoxThreadResolver.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import { makePrepareTerminalLaunch } from "../workspace/restoreMissingWorktree.ts";
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
@@ -240,6 +243,7 @@ const historyLogPath = (logsDir: string, threadId = "thread-1") =>
 
 interface CreateManagerOptions {
   cloudOnly?: boolean;
+  boxPty?: BoxPty.BoxPty["Service"];
   shellResolver?: () => string;
   env?: NodeJS.ProcessEnv;
   subprocessInspector?: (terminalPid: number) => Effect.Effect<{
@@ -292,6 +296,7 @@ const createManager = (
 
       const manager = yield* TerminalManager.makeWithOptions({
         cloudOnly: options.cloudOnly ?? false,
+        ...(options.boxPty ? { boxPty: options.boxPty } : {}),
         logsDir,
         historyLineLimit,
         ptyAdapter,
@@ -588,6 +593,190 @@ it.layer(
       const error = yield* manager.open(openInput()).pipe(Effect.flip);
       assert.equal(error._tag, "TerminalCloudUnavailableError");
       expect(ptyAdapter.spawnInputs).toHaveLength(0);
+    }),
+  );
+
+  it.effect("streams separate Box PTYs and replaces a lost shell with a visible restart", () =>
+    Effect.gen(function* () {
+      type SessionOptions = Parameters<NonNullable<BoxApi.BoxHandle["exec"]["session"]>>[0];
+      const sessions: Array<{
+        options: SessionOptions;
+        write: ReturnType<typeof vi.fn>;
+        resize: ReturnType<typeof vi.fn>;
+        exit: ReturnType<typeof Promise.withResolvers<number>>;
+        closed: ReturnType<typeof Promise.withResolvers<void>>;
+      }> = [];
+      let status = "paused";
+      const resume = vi.fn(async () => {
+        status = "idle";
+      });
+      const unexpected = async (): Promise<never> => {
+        throw new Error("Unexpected Box operation");
+      };
+      let startupFailure: Error | undefined;
+      const boxPty = yield* BoxPty.BoxPty.pipe(
+        Effect.provide(
+          BoxPty.layer.pipe(
+            Layer.provide(
+              Layer.mock(BoxThreadResolver)({
+                resolveTerminal: (threadId) =>
+                  Effect.succeed(
+                    threadId === "thread-1"
+                      ? { nativeId: "thread-box", apiKey: "test-key", worktree: true }
+                      : null,
+                  ),
+              }),
+            ),
+            Layer.provide(
+              Layer.mock(BoxApi.BoxApi)({
+                create: unexpected,
+                list: unexpected,
+                checkModelKey: unexpected,
+                get: async (id, apiKey) => {
+                  expect([id, apiKey]).toEqual(["thread-box", "test-key"]);
+                  if (startupFailure) throw startupFailure;
+                  return {
+                    id,
+                    agent: { stream: unexpected },
+                    files: { write: unexpected },
+                    delete: unexpected,
+                    resume,
+                    getStatus: async () => ({ status }),
+                    exec: {
+                      command: unexpected,
+                      session: async (options) => {
+                        expect(status).toBe("idle");
+                        const write = vi.fn();
+                        const resize = vi.fn();
+                        const exit = Promise.withResolvers<number>();
+                        const closed = Promise.withResolvers<void>();
+                        sessions.push({ options, write, resize, exit, closed });
+                        const prompt = Buffer.from("Box shell 🚀");
+                        options.onStdout?.(prompt.subarray(0, -2));
+                        options.onStdout?.(prompt.subarray(-2));
+                        return {
+                          pid: 10,
+                          id: String(sessions.length),
+                          write,
+                          resize,
+                          endStdin: () => {},
+                          kill: () => {},
+                          terminate: () => {},
+                          wait: () => exit.promise,
+                          close: () => {
+                            exit.resolve(-1);
+                            closed.resolve();
+                          },
+                        };
+                      },
+                    },
+                  };
+                },
+              }),
+            ),
+          ),
+        ),
+      );
+      const { manager, ptyAdapter } = yield* createManager(5, { cloudOnly: true, boxPty });
+      const input = openInput({
+        cwd: "/not-a-host-directory",
+        worktreePath: "/also-not-a-host-directory",
+        env: { INJECTED_FROM_CLIENT: "not forwarded" },
+      });
+      const plainError = new Error("connection unavailable");
+      startupFailure = plainError;
+      const plainFailure = yield* boxPty.spawn({ ...input, cols: 100, rows: 24 }).pipe(Effect.flip);
+      expect(plainFailure.cause).toBe(plainError);
+      startupFailure = Object.assign(new TypeError("request failed: test-key"), {
+        statusCode: 409,
+        response: { headers: { authorization: "test-key" } },
+      });
+      const wrappedFailure = yield* boxPty
+        .spawn({ ...input, cols: 100, rows: 24 })
+        .pipe(Effect.flip);
+      expect(wrappedFailure.cause).toEqual({
+        name: "TypeError",
+        message: "request failed: [redacted]",
+        statusCode: 409,
+      });
+      startupFailure = undefined;
+      const rejected = yield* manager.open({ ...input, threadId: "no-box" });
+      expect(rejected).toMatchObject({ status: "error", error: expect.stringContaining("No Box") });
+
+      const outputSeen = yield* Deferred.make<void>();
+      const restarted = yield* Deferred.make<TerminalEvent>();
+      const detach = yield* manager.attachStream(
+        input,
+        (event) => {
+          if (event.type === "output" && event.data === "Live output")
+            return Deferred.succeed(outputSeen, undefined).pipe(Effect.asVoid);
+          if (event.type === "restarted" || event.type === "exited")
+            return Deferred.succeed(restarted, event).pipe(Effect.asVoid);
+          return Effect.void;
+        },
+        undefined,
+        "box-viewer",
+      );
+      yield* Effect.addFinalizer(() => Effect.sync(detach));
+      const secondInput = { ...input, terminalId: "second" };
+      const second = yield* manager.open(secondInput);
+      expect(second.status).toBe("running");
+      const secondOutputSeen = yield* Deferred.make<void>();
+      const secondRestarted = yield* Deferred.make<TerminalEvent>();
+      const unsubscribe = yield* manager.subscribe((event) => {
+        if (event.terminalId !== secondInput.terminalId) return Effect.void;
+        if (event.type === "output" && event.data === "Second terminal output")
+          return Deferred.succeed(secondOutputSeen, undefined).pipe(Effect.asVoid);
+        if (event.type === "restarted" || event.type === "exited")
+          return Deferred.succeed(secondRestarted, event).pipe(Effect.asVoid);
+        return Effect.void;
+      });
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
+      const [firstSession, secondSession] = sessions;
+      expect(firstSession!.options).toMatchObject({
+        tty: true,
+        cwd: BoxApi.BOX_WORKSPACE_PATH,
+        env: ["TERM=xterm-256color"],
+        rows: 24,
+        cols: 100,
+      });
+      expect(firstSession!.options.argv).toContain(BoxApi.boxWorktreePath(input.threadId));
+      firstSession!.options.onStdout?.(Buffer.from("Live output"));
+      secondSession!.options.onStdout?.(Buffer.from("Second terminal output"));
+      yield* Deferred.await(outputSeen);
+      yield* Deferred.await(secondOutputSeen);
+      yield* manager.write({ ...input, data: "\xff", binary: true });
+      yield* manager.resize({ ...input, cols: 77, rows: 37 }, "box-viewer");
+      expect(firstSession!.write).toHaveBeenCalledWith(Buffer.from([255]));
+      expect(firstSession!.resize).toHaveBeenCalledWith(37, 77);
+      expect(secondSession!.write).not.toHaveBeenCalled();
+      expect(ptyAdapter.spawnInputs).toHaveLength(0);
+
+      status = "paused";
+      firstSession!.exit.resolve(-1);
+      secondSession!.exit.resolve(137);
+      expect(yield* Deferred.await(restarted)).toMatchObject({
+        type: "restarted",
+        snapshot: {
+          history: expect.stringMatching(
+            /Box shell 🚀Live output.*Box terminal session restarted/s,
+          ),
+        },
+      });
+      expect(yield* Deferred.await(secondRestarted)).toMatchObject({
+        type: "restarted",
+        terminalId: secondInput.terminalId,
+        snapshot: {
+          history: expect.stringMatching(/Second terminal output.*Box terminal session restarted/s),
+        },
+      });
+      expect(resume).toHaveBeenCalledTimes(2);
+      yield* manager.write({ ...input, data: "pwd\r" });
+      const replacement = sessions.slice(2).find(({ options }) => options.rows === 37)!;
+      expect(replacement.write).toHaveBeenCalledWith("pwd\r");
+      yield* manager.close(input);
+      yield* Effect.promise(() => replacement.closed.promise);
+      expect(sessions).toHaveLength(4);
     }),
   );
 

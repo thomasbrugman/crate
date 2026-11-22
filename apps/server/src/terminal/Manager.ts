@@ -78,8 +78,8 @@ import { increment, terminalSessionsTotal } from "../observability/Metrics.ts";
 import { expandHomeVariable } from "@t3tools/provider-core/server/pathExpansion";
 import * as ProcessRunner from "../processRunner.ts";
 import * as PortScanner from "../preview/PortScanner.ts";
-import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClient.ts";
 import { terminalOutputStream } from "./OutputProtocol.ts";
+import { BoxPty } from "./BoxPty.ts";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 
 export {
@@ -315,6 +315,7 @@ interface TerminalSessionState {
   updatedAt: string;
   eventSequence: number;
   inputCount: number;
+  canReconnect: boolean;
   cols: number;
   rows: number;
   process: PtyAdapter.PtyProcess | null;
@@ -394,6 +395,11 @@ function normalizeChildCommandName(raw: string, platform: NodeJS.Platform): stri
   const withoutExe =
     platform === "win32" && base.toLowerCase().endsWith(".exe") ? base.slice(0, -4) : base;
   return withoutExe.length > 0 ? withoutExe : null;
+}
+
+function isBoxSessionDisconnect(exitCode: number | null): boolean {
+  // The SDK reports transport loss as -1, but pausing a Box kills its PTYs with SIGKILL.
+  return exitCode === -1 || exitCode === 128 + 9;
 }
 
 function terminalWireLabel(session: TerminalSessionState): string {
@@ -516,10 +522,10 @@ function cleanupProcessHandles(session: TerminalSessionState): void {
 
 function enqueueProcessEvent(
   session: TerminalSessionState,
-  expectedPid: number,
+  expectedProcess: PtyAdapter.PtyProcess,
   event: PendingProcessEvent,
 ): boolean {
-  if (!session.process || session.status !== "running" || session.pid !== expectedPid) {
+  if (session.process !== expectedProcess || session.status !== "running") {
     return false;
   }
 
@@ -1665,6 +1671,7 @@ function normalizedRuntimeEnv(
 
 interface TerminalManagerOptions {
   cloudOnly?: boolean;
+  boxPty?: BoxPty["Service"];
   logsDir: string;
   historyLineLimit?: number;
   historyByteLimit?: number;
@@ -1743,40 +1750,15 @@ export const resolveProviderInstanceTerminalEnvironment = Effect.fn(
 });
 
 /** @public */
-export const make = Effect.fn("TerminalManager.make")(function* (
-  deriveConfigMap: typeof deriveProviderInstanceConfigMap,
-) {
-  const { terminalLogsDir, providerStatusCacheDir, baseDir } = yield* ServerConfig.ServerConfig;
+export const make = Effect.fn("TerminalManager.make")(function* () {
+  const { terminalLogsDir } = yield* ServerConfig.ServerConfig;
   const ptyAdapter = yield* PtyAdapter.PtyAdapter;
-  const portDiscovery = yield* PortScanner.PortDiscovery;
-  const nativeTelemetry = yield* NativeTelemetryClient.NativeTelemetryClient;
-  const serverSettings = yield* ServerSettings.ServerSettingsService;
-  const path = yield* Path.Path;
-  const resolveProviderInstanceEnvironment = Effect.fn(
-    "terminal.resolveProviderInstanceEnvironment",
-  )((rawProviderInstanceId: string, env: Record<string, string> | undefined) =>
-    resolveProviderInstanceTerminalEnvironment({
-      deriveProviderInstanceConfigMap: deriveConfigMap,
-      serverSettings,
-      path,
-      rawProviderInstanceId,
-      env,
-    }),
-  );
+  const boxPty = yield* BoxPty;
   return yield* makeWithOptions({
     cloudOnly: true,
+    boxPty,
     logsDir: terminalLogsDir,
     ptyAdapter,
-    processTable: nativeTelemetry.processTable.pipe(
-      Effect.mapError(
-        (cause) => new TerminalSubprocessCheckError({ cause, command: "resource-monitor" }),
-      ),
-    ),
-    managedBinaryCacheDir: providerStatusCacheDir,
-    managedBinaryToolsDir: path.join(baseDir, "tools"),
-    registerTerminalProcesses: portDiscovery.registerTerminalProcesses,
-    unregisterTerminal: portDiscovery.unregisterTerminal,
-    resolveProviderInstanceEnvironment,
   });
 });
 
@@ -1808,6 +1790,10 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       | TerminalProviderEnvironmentError
       | TerminalCloudUnavailableError
     > {
+      if (options.boxPty) {
+        const { env: _env, ...launch } = input;
+        return { ...launch, worktreePath: null } as Input;
+      }
       if (options.cloudOnly) return yield* new TerminalCloudUnavailableError({});
       if (input.providerInstanceId === undefined) return input;
       const resolver = options.resolveProviderInstanceEnvironment;
@@ -1947,6 +1933,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   const threadLocks = yield* KeyedLock.make<string>();
   const terminalEventListeners = new Set<(event: TerminalEvent) => Effect.Effect<void>>();
   const workerScope = yield* Scope.make("sequential");
+  let shuttingDown = false;
   yield* Effect.addFinalizer(() => Scope.close(workerScope, Exit.void));
 
   const publishEvent =
@@ -2583,11 +2570,15 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
 
   const drainProcessEvents = Effect.fn("terminal.drainProcessEvents")(function* (
     session: TerminalSessionState,
-    expectedPid: number,
+    expectedProcess: PtyAdapter.PtyProcess,
   ) {
     while (true) {
       const action: DrainProcessEventAction = yield* Effect.sync(() => {
-        if (session.pid !== expectedPid || !session.process || session.status !== "running") {
+        if (session.process !== expectedProcess || session.status !== "running") {
+          return { type: "idle" } as const;
+        }
+
+        if (shuttingDown) {
           session.pendingProcessEvents = [];
           session.pendingProcessEventIndex = 0;
           session.processEventDrainRunning = false;
@@ -2638,7 +2629,6 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         session.pid = null;
         session.hasRunningSubprocess = false;
         session.childCommandLabel = null;
-        session.status = "exited";
         session.pendingHistoryControlSequence = "";
         session.pendingProcessEvents = [];
         session.pendingProcessEventIndex = 0;
@@ -2646,6 +2636,8 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         session.exitCode = Number.isInteger(nextEvent.event.exitCode)
           ? nextEvent.event.exitCode
           : null;
+        session.status =
+          options.boxPty && isBoxSessionDisconnect(session.exitCode) ? "starting" : "exited";
         session.exitSignal = Number.isInteger(nextEvent.event.signal)
           ? nextEvent.event.signal
           : null;
@@ -2686,6 +2678,10 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         threadId: action.threadId,
         terminalId: action.terminalId,
       });
+      if (options.boxPty && isBoxSessionDisconnect(action.exitCode)) {
+        yield* withThreadLock(action.threadId, reconnectBoxSession(session));
+        return;
+      }
       yield* publishEvent({
         type: "exited",
         threadId: action.threadId,
@@ -2860,56 +2856,63 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     let ptyProcess: PtyAdapter.PtyProcess | null = null;
     let startedShell: string | null = null;
 
+    const launch = options.boxPty
+      ? options.boxPty
+          .spawn(session)
+          .pipe(Effect.map((process) => ({ process, shell: "bash", shellLabel: "bash" })))
+      : Effect.gen(function* () {
+          const shellCandidates = yield* resolveShellCandidates(
+            shellResolver,
+            platform,
+            baseEnv,
+            session.runtimeEnv?.T3CODE_TERMINAL_SHELL ?? baseEnv.T3CODE_TERMINAL_SHELL,
+          ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem));
+          const terminalEnv = createTerminalSpawnEnv(
+            baseEnv,
+            session.runtimeEnv,
+            platform,
+            yield* HostProcess.HomeDirectory,
+            session.threadId,
+          );
+          // Append managed install directories so agent commands resolve without shadowing user/system tools.
+          if (
+            options.managedBinaryCacheDir !== undefined &&
+            options.managedBinaryToolsDir !== undefined
+          ) {
+            const managedDirectories = yield* acpRegistryManagedBinaryDirectories({
+              cacheDir: options.managedBinaryCacheDir,
+              toolsDir: options.managedBinaryToolsDir,
+              platform,
+              architecture,
+            }).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+            );
+            if (managedDirectories.length > 0) {
+              const delimiter = platform === "win32" ? ";" : ":";
+              const pathKey =
+                platform === "win32"
+                  ? (Object.keys(terminalEnv).find(
+                      (candidate) => candidate.toLowerCase() === "path",
+                    ) ?? "PATH")
+                  : "PATH";
+              const merged = mergePathEntries(
+                terminalEnv[pathKey],
+                managedDirectories.join(delimiter),
+                platform,
+              );
+              if (merged !== undefined) {
+                terminalEnv[pathKey] = merged;
+              }
+            }
+          }
+          return yield* trySpawn(shellCandidates, terminalEnv, session);
+        });
     const startResult = yield* Effect.result(
       increment(terminalSessionsTotal, { lifecycle: eventType }).pipe(
         Effect.andThen(
           Effect.gen(function* () {
-            const shellCandidates = yield* resolveShellCandidates(
-              shellResolver,
-              platform,
-              baseEnv,
-              session.runtimeEnv?.T3CODE_TERMINAL_SHELL ?? baseEnv.T3CODE_TERMINAL_SHELL,
-            ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem));
-            const terminalEnv = createTerminalSpawnEnv(
-              baseEnv,
-              session.runtimeEnv,
-              platform,
-              yield* HostProcess.HomeDirectory,
-              session.threadId,
-            );
-            // Append managed install directories so agent commands resolve without shadowing user/system tools.
-            if (
-              options.managedBinaryCacheDir !== undefined &&
-              options.managedBinaryToolsDir !== undefined
-            ) {
-              const managedDirectories = yield* acpRegistryManagedBinaryDirectories({
-                cacheDir: options.managedBinaryCacheDir,
-                toolsDir: options.managedBinaryToolsDir,
-                platform,
-                architecture,
-              }).pipe(
-                Effect.provideService(FileSystem.FileSystem, fileSystem),
-                Effect.provideService(Path.Path, path),
-              );
-              if (managedDirectories.length > 0) {
-                const delimiter = platform === "win32" ? ";" : ":";
-                const pathKey =
-                  platform === "win32"
-                    ? (Object.keys(terminalEnv).find(
-                        (candidate) => candidate.toLowerCase() === "path",
-                      ) ?? "PATH")
-                    : "PATH";
-                const merged = mergePathEntries(
-                  terminalEnv[pathKey],
-                  managedDirectories.join(delimiter),
-                  platform,
-                );
-                if (merged !== undefined) {
-                  terminalEnv[pathKey] = merged;
-                }
-              }
-            }
-            const spawnResult = yield* trySpawn(shellCandidates, terminalEnv, session);
+            const spawnResult = yield* launch;
             ptyProcess = spawnResult.process;
             startedShell = spawnResult.shellLabel;
 
@@ -2920,27 +2923,37 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
               updatedAt: session.updatedAt,
               sequence: session.eventSequence,
             };
-            yield* modifyManagerState((state) => {
+            const running = yield* modifyManagerState((state) => {
+              if (shuttingDown) return [false, state] as const;
               session.process = ptyProcess;
               session.shell = spawnResult.shell;
               session.pid = processPid;
               session.status = "running";
+              if (options.boxPty && eventType === "restarted") {
+                session.history.append(
+                  "\r\n[Box terminal session restarted. A new shell is running.]\r\n",
+                );
+              }
               // onExit may replay an exit immediately; accept it before subscribing.
               session.unsubscribeData = spawnResult.process.onData((data) => {
-                if (!enqueueProcessEvent(session, processPid, { type: "output", data })) {
+                if (!enqueueProcessEvent(session, spawnResult.process, { type: "output", data })) {
                   return;
                 }
-                if (eventsActivated) runFork(drainProcessEvents(session, processPid));
+                if (eventsActivated) runFork(drainProcessEvents(session, spawnResult.process));
               });
               session.unsubscribeExit = spawnResult.process.onExit((event) => {
-                if (!enqueueProcessEvent(session, processPid, { type: "exit", event })) {
+                if (!enqueueProcessEvent(session, spawnResult.process, { type: "exit", event })) {
                   return;
                 }
-                if (eventsActivated) runFork(drainProcessEvents(session, processPid));
+                if (eventsActivated) runFork(drainProcessEvents(session, spawnResult.process));
               });
               eventStamp = advanceEventSequence(session);
-              return [undefined, state] as const;
+              return [true, state] as const;
             });
+            if (!running) {
+              spawnResult.process.kill();
+              return;
+            }
 
             yield* publishEvent({
               type: eventType,
@@ -2951,7 +2964,12 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
             });
             // Publish startup before draining any events replayed during subscription.
             eventsActivated = true;
-            if (session.processEventDrainRunning) runFork(drainProcessEvents(session, processPid));
+            if (session.processEventDrainRunning) {
+              runFork(drainProcessEvents(session, spawnResult.process));
+            }
+            if (options.boxPty && eventType === "restarted") {
+              yield* queuePersist(session.threadId, session.terminalId, session.history);
+            }
           }),
         ),
       ),
@@ -3003,6 +3021,45 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         ...(startedShell ? { shell: startedShell } : {}),
       });
     }
+  });
+
+  const reconnectBoxSession = Effect.fn("terminal.reconnectBoxSession")(function* (
+    session: TerminalSessionState,
+  ) {
+    if (shuttingDown) return;
+    const current = yield* getSession(session.threadId, session.terminalId);
+    if (
+      Option.getOrUndefined(current) !== session ||
+      session.status !== "starting" ||
+      !isBoxSessionDisconnect(session.exitCode)
+    )
+      return;
+
+    const threadSessions = yield* sessionsForThread(session.threadId);
+    const hasViewer = threadSessions.some((candidate) =>
+      terminalViewers.has(toSessionKey(candidate.threadId, candidate.terminalId)),
+    );
+    if (session.canReconnect && hasViewer) {
+      // Retry once until the user writes or attaches again, rather than looping on a broken link.
+      session.canReconnect = false;
+      yield* startSession(session, session, "restarted");
+      return;
+    }
+
+    const message = "The Box terminal connection closed. Reopen the terminal to start a new shell.";
+    const sequence = yield* modifyManagerState((state) => {
+      session.status = "error";
+      session.startupError = message;
+      return [advanceEventSequence(session).sequence, state] as const;
+    });
+    yield* publishEvent({
+      type: "error",
+      threadId: session.threadId,
+      terminalId: session.terminalId,
+      sequence,
+      message,
+    });
+    yield* evictInactiveSessionsIfNeeded();
   });
 
   const closeSession = Effect.fn("terminal.closeSession")(function* (
@@ -3204,7 +3261,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   );
 
   let subprocessSnapshotFailureCount = 0;
-  yield* Effect.forever(
+  const pollLocalSubprocesses = Effect.forever(
     hasRunningSessions.pipe(
       Effect.flatMap((active) =>
         active
@@ -3226,10 +3283,12 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
             }).pipe(Effect.flatMap(() => Effect.sleep(subprocessPollIntervalMs))),
       ),
     ),
-  ).pipe(Effect.forkIn(workerScope));
+  );
+  if (!options.boxPty) yield* pollLocalSubprocesses.pipe(Effect.forkIn(workerScope));
 
   yield* Effect.addFinalizer(() =>
     Effect.gen(function* () {
+      shuttingDown = true;
       const [sessions, pendingKills] = yield* modifyManagerState(
         (state) =>
           [
@@ -3263,9 +3322,10 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
 
   const openWithWorkspaceLease = Effect.fn("terminal.openLocked")(function* (
     requestedInput: TerminalOpenInput,
+    reconnect: boolean,
   ) {
     const terminalId = requestedInput.terminalId;
-    yield* assertValidCwd(requestedInput.cwd);
+    if (!options.boxPty) yield* assertValidCwd(requestedInput.cwd);
 
     const sessionKey = toSessionKey(requestedInput.threadId, terminalId);
     const input = withSharedGrid(sessionKey, requestedInput);
@@ -3301,6 +3361,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         updatedAt: yield* nowIso,
         eventSequence: 0,
         inputCount: 0,
+        canReconnect: true,
         cols,
         rows,
         process: null,
@@ -3331,7 +3392,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
           cols,
           rows,
         },
-        "started",
+        reconnect ? "restarted" : "started",
       );
       return snapshot(session);
     }
@@ -3361,7 +3422,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       liveSession.pendingProcessEventIndex = 0;
       liveSession.processEventDrainRunning = false;
       yield* persistHistory(liveSession.threadId, liveSession.terminalId, liveSession.history);
-    } else if (liveSession.status === "exited" || liveSession.status === "error") {
+    } else if (!reconnect && (liveSession.status === "exited" || liveSession.status === "error")) {
       liveSession.runtimeEnv = nextRuntimeEnv;
       liveSession.worktreePath = nextWorktreePath;
       liveSession.history.clear();
@@ -3373,6 +3434,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     }
 
     if (!liveSession.process) {
+      liveSession.canReconnect = true;
       yield* startSession(
         liveSession,
         {
@@ -3381,7 +3443,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
           cols: targetCols,
           rows: targetRows,
         },
-        "started",
+        reconnect ? "restarted" : "started",
       );
       return snapshot(liveSession);
     }
@@ -3393,11 +3455,13 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     return snapshot(liveSession);
   });
 
-  const openLocked = (input: TerminalOpenInput) =>
-    withWorkspaceLease(
-      path.resolve(input.worktreePath ?? input.cwd),
-      openWithWorkspaceLease(input),
-    );
+  const openLocked = (input: TerminalOpenInput, reconnect = false) =>
+    options.boxPty
+      ? Effect.uninterruptible(openWithWorkspaceLease(input, reconnect))
+      : withWorkspaceLease(
+          path.resolve(input.worktreePath ?? input.cwd),
+          openWithWorkspaceLease(input, reconnect),
+        );
 
   const open: TerminalManager["Service"]["open"] = (input) =>
     withThreadLock(
@@ -3434,20 +3498,34 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         terminalId,
         cwd: input.cwd,
       });
-      return yield* Effect.uninterruptible(openLocked(resolvedInput));
+      return yield* Effect.uninterruptible(
+        openLocked(resolvedInput, Boolean(options.boxPty && input.resume)),
+      );
     }
 
     const session = existing.value;
     const targetCols = input.cols ?? session.cols;
     const targetRows = input.rows ?? session.rows;
 
+    if (options.boxPty) session.canReconnect = true;
+    const reconnectBox = Boolean(
+      options.boxPty &&
+      !session.process &&
+      (isBoxSessionDisconnect(session.exitCode) || session.status === "error"),
+    );
     if (!input.resume && !session.process && input.cwd && input.restartIfNotRunning === true) {
       const resolvedInput = yield* resolveLaunchInputEnvironment({
         ...input,
         terminalId,
         cwd: input.cwd,
       });
-      return yield* Effect.uninterruptible(openLocked(resolvedInput));
+      return yield* Effect.uninterruptible(openLocked(resolvedInput, reconnectBox));
+    }
+    if (reconnectBox) {
+      yield* Effect.uninterruptible(
+        startSession(session, { ...session, cols: targetCols, rows: targetRows }, "restarted"),
+      );
+      return snapshot(session);
     }
 
     if (
@@ -3792,6 +3870,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         return;
       }
       session.inputCount += 1;
+      if (options.boxPty && !input.reply) session.canReconnect = true;
       yield* Effect.try({
         try: () => process.write(PtyAdapter.ptyInput(input.data, input.binary)),
         catch: (cause) =>
@@ -3889,6 +3968,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     withThreadLock(
       input.threadId,
       Effect.gen(function* () {
+        if (options.boxPty) return;
         const running = (yield* sessionsForThread(input.threadId)).filter(
           (session): session is TerminalSessionState & { pid: number } =>
             session.status === "running" &&
@@ -3962,5 +4042,4 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   });
 });
 
-export const layer = (deriveConfigMap: typeof deriveProviderInstanceConfigMap) =>
-  Layer.effect(TerminalManager, make(deriveConfigMap)).pipe(Layer.provide(ProcessRunner.layer));
+export const layer = Layer.effect(TerminalManager, make()).pipe(Layer.provide(ProcessRunner.layer));

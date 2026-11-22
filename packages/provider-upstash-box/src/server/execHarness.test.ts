@@ -165,7 +165,7 @@ it.each([
       );
     });
     const box = fakeBox([], 0);
-    const sent: string[] = [];
+    const sent: Array<string | Uint8Array> = [];
     const args = commandCode
       ? [wrapper, "-p", "fixture", "--explicit-session", "--t3-mcp-relay"]
       : [wrapper, test.harness, "fixture", "model", "", "file", "relay"];
@@ -195,6 +195,8 @@ it.each([
             child.stdin.on("error", () => {});
             return {
               id: "run",
+              pid: child.pid!,
+              resize: () => {},
               close: () => {
                 child.kill();
               },

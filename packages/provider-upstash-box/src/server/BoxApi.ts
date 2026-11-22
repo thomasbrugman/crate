@@ -5,8 +5,9 @@ import {
   BoxError,
   type BoxConfig,
   type Chunk,
-  type ExecStreamChunk,
+  type ExecSessionHandle,
   type ExecSessionOptions,
+  type ExecStreamChunk,
   type ClaudeCode,
   type OpenAICodex,
   type StreamOptions,
@@ -105,12 +106,11 @@ export interface BoxHandle {
       readonly stderr?: string;
       readonly exitCode: number | null;
     }>;
-    readonly session?: (options: Pick<ExecSessionOptions, "cmd" | "onStdout">) => Promise<{
-      readonly id: string;
-      readonly write: (data: string) => void;
-      readonly wait: () => Promise<number>;
-      readonly close: () => void;
-    }>;
+    readonly session?: (options: ExecSessionOptions) => Promise<
+      Pick<ExecSessionHandle, "pid" | "write" | "resize" | "wait" | "close"> & {
+        readonly id: string;
+      }
+    >;
   };
   readonly files: {
     readonly write: (options: { path: string; content: string }) => Promise<unknown>;
@@ -181,7 +181,9 @@ function projectBox(box: Box): BoxHandle {
         const session = await box.exec.session(options);
         return {
           id: session.execId,
+          pid: session.pid,
           write: (data) => session.write(data),
+          resize: (rows, cols) => session.resize(rows, cols),
           wait: () => session.wait(),
           close: () => session.close(),
         };

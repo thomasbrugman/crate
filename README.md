@@ -78,14 +78,18 @@ used for legacy Command Code setup, not for Git.
   Box once, snapshot it, and put the snapshot ID in your project defaults. New threads start from
   it. Use a snapshot of a setup Box that has never contained credentials, not an active thread Box.
 - **Boxes stick around.** Archiving a thread keeps its Box. Deleting the thread deletes it.
+- **Live terminal.** Once the first agent turn creates the Box, open the terminal drawer or a
+  terminal tab. Each terminal runs its own shell in the Box, not on your Mac. If the Box connection
+  drops and reconnects, the terminal marks the start of a fresh shell; the old process does not
+  survive.
 
 ## What's missing
 
 Some T3 Code features don't make sense when the agent isn't on your machine, and some just
 aren't built yet:
 
-- No terminal, diff view, file browser or preview for cloud threads. Ask the agent to run commands or
-  show you a diff.
+- No diff view, file browser, preview or device panel for cloud threads. Ask the agent to inspect
+  files or show you a diff.
 - No rollback, approvals, steering an agent mid-turn, file attachments or reasoning streams.
 - Project setup scripts don't run in Boxes. Use a snapshot instead.
 - Box threads cannot hand off to a host worktree. Files saved by the MCP secret tool stay on the
