@@ -335,7 +335,7 @@ it.effect.each([undefined, "snapshot-fixture"])(
         assert.notInclude(JSON.stringify(created), credential);
       }
       assert.equal(
-        files.get("/dev/shm/t3stash-auth/commandcode/auth.json"),
+        files.get("/dev/shm/t3stash-auth/command-home/.commandcode/auth.json"),
         credentials.commandCode,
       );
       assert.equal(files.get("/dev/shm/t3stash-auth/claudeCode-token"), credentials.claudeCode);

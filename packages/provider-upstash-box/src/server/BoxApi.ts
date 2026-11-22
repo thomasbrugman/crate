@@ -166,7 +166,19 @@ function projectBox(box: Box): BoxHandle {
       writeVolatile: async (path, content) => {
         // The files API does not reach tmpfs. Send the bytes over live stdin, not argv or stdout.
         const session = await box.exec.session({
-          argv: ["sh", "-c", 'umask 077; cat > "$1"', "sh", path],
+          argv: [
+            "sh",
+            "-c",
+            [
+              'set -eu; umask 077; directory=$(dirname -- "$1")',
+              'test "$(stat -f -c %T "$directory")" = tmpfs',
+              'temp=$(mktemp "$directory/.t3-auth.XXXXXXXX")',
+              "trap 'rm -f -- \"$temp\"' EXIT",
+              'cat > "$temp"; mv -fT -- "$temp" "$1"',
+            ].join("; "),
+            "sh",
+            path,
+          ],
         });
         try {
           session.write(content);

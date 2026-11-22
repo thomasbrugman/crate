@@ -17,6 +17,7 @@ import { commandCodeHarness } from "./harness.ts";
 import { managedHarness } from "./managedHarness.ts";
 import {
   BOX_CREDENTIALS_DIR,
+  BOX_COMMAND_CODE_HOME,
   harnessCredentialKind,
   type BoxHarnessCredentials,
 } from "./credentials.ts";
@@ -80,10 +81,10 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
                   networkPolicy: { mode: "allow-all" },
                 }
               : boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) });
-            if (config.snapshotId && !api.restore) throw new Error("Snapshot restore unavailable.");
             box = await (
-              config.snapshotId && api.restore
-                ? api.restore(config.snapshotId, createConfig)
+              config.snapshotId
+                ? (api.restore?.(config.snapshotId, createConfig) ??
+                  Promise.reject(new BoxRuntimeError({ operation: "create" })))
                 : api.create(createConfig)
             ).catch((createError: unknown) => {
               if (!isMissingStoredKey(createError)) throw createError;
@@ -230,7 +231,7 @@ export async function installConnectedHarnesses(
   if (!writeVolatile) throw new Error("Box does not support volatile credentials.");
   await requireCommand(
     box,
-    `test "$(stat -f -c %T /dev/shm)" = tmpfs && umask 077 && mkdir -p ${BOX_CREDENTIALS_DIR}/codex ${BOX_CREDENTIALS_DIR}/claude ${BOX_CREDENTIALS_DIR}/commandcode`,
+    `test "$(stat -f -c %T /dev/shm)" = tmpfs && umask 077 && mkdir -p ${BOX_CREDENTIALS_DIR}/codex ${BOX_CREDENTIALS_DIR}/claude ${BOX_COMMAND_CODE_HOME}/.commandcode`,
   );
   for (const harness of Object.keys(cliPackages) as BoxHarness[]) {
     const credential = connected.find((entry) => entry.harness === harness);
@@ -244,12 +245,18 @@ export async function installConnectedHarnesses(
             `${directory}/claude/.credentials.json`,
           ]
         : harness === "commandCode"
-          ? [`${directory}/commandcode/auth.json`, `${directory}/commandCode-key`]
+          ? [`${BOX_COMMAND_CODE_HOME}/.commandcode/auth.json`, `${directory}/commandCode-key`]
           : [`${directory}/codex/auth.json`];
     if (harness === "commandCode") {
       await requireCommand(
         box,
-        `mkdir -p ${BOX_HOME}/.commandcode && ln -sfn ${files[0]} ${BOX_HOME}/.commandcode/auth.json`,
+        [
+          `mkdir -p ${BOX_HOME}/.commandcode/projects`,
+          `rm -f -- ${BOX_HOME}/.commandcode/auth.json`,
+          ...[".commandcode/projects", ".gitconfig", ".git-credentials"].map(
+            (path) => `ln -sfnT ${BOX_HOME}/${path} ${BOX_COMMAND_CODE_HOME}/${path}`,
+          ),
+        ].join(" && "),
       );
     } else {
       const home = harness === "codex" ? ".codex" : ".claude";

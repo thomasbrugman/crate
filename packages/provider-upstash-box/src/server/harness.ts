@@ -1,4 +1,4 @@
-import { BOX_CREDENTIALS_DIR } from "./credentials.ts";
+import { BOX_COMMAND_CODE_HOME, BOX_CREDENTIALS_DIR } from "./credentials.ts";
 
 export const commandCodeHarness = `#!/usr/bin/env node
 /*
@@ -87,6 +87,7 @@ if (process.env.BOXJOB_CC_PERMISSION !== 'default') args.push('--yolo');
 
 const env = { ...process.env };
 if (argv.includes('--explicit-session')) {
+	env.HOME = '${BOX_COMMAND_CODE_HOME}';
 	delete env.COMMAND_CODE_API_KEY;
 	try {
 		env.COMMAND_CODE_API_KEY = readFileSync('${BOX_CREDENTIALS_DIR}/commandCode-key', 'utf8');
