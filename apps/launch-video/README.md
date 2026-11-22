@@ -69,7 +69,9 @@ Extract the screen frames into a work directory, then build and render:
 ```sh
 mkdir -p work/tex/laptop work/tex/phone
 ffmpeg -ss 5.5 -t 6 -i clips/readme.mp4 -vf fps=60 -q:v 2 work/tex/laptop/%04d.jpg
-ffmpeg -i clips/t3stash-readme-phone-60fps.mp4 -vf fps=60 -q:v 2 work/tex/phone/%04d.jpg
+ffmpeg -i clips/t3stash-readme-phone-60fps.mp4 \
+  -vf "fps=60,crop=1206:1780:0:0,pad=1206:2622:0:0:color=0xfafafa,drawbox=x=453:y=2566:w=300:h=14:color=black@0.85:t=fill" \
+  -q:v 2 work/tex/phone/%04d.jpg
 blender -b -P apps/launch-video/blender/device_shot.py -- work
 blender -b work/scene.blend -o //out/f_#### -a
 ffmpeg -framerate 60 -i work/out/f_%04d.png -c:v libx264 -pix_fmt yuv420p -crf 16 device-shot.mp4
@@ -77,4 +79,5 @@ ffmpeg -framerate 60 -i work/out/f_%04d.png -c:v libx264 -pix_fmt yuv420p -crf 1
 
 Pass `preview` after the work directory for a half-resolution, low-sample scene. On an 8-core CPU
 a full frame takes about 10 seconds. The laptop needs at least 300 frames for the whole shot; the
-phone holds its last frame. Keep work directories and renders out of git.
+phone holds its last frame. The phone filter crops the composer and the Safari bar off the
+1206×2622 capture and fills the space with the thread background and a home indicator. Keep work directories and renders out of git.
