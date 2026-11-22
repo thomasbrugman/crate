@@ -1,77 +1,15 @@
+import { boxMcpStdio } from "./boxMcpStdio.ts";
 import { BOX_CREDENTIALS_DIR } from "./credentials.ts";
 
 export const managedHarness = String.raw`import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { createConnection, createServer } from 'node:net';
 import { createInterface } from 'node:readline';
+${boxMcpStdio}
 
-const [harness, markedPrompt, model, session, kind, delegation] = process.argv.slice(2);
-if (harness === 'mcp') {
-  const socket = createConnection('\0' + markedPrompt);
-  socket.on('error', () => { process.exitCode = 1; });
-  socket.on('close', () => process.stdin.pause());
-  process.stdin.pipe(socket);
-  socket.pipe(process.stdout);
-} else {
+const [harness, markedPrompt, model, session, kind, relay] = process.argv.slice(2);
 const prompt = markedPrompt.replace(/^t3stash-run:[0-9a-f]+\n/, '');
 const emit = (type, data) => process.stdout.write('event: ' + type + '\ndata: ' + JSON.stringify(data) + '\n\n');
-const startDelegation = async () => {
-  // Linux abstract sockets have no on-disk state to leave behind on cancellation.
-  const address = 't3stash-' + randomUUID();
-  let next = 0;
-  const pending = new Map();
-  const sockets = new Set();
-  const server = createServer(socket => {
-    sockets.add(socket);
-    socket.on('error', () => socket.destroy());
-    const lines = createInterface({ input: socket });
-    lines.on('line', line => {
-      let request;
-      try { request = JSON.parse(line); } catch { return; }
-      if (request == null || request.id == null) return;
-      if (line.length > 65536 || pending.size >= 8) {
-        socket.write(JSON.stringify({
-          jsonrpc: '2.0', id: request.id,
-          error: { code: -32603, message: 'Box delegation is at capacity.' },
-        }) + '\n');
-        return;
-      }
-      const id = ++next;
-      pending.set(id, socket);
-      emit('delegation', { id, request });
-    });
-    socket.once('close', () => {
-      sockets.delete(socket);
-      lines.close();
-      for (const [id, owner] of pending) if (owner === socket) pending.delete(id);
-    });
-  });
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen('\0' + address, resolve);
-  });
-  const answers = createInterface({ input: process.stdin });
-  answers.on('line', line => {
-    let answer;
-    try { answer = JSON.parse(line); } catch { return; }
-    const socket = pending.get(answer.id);
-    pending.delete(answer.id);
-    if (socket && !socket.destroyed) socket.write(JSON.stringify(answer.response) + '\n');
-  });
-  return {
-    args: ['--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: {
-      t3_box: { command: process.execPath, args: [process.argv[1], 'mcp', address] },
-    } })],
-    close: () => {
-      answers.close();
-      process.stdin.pause();
-      for (const socket of sockets) socket.destroy();
-      server.close();
-    },
-  };
-};
-const bridge = harness === 'claudeCode' && delegation === 'delegate' ? await startDelegation() : null;
+const bridge = relay === 'relay' ? await startBoxMcp(emit) : null;
 const binName = harness === 'claudeCode' ? 'claude' : 'codex';
 const localBin = '/home/boxuser/.local/bin/' + binName;
 const isolateSubagent = 'node -e ' + JSON.stringify(
@@ -83,16 +21,25 @@ const claudeSettings = existsSync('.git')
       { matcher: 'Agent|Task', hooks: [{ type: 'command', command: isolateSubagent }] },
     ] } })]
   : [];
+const mcpArgs = !bridge ? []
+  : harness === 'claudeCode'
+    ? ['--mcp-config', JSON.stringify({ mcpServers: {
+        't3-code': { command: bridge.command, args: bridge.args },
+      } })]
+    : ['-c', 'mcp_servers.t3-code.command=' + JSON.stringify(bridge.command),
+       '-c', 'mcp_servers.t3-code.args=' + JSON.stringify(bridge.args),
+       '-c', 'mcp_servers.t3-code.tool_timeout_sec=3900'];
 const args = harness === 'claudeCode'
   ? ['--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages',
-     '--permission-mode', 'bypassPermissions', ...claudeSettings, ...(bridge?.args ?? []), '--model', model,
+     '--permission-mode', 'bypassPermissions', ...claudeSettings, ...mcpArgs, '--model', model,
      ...(session ? ['--resume', session] : []), '--', prompt]
-  : ['exec', ...(session ? ['resume'] : []), '--json',
+  : [...mcpArgs, 'exec', ...(session ? ['resume'] : []), '--json',
      '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--model', model,
      '--', ...(session ? [session] : []), prompt];
 const env = { ...process.env };
 env.HOME = '/home/boxuser';
 if (harness === 'claudeCode') {
+  if (bridge) env.MCP_TOOL_TIMEOUT = '3900000';
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDE_CODE_OAUTH_TOKEN;
   env.CLAUDE_CONFIG_DIR = '${BOX_CREDENTIALS_DIR}/claude';
@@ -130,11 +77,16 @@ const done = (usage, output) => {
     output_tokens: usage?.output_tokens ?? 0,
   });
 };
-const tool = (item) => emit('tool', {
+const secretTools = new Set();
+const tool = (item) => {
+  const secret = item.name?.endsWith('__request_secret');
+  if (secret) secretTools.add(item.id);
+  emit('tool', {
   tool_call_id: item.id,
   name: item.name ?? item.type,
-  input: item.input ?? (typeof item.command === 'string' ? { command: item.command } : {}),
-});
+  input: secret ? {} : item.input ?? (typeof item.command === 'string' ? { command: item.command } : {}),
+  });
+};
 const toolResult = (id, output) => emit('tool_result', { tool_call_id: id, output });
 const subagentCalls = new Map();
 const subagentTasks = new Set();
@@ -183,7 +135,9 @@ for await (const line of createInterface({ input: child.stdout })) {
       }
     } else if (frame.type === 'user') {
       for (const block of frame.message?.content ?? []) {
-        if (block.type === 'tool_result') toolResult(block.tool_use_id, block.content);
+        if (block.type === 'tool_result') {
+          toolResult(block.tool_use_id, secretTools.delete(block.tool_use_id) ? null : block.content);
+        }
       }
     } else if (frame.type === 'result') {
       if (typeof frame.session_id === 'string') sessionId = frame.session_id;
@@ -207,5 +161,4 @@ for await (const line of createInterface({ input: child.stdout })) {
 const code = await exited;
 bridge?.close();
 if (!completed || reportedError || code !== 0) process.exitCode = 1;
-}
 `;

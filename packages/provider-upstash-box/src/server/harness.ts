@@ -1,3 +1,4 @@
+import { boxMcpStdio } from "./boxMcpStdio.ts";
 import { BOX_COMMAND_CODE_HOME, BOX_CREDENTIALS_DIR } from "./credentials.ts";
 
 export const commandCodeHarness = `#!/usr/bin/env node
@@ -14,9 +15,10 @@ export const commandCodeHarness = `#!/usr/bin/env node
  */
 
 import { spawn, execFileSync } from 'node:child_process';
-import { readdirSync, statSync, openSync, readSync, closeSync, readFileSync } from 'node:fs';
+import { readdirSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+${boxMcpStdio}
 
 function readArg(argv, name) {
 	const i = argv.indexOf(name);
@@ -86,12 +88,28 @@ if (session) args.push('--resume', session);
 if (process.env.BOXJOB_CC_PERMISSION !== 'default') args.push('--yolo');
 
 const env = { ...process.env };
+const bridge = argv.includes('--t3-mcp-relay') ? await startBoxMcp(emit) : null;
 if (argv.includes('--explicit-session')) {
 	env.HOME = '${BOX_COMMAND_CODE_HOME}';
 	delete env.COMMAND_CODE_API_KEY;
 	try {
 		env.COMMAND_CODE_API_KEY = readFileSync('${BOX_CREDENTIALS_DIR}/commandCode-key', 'utf8');
 	} catch {}
+}
+if (bridge) {
+	const file = join(env.HOME, '.commandcode', 'mcp.json');
+	let config = {};
+	try { config = JSON.parse(readFileSync(file, 'utf8')); }
+	catch (error) { if (error.code !== 'ENOENT') throw error; }
+	const server = { command: bridge.command, args: [process.argv[1], 'mcp'] };
+	const mcpServers = { ...config.mcpServers, 't3-code': server };
+	if (JSON.stringify(config.mcpServers?.['t3-code']) !== JSON.stringify(server)) {
+		const tmp = file + '.' + mcpRandomId();
+		writeFileSync(tmp, JSON.stringify({ ...config, mcpServers }), { mode: 0o600, flag: 'wx' });
+		renameSync(tmp, file);
+	}
+	env.T3_BOX_MCP_SOCKET = bridge.address;
+	env.MCP_TOOL_TIMEOUT = '3900000';
 }
 const child = spawn(resolveBin(), args, {
 	cwd: process.env.BOXJOB_CC_CWD || process.cwd(),
@@ -106,8 +124,10 @@ let usage = {};
 let sessionId = session;
 let finished = false;
 const announcedTools = new Set();
+const secretTools = new Set();
 
 function exitAfterFlush(code) {
+	bridge?.close();
 	process.stdout.write('', () => process.exit(code));
 }
 
@@ -160,11 +180,13 @@ function handleFrame(frame) {
 			const id = e.toolCallId || e.toolName;
 			if (announcedTools.has(id)) break;
 			announcedTools.add(id);
-			emit('tool', { tool_call_id: e.toolCallId, name: e.toolName, input: e.input || (e.description ? { description: e.description } : {}) });
+			const secret = e.toolName?.endsWith('__request_secret');
+			if (secret) secretTools.add(id);
+			emit('tool', { tool_call_id: e.toolCallId, name: e.toolName, input: secret ? {} : e.input || (e.description ? { description: e.description } : {}) });
 			break;
 		}
 		case 'tool_completed':
-			emit('tool_result', { tool_call_id: e.toolCallId, name: e.toolName, output: e.result ?? null });
+			emit('tool_result', { tool_call_id: e.toolCallId, name: e.toolName, output: secretTools.delete(e.toolCallId || e.toolName) ? null : e.result ?? null });
 			break;
 		case 'run_end': {
 			const r = e.result || {};

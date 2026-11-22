@@ -79,6 +79,7 @@ import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import { resolveRuntimeMode } from "./delegatedTaskModes.ts";
 import type { ProjectionRecordFilter } from "../orchestration-v2/ProjectionStore.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { BoxExec } from "@t3tools/provider-upstash-box/server";
 
 const decodeTarget = Schema.decodeUnknownEffect(OrchestratorMcpTarget);
 
@@ -2927,6 +2928,7 @@ describe("OrchestratorMcpService provider resolution", () => {
     { name: "delegates from Claude to a Box Codex worktree without host Git", inBox: true },
   ])("driver-only delegation $name", ({ inBox }) =>
     Effect.gen(function* () {
+      const boxCommit = "1234567890abcdef1234567890abcdef12345678";
       const altInstanceId = ProviderInstanceId.make("codex-alt");
       const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
       const targetDriver = ProviderDriverKind.make(inBox ? "boxCodex" : "codex");
@@ -2954,6 +2956,13 @@ describe("OrchestratorMcpService provider resolution", () => {
       const layerDependencies = Layer.mergeAll(
         NodeServices.layer,
         NodeCrypto.layer,
+        Layer.mock(BoxExec.BoxExec)({
+          run: ({ threadId, command }) => {
+            assert.equal(threadId, parentThreadId);
+            assert.include(command, "git rev-parse --verify HEAD");
+            return Effect.succeed({ exitCode: 0, stdout: boxCommit + "\n", stderr: "" });
+          },
+        }),
         Layer.mock(ThreadManagementService.ThreadManagementService)({
           hasReceipt: () => Effect.succeed(false),
           getThreadRecords: (threadId) =>
@@ -3028,9 +3037,11 @@ describe("OrchestratorMcpService provider resolution", () => {
         const request = commands[0] as {
           modelSelection: { instanceId: string; model: string };
           workspaceStrategy?: unknown;
+          boxBaseCommit?: string;
         };
         assert.equal(request.modelSelection.instanceId, altInstanceId);
         assert.isUndefined(request.workspaceStrategy);
+        assert.equal(request.boxBaseCommit, inBox ? boxCommit : undefined);
       }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(layerDependencies))));
     }),
   );

@@ -3,9 +3,8 @@ import * as NodeStream from "node:stream";
 import type { Chunk, ExecStreamChunk } from "@upstash/box";
 import type { McpProviderSessionConfig } from "@t3tools/provider-core/server/mcpSession";
 
-import type { BoxHarness } from "../harnesses.ts";
 import type { BoxHandle, BoxStream, BoxSubagentChunk } from "./BoxApi.ts";
-import { makeDelegationMcp } from "./delegationMcp.ts";
+import { makeMcpRelay } from "./mcpRelay.ts";
 
 function decodeFrame(frame: string): Chunk | BoxSubagentChunk | undefined {
   const match = /^event: (\w+)\r?\ndata: (.+)$/su.exec(frame);
@@ -75,12 +74,7 @@ function decodeFrame(frame: string): Chunk | BoxSubagentChunk | undefined {
   if (match[1] === "error") throw new Error("The harness could not complete the turn.");
 }
 
-interface Delegation {
-  readonly config: McpProviderSessionConfig;
-  readonly harnesses: ReadonlyArray<BoxHarness>;
-}
-
-async function duplexHarness(box: BoxHandle, command: string, delegation: Delegation) {
+async function duplexHarness(box: BoxHandle, command: string, config: McpProviderSessionConfig) {
   if (!box.exec.session) throw new Error("Box interactive execution is unavailable.");
   const output = new NodeStream.Readable({ read() {} });
   output.setEncoding("utf8");
@@ -98,46 +92,42 @@ async function duplexHarness(box: BoxHandle, command: string, delegation: Delega
       return -1;
     },
   );
-  const abort = new AbortController();
-  const mcp = makeDelegationMcp(delegation.config, delegation.harnesses, abort.signal);
+  const mcp = makeMcpRelay(config);
   let closed = false;
   const cancel = async () => {
     if (closed) return;
     closed = true;
-    abort.abort();
     output.destroy();
     session.close();
     await mcp.close();
   };
-  let inFlight = 0;
   return {
     id: session.id,
     cancel,
     onFrame(frame: string) {
-      const prefix = "event: delegation\ndata: ";
-      if (!frame.startsWith(prefix)) return false;
-      if (frame.length > 132 * 1024 || inFlight >= 8) return true;
-      const { id, request } = JSON.parse(frame.slice(prefix.length)) as {
-        readonly id?: unknown;
+      const match = /^event: (mcp_request|mcp_disconnect)\ndata: (.+)$/su.exec(frame);
+      if (!match) return false;
+      const { client, request } = JSON.parse(match[2]!) as {
+        readonly client: number;
         readonly request?: unknown;
       };
-      if (!Number.isSafeInteger(id)) return true;
-      inFlight++;
-      void mcp.handle(request).then(
-        (response) => {
-          inFlight--;
-          if (!closed && response !== undefined) {
-            try {
-              session.write(JSON.stringify({ id, response }) + "\n");
-            } catch {
-              // The Box can exit before a tool call replies.
-            }
+      if (!Number.isSafeInteger(client) || client <= 0) return true;
+      if (match[1] === "mcp_disconnect") {
+        void mcp.disconnect(client);
+        return true;
+      }
+      const reply = (response: object) => {
+        if (!closed) {
+          try {
+            session.write(JSON.stringify({ client, response }) + "\n");
+          } catch {
+            // The Box can exit before a tool call replies.
           }
-        },
-        () => {
-          inFlight--;
-        },
-      );
+        }
+      };
+      void mcp.handle(client, request, reply).then((response) => {
+        if (response !== undefined) reply(response);
+      });
       return true;
     },
     async *[Symbol.asyncIterator](): AsyncGenerator<ExecStreamChunk> {
@@ -154,9 +144,9 @@ async function duplexHarness(box: BoxHandle, command: string, delegation: Delega
 export async function execHarness(
   box: BoxHandle,
   command: string,
-  delegation?: Delegation,
+  mcpSession?: McpProviderSessionConfig,
 ): Promise<BoxStream> {
-  const duplex = delegation && (await duplexHarness(box, command, delegation));
+  const duplex = mcpSession && (await duplexHarness(box, command, mcpSession));
   const run = duplex ?? (await box.exec.stream?.(command));
   if (!run) throw new Error("Box streaming execution is unavailable.");
   return {
@@ -164,7 +154,7 @@ export async function execHarness(
       return run.id;
     },
     cancel: run.cancel,
-    ...(delegation === undefined ? {} : { ownsProcess: true }),
+    ...(mcpSession === undefined ? {} : { ownsProcess: true }),
     async *[Symbol.asyncIterator]() {
       let buffer = "";
       let finish: Extract<Chunk, { type: "finish" }> | undefined;

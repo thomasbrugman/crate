@@ -96,6 +96,7 @@ import {
   delegatedTaskReportRuns,
 } from "@t3tools/provider-core/server/subagentProjection";
 import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
+import { BoxApi, BoxExec } from "@t3tools/provider-upstash-box/server";
 import {
   DispatchModeLimit,
   type DispatchModeRefusal,
@@ -1307,6 +1308,7 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
   const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
   const gitDriver = yield* GitVcsDriver.GitVcsDriver;
+  const boxExec = yield* Effect.serviceOption(BoxExec.BoxExec);
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const remoteDelegation = yield* RemoteDelegation.RemoteDelegation;
 
@@ -2871,6 +2873,26 @@ const make = Effect.gen(function* () {
             ?.driver,
         );
       let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
+      let boxBaseCommit: string | undefined;
+      if (usesParentBox && !isRetryOfAcceptedDelegation) {
+        const unavailable = failure(
+          "invalid_request",
+          "Unable to resolve the parent Box checkout commit.",
+        );
+        if (Option.isNone(boxExec)) return yield* unavailable;
+        const result = yield* boxExec.value
+          .run({
+            threadId: parent.thread.id,
+            command: `if test "$PWD" != ${BoxApi.BOX_WORKSPACE_PATH}; then git rev-parse --verify HEAD; fi`,
+          })
+          .pipe(Effect.mapError(() => unavailable));
+        const commit = result.stdout.trim();
+        if (result.exitCode !== 0 || (commit && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(commit)))
+          return yield* unavailable;
+        if (commit) boxBaseCommit = commit;
+        else if (input.isolation === "worktree")
+          return yield* failure("invalid_request", "The parent Box does not have a Git checkout.");
+      }
       if (input.isolation === "worktree" && !usesParentBox && !isRetryOfAcceptedDelegation) {
         const project = yield* requireProject(parent.thread.projectId);
         const base = yield* gitDriver
@@ -2923,6 +2945,7 @@ const make = Effect.gen(function* () {
               runtimeMode,
               interactionMode,
               ...(workspaceStrategy === undefined ? {} : { workspaceStrategy }),
+              ...(boxBaseCommit === undefined ? {} : { boxBaseCommit }),
               // Async delegations wake the parent on every child terminal; wait
               // delegations deliver through the blocking tool call until `awaitTask`
               // gives up the wait (timeout, cancelled call) and upgrades the wake.

@@ -4,7 +4,7 @@ import { assert, it } from "@effect/vitest";
 
 import { commandCodeHarness } from "./harness.ts";
 
-function setup(
+async function setup(
   options: {
     prompt?: string;
     session?: string;
@@ -28,43 +28,46 @@ function setup(
   });
   let output = "";
   let args: string[] = [];
-  NodeVM.runInNewContext(commandCodeHarness.replace(/^import .*;$/gm, ""), {
-    readdirSync: (path: string) => {
-      if (options.unavailable) throw new Error("unreadable");
-      return path.endsWith("/projects") ? ["project"] : Object.keys(options.files ?? {});
-    },
-    statSync: (path: string) => options.files?.[path.split("/").at(-1)!],
-    openSync: (path: string) => path.split("/").at(-1),
-    readSync: (fd: string, buffer: Buffer) =>
-      buffer.write(JSON.stringify(options.files?.[fd]?.header) + "\n"),
-    closeSync: () => undefined,
-    Buffer,
-    join: (...parts: string[]) => parts.join("/"),
-    homedir: () => "/home/boxuser",
-    spawn: (_bin: string, value: string[]) => {
-      args = [...value];
-      return child;
-    },
-    process: {
-      argv: [
-        "node",
-        "harness",
-        "-p",
-        options.prompt ?? "test",
-        ...(options.explicitSession ? ["--explicit-session"] : []),
-        ...(options.session ? ["--session", options.session] : []),
-      ],
-      env: { BOXJOB_CC_BIN: "command-code" },
-      cwd: () => "/workspace/home",
-      stdout: {
-        write: (text: string) => {
-          output += text;
-        },
+  await NodeVM.runInNewContext(
+    `(async () => {${commandCodeHarness.replace(/^#!.*$|^import .*;$/gm, "")}})()`,
+    {
+      readdirSync: (path: string) => {
+        if (options.unavailable) throw new Error("unreadable");
+        return path.endsWith("/projects") ? ["project"] : Object.keys(options.files ?? {});
       },
-      stderr: { write: () => undefined },
-      exit: () => undefined,
+      statSync: (path: string) => options.files?.[path.split("/").at(-1)!],
+      openSync: (path: string) => path.split("/").at(-1),
+      readSync: (fd: string, buffer: Buffer) =>
+        buffer.write(JSON.stringify(options.files?.[fd]?.header) + "\n"),
+      closeSync: () => undefined,
+      Buffer,
+      join: (...parts: string[]) => parts.join("/"),
+      homedir: () => "/home/boxuser",
+      spawn: (_bin: string, value: string[]) => {
+        args = [...value];
+        return child;
+      },
+      process: {
+        argv: [
+          "node",
+          "harness",
+          "-p",
+          options.prompt ?? "test",
+          ...(options.explicitSession ? ["--explicit-session"] : []),
+          ...(options.session ? ["--session", options.session] : []),
+        ],
+        env: { BOXJOB_CC_BIN: "command-code" },
+        cwd: () => "/workspace/home",
+        stdout: {
+          write: (text: string) => {
+            output += text;
+          },
+        },
+        stderr: { write: () => undefined },
+        exit: () => undefined,
+      },
     },
-  });
+  );
   return {
     args,
     child,
@@ -83,34 +86,34 @@ function setup(
   };
 }
 
-it("resumes the newest matching Command Code transcript only when no session was supplied", () => {
+it("resumes the newest matching Command Code transcript only when no session was supplied", async () => {
   const files = {
     "older.jsonl": { mtimeMs: 1, header: { type: "session", id: "older", cwd: "/workspace/home" } },
     "newer.jsonl": { mtimeMs: 2, header: { type: "session", id: "newer", cwd: "/workspace/home" } },
     "other.jsonl": { mtimeMs: 3, header: { type: "session", id: "other", cwd: "/other" } },
     "broken.jsonl": { mtimeMs: 4, header: {} },
   };
-  assert.include(setup({ files }).args.join(" "), "--resume newer");
-  assert.include(setup({ files, session: "explicit" }).args.join(" "), "--resume explicit");
-  assert.notInclude(setup({ files, explicitSession: true }).args, "--resume");
-  assert.notInclude(setup().args, "--resume");
-  assert.notInclude(setup({ unavailable: true }).args, "--resume");
+  assert.include((await setup({ files })).args.join(" "), "--resume newer");
+  assert.include((await setup({ files, session: "explicit" })).args.join(" "), "--resume explicit");
+  assert.notInclude((await setup({ files, explicitSession: true })).args, "--resume");
+  assert.notInclude((await setup()).args, "--resume");
+  assert.notInclude((await setup({ unavailable: true })).args, "--resume");
 });
 
-it("strips only the outer run marker before invoking Command Code", () => {
+it("strips only the outer run marker before invoking Command Code", async () => {
   for (const prompt of ["hello", "t3stash-run:abcd\nliteral user text"]) {
-    const { args } = setup({ prompt: `t3stash-run:6162\n${prompt}` });
+    const { args } = await setup({ prompt: `t3stash-run:6162\n${prompt}` });
     assert.equal(args[1], prompt);
   }
   const malformed = "t3stash-run:not-hex\nhello";
-  assert.equal(setup({ prompt: malformed }).args[1], malformed);
-  assert.deepEqual(setup({ prompt: "t3stash-run:6162\n" }).events(), [
+  assert.equal((await setup({ prompt: malformed })).args[1], malformed);
+  assert.deepEqual((await setup({ prompt: "t3stash-run:6162\n" })).events(), [
     { event: "error", data: { error: "no prompt received from the box" } },
   ]);
 });
 
-it("preserves Command Code call IDs through box-sse-v1 for concurrent calls completing in reverse order", () => {
-  const { frame, events } = setup();
+it("preserves Command Code call IDs through box-sse-v1 for concurrent calls completing in reverse order", async () => {
+  const { frame, events } = await setup();
   for (const toolCallId of ["pwd", "read"]) {
     frame({
       type: "tool_queued",
@@ -152,8 +155,8 @@ it("preserves Command Code call IDs through box-sse-v1 for concurrent calls comp
   ]);
 });
 
-it("ignores malformed frames, preserves empty results and reports process errors", () => {
-  const { child, frame, events } = setup();
+it("ignores malformed frames, preserves empty results and reports process errors", async () => {
+  const { child, frame, events } = await setup();
   child.stdout.write("not json\n");
   assert.deepEqual(events(), []);
   frame({ type: "tool_completed", toolCallId: "empty", result: null });
