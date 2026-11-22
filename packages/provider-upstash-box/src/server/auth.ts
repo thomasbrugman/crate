@@ -5,7 +5,7 @@ import { EphemeralBox } from "@upstash/box";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 
-import type { BoxHarness } from "../harnesses.ts";
+import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
 import type { BoxEnvironmentConfig } from "./adapter.ts";
 import { BOX_HOME } from "./BoxApi.ts";
 import { cliPackages } from "./bootstrap.ts";
@@ -41,6 +41,7 @@ export const makeBoxHarnessAuth = Effect.fn("UpstashBox.makeAuth")(function* (
     authenticate: Effect.fn("UpstashBox.authenticate")(function* (_methodId, context) {
       const { apiKey } = yield* environment;
       if (!apiKey) return yield* failure("start", "Set an Upstash Box API key first.");
+      yield* context.setProgress("Creating the sign-in Box.");
       const box = yield* Effect.acquireRelease(
         Effect.tryPromise({
           try: () =>
@@ -59,6 +60,9 @@ export const makeBoxHarnessAuth = Effect.fn("UpstashBox.makeAuth")(function* (
           ),
       );
       const cli = cliPackages[harness];
+      yield* context.setProgress(
+        `Installing ${BOX_HARNESS_LABELS[harness]}. This may take a minute.`,
+      );
       yield* Effect.tryPromise({
         try: async () => {
           const setup = await box.exec.command(
@@ -70,6 +74,7 @@ export const makeBoxHarnessAuth = Effect.fn("UpstashBox.makeAuth")(function* (
       });
       const output = yield* Queue.sliding<string>(64);
       const decoder = new TextDecoder();
+      yield* context.setProgress("Opening the sign-in terminal.");
       const session = yield* Effect.acquireRelease(
         Effect.tryPromise({
           try: () =>

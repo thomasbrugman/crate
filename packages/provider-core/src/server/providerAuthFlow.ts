@@ -28,6 +28,7 @@ export interface ProviderAuthFlowContext {
   readonly expiresAt: number;
   readonly returnUrl?: string;
   readonly callbackMode?: "server" | "client";
+  readonly setProgress: (message: string) => Effect.Effect<void>;
   readonly setInteraction: (
     interaction: ProviderAuthInteraction,
     respond?: (response: ProviderAuthResponse) => Effect.Effect<void, ProviderSetupError>,
@@ -301,6 +302,12 @@ export const make = Effect.fn("ProviderAuthFlow.make")(function* (options: {
             yield* options.authenticate(methodId, {
               flowId: id,
               expiresAt: flow.expiresAt,
+              setProgress: (message) =>
+                Effect.suspend(() =>
+                  snapshot.value.state.phase === "starting"
+                    ? publish(flow, { message })
+                    : Effect.void,
+                ),
               ...(returnUrl ? { returnUrl } : {}),
               ...(callbackMode ? { callbackMode } : {}),
               // Terminal sign-in updates this for every output chunk within the auth operation.

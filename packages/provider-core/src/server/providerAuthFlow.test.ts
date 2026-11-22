@@ -22,6 +22,41 @@ import * as ProviderAuthFlow from "./providerAuthFlow.ts";
 const instanceId = ProviderInstanceId.make("auth-flow-test");
 const method = { id: "browser", name: "Browser", description: null, type: "agent" as const };
 
+it.effect(
+  "publishes starting progress without changing the flow and ignores progress after cancellation",
+  () =>
+    Effect.gen(function* () {
+      const ready = yield* Deferred.make<ProviderAuthFlow.ProviderAuthFlowContext>();
+      const controller = yield* ProviderAuthFlow.make({
+        instanceId,
+        credentialBinding: { owner: "provider", key: "shared-agent" },
+        methods: Effect.succeed([method]),
+        authenticate: (_, context) =>
+          Deferred.succeed(ready, context).pipe(Effect.andThen(Effect.never)),
+        logout: Effect.void,
+      });
+      const initial = yield* controller.start("owner");
+      const context = yield* Deferred.await(ready);
+      const current = () =>
+        controller.subscribe("owner").pipe(Stream.runHead, Effect.map(Option.getOrThrow));
+      for (const message of [
+        "Creating the sign-in Box.",
+        "Installing Command Code.",
+        "Opening the sign-in terminal.",
+      ]) {
+        yield* context.setProgress(message);
+        assert.deepEqual(yield* current(), { ...initial, methods: [method], message });
+      }
+      yield* context.setInteraction({ type: "terminal", id: "terminal", output: "" });
+      const waiting = yield* current();
+      yield* context.setProgress("Late progress");
+      assert.deepEqual(yield* current(), waiting);
+      const cancelled = yield* controller.cancel("owner", initial.flowId!);
+      yield* context.setProgress("Stale progress");
+      assert.deepEqual(yield* current(), cancelled);
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+);
+
 it.effect("distinguishes pending method discovery from an agent with no sign-in methods", () =>
   Effect.gen(function* () {
     const discovered = yield* Deferred.make<ReadonlyArray<typeof method>>();
