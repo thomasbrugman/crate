@@ -10,8 +10,8 @@ const Root = () => (
     component={Opener}
     width={1920}
     height={1080}
-    fps={30}
-    durationInFrames={210}
+    fps={60}
+    durationInFrames={516}
   />
 );
 

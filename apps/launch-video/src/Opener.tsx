@@ -3,24 +3,20 @@ import { Button } from "../../web/src/components/ui/button";
 import { Badge } from "../../web/src/components/ui/badge";
 import { Skeleton } from "../../web/src/components/ui/skeleton";
 import { Spinner } from "../../web/src/components/ui/spinner";
+import { DispatchReveal, PrinterJam } from "./ShippingLabels";
 
-const titles = [
-  "Rework authentication",
-  "Build the dashboard",
-  "Fix failing tests",
-  "Review the API",
-];
+const titles = ["README edit", "Install review", "Phone pairing", "Review tests"];
 const ramp = (frame: number, input: number[], output: number[]) =>
   interpolate(frame, input, output, { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
 export function Opener() {
-  const frame = useCurrentFrame();
+  const renderFrame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const entrance = spring({ frame, fps, config: { damping: 24, stiffness: 100 } });
+  const frame = (renderFrame * 30) / fps;
+  const entrance = spring({ frame: renderFrame, fps, config: { damping: 24, stiffness: 100 } });
   const frozenFrame = Math.min(frame, 60);
   const reduced = frame >= 105;
-  const fade = ramp(frame, [198, 209], [1, 0]);
-  const zoom = ramp(frame, [60, 104, 105, 195], [1, 1.12, 1.06, 1.13]);
+  const zoom = ramp(frame, [60, 104, 105, 195], [1, 1.035, 1.02, 1.04]);
   const headlineOpacity = reduced
     ? ramp(frame, [113, 122, 190, 198], [0, 1, 1, 0])
     : ramp(frame, [9, 19, 90, 96], [0, 1, 1, 0]);
@@ -28,15 +24,19 @@ export function Opener() {
 
   return (
     <AbsoluteFill className="scene dark">
-      <div style={{ opacity: fade }}>
+      <div>
+        <div className="jam-header">
+          <span>01 / INTAKE</span>
+          <span>t3stash / dispatch</span>
+        </div>
         <div className="beat" style={{ opacity: headlineOpacity }}>
-          {reduced ? "Fewer threads. Still stuck." : "4 agents on an 8GB laptop"}
+          {reduced ? "Fewer threads. Still stuck." : "4 agents on an 8 GB laptop."}
         </div>
         <div
           className="window"
           style={{
             opacity: entrance,
-            transform: `translateY(${(1 - entrance) * 90}px) scale(${(0.96 + entrance * 0.04) * zoom})`,
+            transform: `translateY(${(1 - entrance) * 60}px) scale(${(0.66 + entrance * 0.04) * zoom})`,
           }}
         >
           <div className="toolbar">
@@ -44,7 +44,7 @@ export function Opener() {
             <span className="dot" />
             <span className="dot" />
             <span className="secondary" style={{ marginLeft: 38 }}>
-              Workspace / web-app
+              T3 Code / t3stash
             </span>
           </div>
           <div style={{ display: "flex", height: 662 }}>
@@ -98,14 +98,14 @@ export function Opener() {
                   paddingBottom: 24,
                 }}
               >
-                <span style={{ fontSize: 24 }}>Rework authentication</span>
+                <span style={{ fontSize: 24 }}>README edit</span>
                 <Badge variant="outline" size="lg">
                   Agent
                 </Badge>
               </div>
               <div style={{ textAlign: "right", marginTop: 34 }}>
                 <Badge variant="secondary" size="lg" style={{ padding: "18px 22px", fontSize: 20 }}>
-                  Add sign-in and session handling.
+                  Fix the Node version in the t3stash README.
                 </Badge>
               </div>
               <div
@@ -120,7 +120,7 @@ export function Opener() {
                 <Spinner
                   style={{ width: 22, height: 22, transform: `rotate(${frozenFrame * 10}deg)` }}
                 />
-                <span>Inspecting the authentication flow</span>
+                <span>Checking package.json</span>
               </div>
               <div style={{ marginTop: 25, display: "grid", gap: 15 }}>
                 <Skeleton style={{ height: 13, width: "88%" }} />
@@ -186,6 +186,7 @@ export function Opener() {
           </div>
         </div>
       </div>
+      <PrinterJam frame={frame} />
       <div
         style={{
           position: "absolute",
@@ -193,11 +194,12 @@ export function Opener() {
           bottom: 25,
           fontSize: 15,
           letterSpacing: 3,
-          color: "#85858a",
+          color: "#b2ada3",
         }}
       >
         SIMULATED
       </div>
+      <DispatchReveal frame={frame} />
     </AbsoluteFill>
   );
 }

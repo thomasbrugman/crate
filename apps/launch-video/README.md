@@ -1,8 +1,8 @@
 # Launch video
 
-The launch video opens with a seven-second Remotion simulation and then shows t3stash running
-real threads on this repository. Rendering the opener does not require an app server,
-credentials, or remote assets.
+The launch video opens with a simulated thermal-printer jam and a t3stash dispatch reveal.
+Then it follows the README work order through real Box threads on this repository. The opener
+does not need an app server, credentials, or remote assets.
 
 From the repository root:
 
@@ -11,7 +11,7 @@ vp i
 vp run --filter @t3tools/launch-video render:opener
 ```
 
-The H.264 export is `out/opener.mp4` inside this package (ignored by git).
+The 1080p/60 fps H.264 export is `out/opener.mp4` inside this package (ignored by git).
 Use `vp run --filter @t3tools/launch-video studio` to preview `Opener`.
 Remotion may download headless Chrome on the first render.
 
@@ -21,13 +21,13 @@ All animation, including spinner rotation and the unsuccessful click, is frame-d
 
 ## Assemble the launch cut
 
-Install Python 3.10+ with Pillow, FFmpeg with H.264 encoding, and the DejaVu Sans,
-Sans Bold, and Sans Mono fonts. Put the rendered opener and the capture clips in
-one directory; the script uses these filenames:
+Install Python 3.10+ with Pillow, FFmpeg with H.264 encoding and FFprobe, and the
+DejaVu Sans, Sans Bold, and Sans Mono fonts. Put the rendered opener and the
+capture clips in one directory; the script uses these filenames:
 
 | Clip                   | Content                                                   |
 | ---------------------- | --------------------------------------------------------- |
-| `opener.mp4`           | Seven-second simulation                                   |
+| `opener.mp4`           | 8.6-second printer-jam simulation and dispatch reveal     |
 | `onboarding.mp4`       | Numbered Box setup and the saved Command Code connection  |
 | `snapshot-setting.mp4` | Project snapshot setting                                  |
 | `box-size.mp4`         | Medium Box size selection                                 |
@@ -46,11 +46,11 @@ python3 apps/launch-video/cut.py /path/to/clips /path/to/launch-cut.mp4
 Pass `--wordmark /path/to/compact-black.png` to use the approved transparent wordmark on the light
 end card. Without it, the card typesets the product name.
 
-Use 1440×810 for desktop captures and 430×790 for the phone layout. Record the numbered onboarding
-screen after saving credentials, not during entry. The montage uses separate recordings of real
-threads. For the phone shot, open the same README thread from the mobile sidebar and scroll to the
-diff. Phone access requires an awake, reachable t3stash host. Remove credentials and pairing links
-before sharing footage.
+Capture desktop footage at 1440×810 and 60 fps, and use a portrait 60 fps clip for the phone.
+Record the numbered onboarding screen after saving credentials, not during entry. The montage
+uses separate recordings of real threads. For the phone shot, open the same README thread from
+the sidebar and show the diff. Phone access requires an awake, reachable t3stash host. Remove
+credentials and pairing links before sharing footage.
 
 Without a music file the render includes only sound cues. To audition a licensed track from its
 first beat at the reveal, pass `--music /path/to/track.mp3 --music-start SECONDS`; the offset skips
