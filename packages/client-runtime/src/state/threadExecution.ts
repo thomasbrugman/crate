@@ -143,9 +143,9 @@ function boxSetupLabel(key: string | undefined) {
     case "upstash-box.setup.check":
       return msg("Checking the Box setup");
     case "upstash-box.setup.install":
-      return msg("Installing the agent");
+      return msg("Installing harnesses");
     case "upstash-box.setup.credentials":
-      return msg("Copying credentials from the template Box");
+      return msg("Preparing credentials");
     case "upstash-box.setup.clone":
       return msg("Cloning the repository");
     default:

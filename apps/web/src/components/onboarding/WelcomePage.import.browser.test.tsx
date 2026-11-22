@@ -99,7 +99,14 @@ vi.mock(import("../../onboarding/firstRun"), async (original) => ({
 vi.mock(import("../../state/environments"), async (original) => ({
   ...(await original()),
   useEnvironments: (() => ({
-    environments: [{ environmentId: "primary", label: "primary" }],
+    environments: [
+      {
+        environmentId: "primary",
+        label: "primary",
+        connection: { phase: "connected" },
+        serverConfig: null,
+      },
+    ],
   })) as never,
   usePrimaryEnvironmentId: (() => "primary") as never,
 }));

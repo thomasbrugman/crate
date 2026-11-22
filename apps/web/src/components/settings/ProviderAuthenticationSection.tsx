@@ -13,7 +13,7 @@ import type {
   ServerProvider,
 } from "@t3tools/contracts";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
 import { CopyIcon } from "lucide-react";
 
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
@@ -37,12 +37,18 @@ export function ProviderAuthenticationSection({
   instanceId,
   provider,
   readOnly,
+  title,
+  hint,
+  credentialInput,
 }: {
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;
   readonly instanceId: ProviderInstanceId;
   readonly provider: ServerProvider;
   readonly readOnly: boolean;
+  readonly title?: string;
+  readonly hint?: string;
+  readonly credentialInput?: ReactNode;
 }) {
   const gt = useGT();
   const target = { environmentId, input: { instanceId } };
@@ -176,7 +182,7 @@ export function ProviderAuthenticationSection({
 
   return (
     <SettingsRow
-      title={gt("Account")}
+      title={title ?? gt("Account")}
       description={
         signedIn && !active && provider.auth.email?.trim() ? (
           <span>
@@ -193,7 +199,10 @@ export function ProviderAuthenticationSection({
             </T>
           </span>
         ) : (
-          <span role="status">{accountDescription}</span>
+          <>
+            {hint ? <span>{hint} </span> : null}
+            <span role="status">{accountDescription}</span>
+          </>
         )
       }
       status={
@@ -205,6 +214,7 @@ export function ProviderAuthenticationSection({
       }
       control={
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {!active ? credentialInput : null}
           {!active && (auth?.methods?.length ?? 0) > 1 ? (
             <Select
               value={auth?.methods?.some((method) => method.id === methodId) ? methodId : ""}

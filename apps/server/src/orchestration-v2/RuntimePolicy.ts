@@ -151,7 +151,7 @@ export const layerFromProjectStore: Layer.Layer<
     const projects = yield* ProjectStore.ProjectStoreV2;
     const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
     // The same ceiling the orchestrator enforces, fixed for the server's life.
-    const { managedPolicy } = yield* ServerSettings.ServerSettingsService;
+    const { managedPolicy, getSettings } = yield* ServerSettings.ServerSettingsService;
     const maxRuntimeMode = managedPolicy?.limits?.maxRuntimeMode;
     return RuntimePolicyV2.of({
       resolve: Effect.fn("RuntimePolicyV2.resolve")(function* (input) {
@@ -198,11 +198,22 @@ export const layerFromProjectStore: Layer.Layer<
               Effect.orElseSucceed(() => undefined),
             )
           : undefined;
+        const boxSnapshotId = isUpstashBoxDriver(instance?.driverKind)
+          ? yield* getSettings.pipe(
+              Effect.map(
+                (settings) =>
+                  settings.projectSettingsOverrides[input.thread.projectId]?.upstashBoxSnapshotId ??
+                  settings.upstashBoxSnapshotId,
+              ),
+              Effect.orElseSucceed(() => ""),
+            )
+          : "";
         return ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
           runtimeMode: providerRuntimeMode(input.thread.runtimeMode, supportedRuntimeModes),
           interactionMode: input.thread.interactionMode,
           cwd,
           ...(repositoryUrl === undefined ? {} : { repositoryUrl }),
+          ...(boxSnapshotId ? { boxSnapshotId } : {}),
           ...(isUpstashBoxDriver(instance?.driverKind) && input.thread.boxSize !== undefined
             ? { boxSize: input.thread.boxSize }
             : {}),

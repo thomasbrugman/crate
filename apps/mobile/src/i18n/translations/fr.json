@@ -744,8 +744,6 @@
   "fd961a3820d46cfa": "Connexion à la Box",
   "9f6faa1464231d0f": "Création de la Box",
   "21ace56348b5b799": "Vérification de la configuration de la Box",
-  "4f2fbef2421a52a4": "Installation de l’agent",
-  "aaa55cdbc9661af6": "Copie des identifiants depuis la Box modèle",
   "9c08b1739f450ae2": "Clonage du dépôt",
   "49221d2a7a2da0de": "Configuration de Box",
   "f1d27d127ab27ac6": "Démarrage",
@@ -5337,5 +5335,7 @@
   "ad208e3e32c85029": "Tout masquer",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Appels d’outils dans la discussion",
-  "8d545d54c0a9e950": "Masque les commandes, modifications et recherches lancées par les agents. Masquer les réussis garde les échecs. Zen n’affiche que les réponses finales. Les approbations, questions et erreurs s’affichent toujours."
+  "8d545d54c0a9e950": "Masque les commandes, modifications et recherches lancées par les agents. Masquer les réussis garde les échecs. Zen n’affiche que les réponses finales. Les approbations, questions et erreurs s’affichent toujours.",
+  "9f754eebb3866690": "Installation des agents",
+  "67f4aa1a06528a91": "Préparation des identifiants"
 }

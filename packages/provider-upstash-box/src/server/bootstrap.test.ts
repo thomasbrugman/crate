@@ -242,6 +242,111 @@ it.effect("bootstraps a managed agent Box without installing Command Code", () =
   }),
 );
 
+it.effect.each([undefined, "snapshot-fixture"])(
+  "prepares connected harnesses without pulling auth from the template (snapshot %s)",
+  (snapshotId) =>
+    Effect.gen(function* () {
+      let created: BoxConfig | undefined;
+      let restored: string | undefined;
+      const commands: string[] = [];
+      const templateReads: string[] = [];
+      const files = new Map<string, string>();
+      const box: BoxHandle = {
+        id: "shared-box",
+        resume: async () => undefined,
+        getStatus: async () => ({ status: "idle" }),
+        agent: {
+          stream: async () => {
+            throw new Error("unexpected managed agent");
+          },
+        },
+        exec: {
+          command: async (command) => {
+            commands.push(command);
+            return { stdout: "", exitCode: command.startsWith("test -f") ? 1 : 0 };
+          },
+        },
+        files: {
+          write: async ({ path, content }) => {
+            files.set(path, content);
+          },
+          writeVolatile: async (path, content) => {
+            files.set(path, content);
+          },
+        },
+        delete: async () => undefined,
+      };
+      const credentials = {
+        commandCode: '{"token":"command-fixture"}',
+        claudeCode: "sk-ant-oat-test",
+        codex: "codex-key-fixture",
+      };
+      yield* ensureBox(
+        {
+          apiKey: "key",
+          templateBoxName: "template",
+          size: "small",
+          harness: "codex",
+          model: "default",
+          agentApiKey: "",
+          credentials,
+          ...(snapshotId ? { snapshotId } : {}),
+        },
+        "thread",
+        "https://github.com/owner/repo.git",
+      ).pipe(
+        Effect.provideService(BoxApi, {
+          get: async (id) => {
+            if (id !== "template") throw new BoxError("missing", 404);
+            return {
+              ...box,
+              exec: {
+                command: async (command) => {
+                  templateReads.push(command);
+                  return { stdout: "", exitCode: 0 };
+                },
+              },
+            };
+          },
+          create: async (config) => {
+            assert.isUndefined(snapshotId);
+            created = config;
+            return box;
+          },
+          restore: async (id, config) => {
+            restored = id;
+            created = config;
+            return box;
+          },
+          list: async () => [],
+          checkModelKey: async () => 200,
+        }),
+      );
+      assert.deepEqual(created?.networkPolicy, { mode: "allow-all" });
+      assert.equal(restored, snapshotId);
+      assert.isUndefined(created?.agent);
+      for (const [pkg, credential] of [
+        ["command-code", credentials.commandCode],
+        ["@anthropic-ai/claude-code", credentials.claudeCode],
+        ["@openai/codex", credentials.codex],
+      ] as const) {
+        assert.include(commands.join("\n"), `npm i -g --prefix /home/boxuser/.local ${pkg}@`);
+        assert.notInclude(commands.join("\n"), credential);
+        assert.notInclude(JSON.stringify(created), credential);
+      }
+      assert.equal(
+        files.get("/dev/shm/t3stash-auth/command-home/.commandcode/auth.json"),
+        credentials.commandCode,
+      );
+      assert.equal(files.get("/dev/shm/t3stash-auth/claudeCode-token"), credentials.claudeCode);
+      assert.include(files.get("/dev/shm/t3stash-auth/codex/auth.json") ?? "", credentials.codex);
+      assert.deepEqual(templateReads, [
+        "test ! -f ~/.git-credentials || cat ~/.git-credentials",
+        "test ! -f ~/.gitconfig || cat ~/.gitconfig",
+      ]);
+    }),
+);
+
 it.effect("reports a refused Box creation for a missing stored model key", () =>
   Effect.gen(function* () {
     const error = yield* ensureBox(

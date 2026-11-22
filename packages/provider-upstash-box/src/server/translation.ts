@@ -14,6 +14,9 @@ import type {
 import type { Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 
+import type { BoxSubagentChunk } from "./BoxApi.ts";
+import { BoxSubagents } from "./subagents.ts";
+
 type ToolItem = Extract<OrchestrationV2TurnItem, { type: "dynamic_tool" }>;
 
 export class BoxTurnTranslation {
@@ -31,10 +34,12 @@ export class BoxTurnTranslation {
   readonly thread: OrchestrationV2ProviderThread;
   private readonly input: ProviderAdapterV2TurnInput;
   private readonly ids: IdAllocatorV2Derive;
+  private readonly subagents: BoxSubagents;
 
   constructor(input: ProviderAdapterV2TurnInput, ids: IdAllocatorV2Derive, now: DateTime.Utc) {
     this.input = input;
     this.ids = ids;
+    this.subagents = new BoxSubagents(input, ids);
     this.startedAt = now;
     this.thread = input.providerThread;
     const nativeItemId = `${input.attemptId}:assistant`;
@@ -146,9 +151,12 @@ export class BoxTurnTranslation {
     ];
   }
 
-  accept(chunk: Chunk, now: DateTime.Utc): ProviderAdapterV2Event[] {
+  accept(chunk: Chunk | BoxSubagentChunk, now: DateTime.Utc): ProviderAdapterV2Event[] {
     if (this.terminal) return [];
     switch (chunk.type) {
+      case "subagent-start":
+      case "subagent-finish":
+        return this.subagents.accept(chunk, now, () => ++this.itemOrdinal);
       case "start":
         this.turn = {
           ...this.turn,
@@ -285,6 +293,7 @@ export class BoxTurnTranslation {
           updatedAt: now,
         },
       }));
+    events.push(...this.subagents.settle(now));
     if (this.text) events.push(...this.messageEvents(now, false));
     events.push(
       {

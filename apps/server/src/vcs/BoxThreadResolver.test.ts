@@ -24,12 +24,14 @@ const cases: ReadonlyArray<{
   readonly deleted?: boolean;
   readonly noNativeId?: boolean;
   readonly noRepository?: boolean;
+  readonly sharedBox?: boolean;
   readonly unavailable?: boolean;
   readonly reason?: BoxExec.BoxExecError["reason"];
 }> = [
   { driver: "boxCommandCode" },
   { driver: "boxClaudeCode" },
   { driver: "boxCodex" },
+  { driver: "boxCodex", sharedBox: true },
   { driver: "upstashBox" },
   { driver: "codex", reason: "thread_unavailable" },
   { driver: "boxCommandCode", deleted: true, reason: "thread_unavailable" },
@@ -124,6 +126,9 @@ it.effect.each(cases)("resolves persisted Box identity and project context: %j",
         lastRunOrdinal: 1,
         handoffIds: [],
         forkedFrom: null,
+        ...(scenario.sharedBox
+          ? { nativeMetadata: { boxOwnerThreadId: ThreadId.make("parent") } }
+          : {}),
         createdAt: now,
         updatedAt: now,
       },
@@ -168,7 +173,11 @@ it.effect.each(cases)("resolves persisted Box identity and project context: %j",
       assert.deepEqual(yield* target.resolve(threadId), {
         threadId,
         projectRoot: "/explicit/project",
-        checkoutRoot: scenario.noRepository ? "/workspace/home" : "/workspace/home/repo",
+        checkoutRoot: scenario.noRepository
+          ? "/workspace/home"
+          : scenario.sharedBox
+            ? "/workspace/home/.t3stash-worktrees/626f782d746872656164"
+            : "/workspace/home/repo",
       });
       assert.deepEqual(calls, ["persisted-box"]);
     }

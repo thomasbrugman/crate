@@ -1458,7 +1458,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
               config: { apiKey: "box-model-secret" },
             },
           },
-          upstashBox: { apiKey: "box-environment-secret" },
+          upstashBox: {
+            apiKey: "box-environment-secret",
+            commandCodeAuth: '{"token":"command-code-test-secret"}',
+            claudeCodeAuth: "claude-test-secret",
+            codexAuth: "codex-test-secret",
+          },
           sourceControlHosts: {
             github: { tokens: { "github.com": "github-secret" } },
             bitbucket: { email: "me@example.test", accessToken: "bitbucket-secret" },
@@ -1494,11 +1499,23 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           "expo-secret",
           "box-model-secret",
           "box-environment-secret",
+          "command-code-test-secret",
+          "claude-test-secret",
+          "codex-test-secret",
         ];
         const client = ServerSettingsModule.redactServerSettingsForClient(saved, {
           secretReferences: true,
         });
         const disk = yield* fs.readFileString(config.settingsPath);
+        for (const [field, value] of [
+          ["commandCodeAuth", "command-code-test-secret"],
+          ["claudeCodeAuth", "claude-test-secret"],
+          ["codexAuth", "codex-test-secret"],
+        ] as const) {
+          const raw = yield* store.get(`upstash-box-${Buffer.from(field).toString("base64url")}`);
+          assert.isTrue(Option.isSome(raw));
+          assert.notInclude(Buffer.from(Option.getOrThrow(raw)).toString("utf8"), value);
+        }
         for (const value of values) {
           assert.include(JSON.stringify(saved), value);
           assert.notInclude(JSON.stringify(client), value);
@@ -1824,7 +1841,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
               config: { serverUrl: "http://127.0.0.1:4096", serverPassword: openCodeReference },
             },
           },
-          upstashBox: { apiKey: usageReference },
+          upstashBox: {
+            apiKey: usageReference,
+            commandCodeAuth: usageReference,
+            claudeCodeAuth: usageReference,
+            codexAuth: usageReference,
+          },
         });
         const legacy = ServerSettingsModule.redactServerSettingsForClient(withUsage, {
           secretReferences: false,
@@ -1841,6 +1863,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         assert.equal(legacy.easDeviceHosts[0]?.accessToken, SECRET_REDACTED);
         assert.equal(legacy.simlockDeviceHosts[0]?.agentToken, SECRET_REDACTED);
         assert.equal(legacy.upstashBox.apiKey, SECRET_REDACTED);
+        assert.equal(legacy.upstashBox.commandCodeAuth, SECRET_REDACTED);
+        assert.equal(legacy.upstashBox.claudeCodeAuth, SECRET_REDACTED);
+        assert.equal(legacy.upstashBox.codexAuth, SECRET_REDACTED);
         const configOf = (settings: ServerSettings, id: ProviderInstanceId) =>
           settings.providerInstances[id]?.config as Record<string, unknown> | undefined;
         assert.equal(configOf(legacy, antigravity)?.apiKey, SECRET_REDACTED);
@@ -1857,6 +1882,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         });
         assert.deepEqual(echoed.sourceControlHosts.bitbucket?.accessToken, reference);
         assert.deepEqual(echoed.upstashBox.apiKey, usageReference);
+        assert.deepEqual(echoed.upstashBox.commandCodeAuth, usageReference);
+        assert.deepEqual(echoed.upstashBox.claudeCodeAuth, usageReference);
+        assert.deepEqual(echoed.upstashBox.codexAuth, usageReference);
         assert.deepEqual(echoed.sourceControlHosts.github?.tokens, {
           "github.com": gitHubReference,
           "ghe.acme.test": "ghp_ghe",
@@ -1988,6 +2016,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         "usageLimitSources.*.managementKey",
         "textGenerators.*.apiKey",
         "upstashBox.apiKey",
+        "upstashBox.commandCodeAuth",
+        "upstashBox.claudeCodeAuth",
+        "upstashBox.codexAuth",
       ]);
     }),
   );

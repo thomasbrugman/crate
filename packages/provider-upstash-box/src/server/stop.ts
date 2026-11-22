@@ -31,7 +31,7 @@ function killTree(pid) {
   }
 }
 for (const [pid, row] of rows)
-  if (marker && row.argv.some(arg => arg === 't3stash-harness.mjs' || arg.endsWith('/t3stash-harness.mjs')) &&
+  if (marker && row.argv.some(arg => arg.endsWith('/t3stash-harness.mjs') || arg.endsWith('/t3stash-managed.mjs')) &&
       row.argv.some(arg => arg.startsWith(marker)))
     killTree(pid);
 T3_KILL_HARNESS`;

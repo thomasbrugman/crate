@@ -183,6 +183,8 @@ const getAutoBootstrapThreadModelSelection = (): ModelSelection => ({
 interface AutoBootstrapWelcomeTargets {
   readonly bootstrapProjectId?: ProjectId;
   readonly bootstrapThreadId?: ThreadId;
+  readonly bootstrapProjectCreated?: boolean;
+  readonly bootstrapThreadCreated?: boolean;
 }
 
 export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
@@ -265,9 +267,6 @@ const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
   const threadLaunch = yield* ThreadLaunch.ThreadLaunchService;
   const path = yield* Path.Path;
 
-  let bootstrapProjectId: ProjectId | undefined;
-  let bootstrapThreadId: ThreadId | undefined;
-
   if (serverConfig.autoBootstrapProjectFromCwd) {
     const threadModelSelection = getAutoBootstrapThreadModelSelection();
     const bootstrapped = yield* projects
@@ -324,18 +323,21 @@ const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
               }).pipe(Effect.as(undefined)),
           }),
         );
-      bootstrapProjectId = project.id;
-      bootstrapThreadId = launched?.threadId;
-    } else {
-      bootstrapProjectId = project.id;
-      bootstrapThreadId = existingThread.id;
+      return {
+        bootstrapProjectId: project.id,
+        bootstrapProjectCreated: bootstrapped.created,
+        ...(launched ? { bootstrapThreadId: launched.threadId, bootstrapThreadCreated: true } : {}),
+      } satisfies AutoBootstrapWelcomeTargets;
     }
+    return {
+      bootstrapProjectId: project.id,
+      bootstrapProjectCreated: bootstrapped.created,
+      bootstrapThreadId: existingThread.id,
+      bootstrapThreadCreated: false,
+    } satisfies AutoBootstrapWelcomeTargets;
   }
 
-  return {
-    ...(bootstrapProjectId ? { bootstrapProjectId } : {}),
-    ...(bootstrapThreadId ? { bootstrapThreadId } : {}),
-  } satisfies AutoBootstrapWelcomeTargets;
+  return {} satisfies AutoBootstrapWelcomeTargets;
 });
 
 const resolveStartupBrowserTarget = Effect.gen(function* () {

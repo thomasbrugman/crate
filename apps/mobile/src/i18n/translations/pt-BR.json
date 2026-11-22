@@ -744,8 +744,6 @@
   "fd961a3820d46cfa": "Conectando à Box",
   "9f6faa1464231d0f": "Criando a Box",
   "21ace56348b5b799": "Verificando a configuração da Box",
-  "4f2fbef2421a52a4": "Instalando o agente",
-  "aaa55cdbc9661af6": "Copiando credenciais da Box modelo",
   "9c08b1739f450ae2": "Clonando o repositório",
   "49221d2a7a2da0de": "Configurando Box",
   "f1d27d127ab27ac6": "Iniciando",
@@ -5337,5 +5335,7 @@
   "ad208e3e32c85029": "Ocultar todas",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Chamadas de ferramentas no chat",
-  "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem."
+  "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem.",
+  "9f754eebb3866690": "Instalando os agentes",
+  "67f4aa1a06528a91": "Preparando as credenciais"
 }

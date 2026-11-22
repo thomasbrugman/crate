@@ -33,7 +33,7 @@ import * as TestClock from "effect/testing/TestClock";
 
 import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
-import { BoxApi, type BoxHandle, type BoxStream } from "./BoxApi.ts";
+import { BoxApi, type BoxHandle, type BoxStream, type BoxSubagentChunk } from "./BoxApi.ts";
 import { commandCodeHarness } from "./harness.ts";
 
 const instanceId = ProviderInstanceId.make("box-test");
@@ -256,7 +256,7 @@ it.effect("uses the saved Box size for provisioning and reprovisioning", () =>
   ),
 );
 
-it.live("retains idle Boxes containing only gitignored work", () =>
+it.live("releases idle Boxes only when all their checkouts contain no unsaved work", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const home = yield* Effect.acquireRelease(
@@ -273,9 +273,10 @@ it.live("retains idle Boxes containing only gitignored work", () =>
       yield* Effect.promise(() =>
         NodeFSP.writeFile(NodePath.join(repo, ".gitignore"), ".env\n*.sqlite\n"),
       );
+      const worktree = NodePath.join(home, ".t3stash-worktrees", "6368696c64");
+      const git = (...args: string[]) =>
+        NodeChildProcess.execFileSync("git", args, { cwd: repo, stdio: "pipe" });
       yield* Effect.sync(() => {
-        const git = (...args: string[]) =>
-          NodeChildProcess.execFileSync("git", args, { cwd: repo, stdio: "pipe" });
         git("init");
         git("add", ".gitignore");
         git(
@@ -288,6 +289,7 @@ it.live("retains idle Boxes containing only gitignored work", () =>
           "initial",
         );
         git("update-ref", "refs/remotes/origin/main", "HEAD");
+        git("worktree", "add", "--detach", worktree, "HEAD");
       });
       let deleted = 0;
       const { adapter, turn } = yield* setup(
@@ -297,7 +299,7 @@ it.live("retains idle Boxes containing only gitignored work", () =>
         },
         "commandCode",
         async (command) => {
-          if (!command.includes("git stash")) return { stdout: "", exitCode: 0 };
+          if (!command.includes("clean_checkout")) return { stdout: "", exitCode: 0 };
           const result = NodeChildProcess.spawnSync(
             "sh",
             ["-c", command.replaceAll("/workspace/home", home)],
@@ -308,13 +310,30 @@ it.live("retains idle Boxes containing only gitignored work", () =>
       );
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.equal(deleted, 1);
-      for (const name of [".env", "local.sqlite"]) {
-        const path = NodePath.join(repo, name);
+      for (const checkout of [repo, worktree]) {
+        const path = NodePath.join(checkout, ".env");
         yield* Effect.promise(() => NodeFSP.writeFile(path, "fixture"));
         assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
         assert.equal(deleted, 1);
         yield* Effect.promise(() => NodeFSP.unlink(path));
       }
+      yield* Effect.sync(() =>
+        git(
+          "-C",
+          worktree,
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.invalid",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "unpushed child work",
+        ),
+      );
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 1);
+      yield* Effect.sync(() => git("worktree", "remove", worktree));
       yield* Effect.promise(() => NodeFSP.rm(repo, { recursive: true }));
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(home, "notes.txt"), "fixture"));
@@ -335,7 +354,10 @@ it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitiz
           deleted++;
         },
         "commandCode",
-        async (command) => ({ stdout: "", exitCode: command.includes("git stash") ? exitCode : 0 }),
+        async (command) => ({
+          stdout: "",
+          exitCode: command.includes("clean_checkout") ? exitCode : 0,
+        }),
       );
       yield* adapter.deleteThread!(turn.providerThread);
       assert.equal(deleted, 1);
@@ -361,14 +383,17 @@ it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitiz
       lookup.error = new BoxError("private upstream body", 404);
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.lengthOf(
-        commands.filter((text) => text.includes("git stash")),
+        commands.filter((text) => text.includes("clean_checkout")),
         2,
       );
     }),
   ),
 );
 
-function fakeStream(chunks: ReadonlyArray<Chunk>, error: unknown = false): BoxStream {
+function fakeStream(
+  chunks: ReadonlyArray<Chunk | BoxSubagentChunk>,
+  error: unknown = false,
+): BoxStream {
   return {
     id: "native-run",
     cancel: async () => undefined,
@@ -441,6 +466,188 @@ const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>
     Stream.takeUntil((event) => event.type === "turn.terminal"),
     Stream.runCollect,
   );
+
+it.effect("projects native subagent results into separate linked conversations", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn } = yield* setup(
+        fakeStream([
+          { type: "subagent-start", taskId: "first", title: "Review", prompt: "Review the patch" },
+          {
+            type: "subagent-start",
+            taskId: "nested",
+            parentTaskId: "first",
+            title: "Compare",
+            prompt: "Compare approaches",
+          },
+          {
+            type: "subagent-finish",
+            taskId: "first",
+            status: "completed",
+            result: "Review result",
+          },
+          finish,
+        ]),
+        undefined,
+        "claudeCode",
+      );
+      yield* runtime.startTurn(turn);
+      const events = yield* Effect.forEach(yield* collect(runtime.events), (event) =>
+        decodeEvent(event),
+      );
+      const [child, nested] = events.flatMap((event) =>
+        event.type === "app_thread.created" ? [event.appThread] : [],
+      );
+      assert.equal(child?.lineage.parentThreadId, turn.threadId);
+      assert.equal(nested?.lineage.parentThreadId, child?.id);
+      assert.deepEqual(
+        events.flatMap((event) =>
+          event.type === "message.updated" && event.message.text === "Review result"
+            ? [event.message.threadId]
+            : [],
+        ),
+        [child?.id],
+      );
+      assert.isTrue(
+        events.some(
+          (event) =>
+            event.type === "subagent.updated" &&
+            event.subagent.childThreadId === nested?.id &&
+            event.subagent.status === "interrupted",
+        ),
+      );
+    }),
+  ),
+);
+
+it.effect("shares a Box across harnesses and gives a linked subagent an isolated checkout", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const streams: string[] = [];
+      const commands: string[] = [];
+      const boxes = new Map<string, BoxHandle>();
+      const api = BoxApi.of({
+        get: async (name) => {
+          const box = boxes.get(name);
+          if (!box) throw new BoxError("missing", 404);
+          return box;
+        },
+        create: async ({ name }) => {
+          const box: BoxHandle = {
+            id: name!,
+            agent: {
+              stream: async () => {
+                throw new Error("unexpected native agent");
+              },
+            },
+            exec: {
+              command: async (command) => {
+                commands.push(command);
+                return { stdout: "", exitCode: 0 };
+              },
+              stream: async (command) => {
+                streams.push(command);
+                return {
+                  id: "process",
+                  cancel: async () => undefined,
+                  async *[Symbol.asyncIterator]() {
+                    yield {
+                      type: "output",
+                      data: 'event: done\ndata: {"session_id":"fixture-session"}\n\n',
+                    } as const;
+                    yield { type: "exit", exitCode: 0, cpuNs: 0 } as const;
+                  },
+                };
+              },
+            },
+            files: { write: async () => undefined, writeVolatile: async () => undefined },
+            getStatus: async () => ({ status: "idle" }),
+            delete: async () => undefined,
+            resume: async () => undefined,
+          };
+          boxes.set(box.id, box);
+          return box;
+        },
+        list: async () => [],
+        checkModelKey: async () => 200,
+      });
+      const policy = { ...runtimePolicy, repositoryUrl: "https://example.test/repo.git" };
+      const environment = Effect.succeed({
+        apiKey: "fixture-key",
+        templateBoxName: "",
+        size: "small" as const,
+        credentials: { commandCode: '{"token":"fixture"}', codex: "fixture-key" },
+      });
+      const open = (harness: BoxHarness, owner: ThreadId, thread: ThreadId, worktree: boolean) =>
+        Effect.gen(function* () {
+          const providerId = ProviderInstanceId.make(harness);
+          const selected = { ...modelSelection, instanceId: providerId };
+          const turnPolicy = worktree ? { ...policy, boxOwnerThreadId: owner } : policy;
+          const adapter = yield* makeUpstashBoxAdapter(
+            providerId,
+            { harness, driver: BOX_HARNESS_DRIVER_KINDS[harness], agentApiKey: "" },
+            environment,
+          ).pipe(Effect.provide(IdAllocator.layer), Effect.provideService(BoxApi, api));
+          const session = yield* adapter.openSession({
+            threadId: thread,
+            providerSessionId: ProviderSessionId.make(`${harness}-${thread}`),
+            modelSelection: selected,
+            runtimePolicy: turnPolicy,
+          });
+          const loaded = yield* session.ensureThread({
+            threadId: thread,
+            modelSelection: selected,
+            runtimePolicy: turnPolicy,
+          });
+          return { session, loaded, selected, turnPolicy };
+        });
+      const child = ThreadId.make("linked-child");
+      const fork = ThreadId.make("manual-fork");
+      const [main, switched] = yield* Effect.all(
+        [open("commandCode", threadId, threadId, false), open("codex", threadId, threadId, false)],
+        { concurrency: 2 },
+      );
+      const linked = yield* open("codex", threadId, child, true);
+      const manual = yield* open("codex", fork, fork, false);
+      assert.equal(boxes.size, 2);
+      assert.equal(
+        switched.loaded.nativeThreadRef?.nativeId,
+        main.loaded.nativeThreadRef?.nativeId,
+      );
+      assert.equal(linked.loaded.nativeThreadRef?.nativeId, main.loaded.nativeThreadRef?.nativeId);
+      assert.equal(linked.loaded.nativeMetadata?.boxOwnerThreadId, threadId);
+      assert.isUndefined(manual.loaded.nativeMetadata?.boxOwnerThreadId);
+      assert.notEqual(
+        manual.loaded.nativeThreadRef?.nativeId,
+        main.loaded.nativeThreadRef?.nativeId,
+      );
+      assert.notEqual(switched.loaded.id, main.loaded.id);
+      assert.notEqual(linked.loaded.id, switched.loaded.id);
+      const { turn } = yield* setup(fakeStream([]));
+      for (const [thread, target] of [
+        [threadId, switched],
+        [child, linked],
+      ] as const) {
+        yield* target.session.startTurn({
+          ...turn,
+          threadId: thread,
+          providerThread: target.loaded,
+          modelSelection: target.selected,
+          runtimePolicy: target.turnPolicy,
+          appContext: [{ key: "handoff", text: "Earlier conversation" }],
+        });
+        yield* collect(target.session.events);
+      }
+      assert.include(streams[0], "cd /workspace/home/repo");
+      assert.include(streams[0], "Earlier conversation");
+      const worktree = `/workspace/home/.t3stash-worktrees/${Buffer.from(child).toString("hex")}`;
+      assert.include(streams[1], `cd ${worktree}`);
+      assert.isTrue(
+        commands.some((command) => command.includes(`worktree add --detach -- ${worktree} HEAD`)),
+      );
+    }),
+  ),
+);
 
 it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
   "recreates a deleted Box before a follow-up even when the thread stays loaded (%s)",
@@ -797,7 +1004,7 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
           [
             fakeStream([], new BoxError("harness exited")),
             "failed",
-            "The Box agent reported an error: harness exited. Send a message to retry.",
+            "The Box agent reported an error. Send a message to retry.",
             undefined,
           ],
           [
@@ -905,7 +1112,7 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
 );
 
 it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
-  "redacts and bounds only messages from agent stream error events (%s)",
+  "does not expose the agent's error payload (%s)",
   (harness) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -925,10 +1132,7 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
         const terminal = events.find((event) => event.type === "turn.terminal");
         assert.equal(terminal?.status, "failed");
         const message = terminal?.failure?.message ?? "";
-        assert.include(message, "The Box agent reported an error: harness failed:");
-        assert.include(message, "[REDACTED]");
-        assert.include(message, "…");
-        assert.isAtMost(message.length, 270);
+        assert.equal(message, "The Box agent reported an error. Send a message to retry.");
         for (const value of [
           "test-key",
           agentApiKey,

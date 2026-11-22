@@ -26,7 +26,7 @@ export interface BoxExecThread {
     "appThreadId" | "driver" | "nativeThreadRef"
   >;
   readonly apiKey: string;
-  readonly repositoryUrl: string | null;
+  readonly checkoutRoot: string;
 }
 
 /** Loads the current persisted provider thread and its resolved provider-instance credentials.
@@ -94,7 +94,7 @@ export const make = Effect.gen(function* () {
         try: () => api.get(nativeId, thread.apiKey),
         catch: () => fail("box_unavailable"),
       });
-      const cwd = input.cwd ?? (thread.repositoryUrl ? "/workspace/home/repo" : "/workspace/home");
+      const cwd = input.cwd ?? thread.checkoutRoot;
       const command = [input.command, ...(input.args ?? []).map(quote)].join(" ");
       const result = yield* Effect.tryPromise({
         try: () => box.exec.command(`cd -- ${quote(cwd)} || exit 1\n${command}`),
