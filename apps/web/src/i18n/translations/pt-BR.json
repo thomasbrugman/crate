@@ -12228,7 +12228,6 @@
   "67f4aa1a06528a91": "Preparando as credenciais",
   "10a8d3ed31c3da0c": "Cole uma chave de API do Command Code ou o conteúdo de ~/.commandcode/auth.json.",
   "b348145623c69867": "Snapshot do Upstash Box",
-  "2dbd2da341f1f37e": "Opcional. Restaure as Boxes de novas conversas de um snapshot criado sem credenciais de agentes.",
   "276872b1b4120d7a": "Cole uma chave de API da Anthropic ou um token de claude setup-token.",
   "7d49aae75c90c5c6": "Cole uma chave de API da OpenAI ou o conteúdo de ~/.codex/auth.json após entrar.",
   "7317ccaec18e412a": "Serve para preparar Boxes legadas do {harness}, não para configurar credenciais do Git.",
@@ -12255,5 +12254,18 @@
   "0dfc582858939130": "Ignorado",
   "9756b09ffd8a55c6": "Em andamento",
   "353b08f4363dbb2c": "Pendente",
-  "6796d4f5acef3397": "Configuração necessária"
+  "6796d4f5acef3397": "Configuração necessária",
+  "f3f1d8f247e0def2": "Snapshot sem nome",
+  "4212d65ace158b5b": "Nova Box (sem snapshot)",
+  "93772fd0276951d1": "Snapshot salvo indisponível",
+  "52820a0a9b8c2def": "Atualizar snapshots",
+  "6ef72c25deafa2b2": "Você não tem permissão para escolher snapshots.",
+  "4e1802085d103e00": "Não foi possível carregar os snapshots. Verifique sua conexão com o Box e atualize a lista.",
+  "bf477c31d229e3d5": "Carregando snapshots…",
+  "6474d81b0d9ea91c": "Ainda não há snapshots. Os snapshots salvos no Box aparecerão aqui.",
+  "ca55c8cb71dd6412": "Somente snapshots prontos podem ser usados em novas conversas.",
+  "971763147ddacc96": "Nome do snapshot",
+  "30ceb3f2fceacc94": "Os nomes de exibição são compartilhados pelos projetos deste ambiente. O snapshot no Box não é alterado.",
+  "fb4d72380d24ca6e": "Inicie as Boxes de novas conversas a partir de um snapshot preparado. Use apenas snapshots criados sem credenciais do agente.",
+  "a386231cbf78b57b": "Escolha um ambiente para selecionar um snapshot."
 }

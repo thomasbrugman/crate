@@ -12224,7 +12224,6 @@
   "67f4aa1a06528a91": "Preparando las credenciales",
   "10a8d3ed31c3da0c": "Pega una clave de API de Command Code o el contenido de ~/.commandcode/auth.json.",
   "b348145623c69867": "Instantánea de Upstash Box",
-  "2dbd2da341f1f37e": "Opcional. Restaura las Boxes de nuevos hilos desde una instantánea creada sin credenciales de agentes.",
   "276872b1b4120d7a": "Pega una clave de API de Anthropic o un token de claude setup-token.",
   "7d49aae75c90c5c6": "Pega una clave de API de OpenAI o el contenido de ~/.codex/auth.json tras iniciar sesión.",
   "7317ccaec18e412a": "Se usa para preparar las Boxes antiguas de {harness}, no para configurar las credenciales de Git.",
@@ -12251,5 +12250,18 @@
   "0dfc582858939130": "Omitido",
   "9756b09ffd8a55c6": "En curso",
   "353b08f4363dbb2c": "Pendiente",
-  "6796d4f5acef3397": "Configuración necesaria"
+  "6796d4f5acef3397": "Configuración necesaria",
+  "f3f1d8f247e0def2": "Instantánea sin nombre",
+  "4212d65ace158b5b": "Box nueva (sin instantánea)",
+  "93772fd0276951d1": "La instantánea guardada no está disponible",
+  "52820a0a9b8c2def": "Actualizar instantáneas",
+  "6ef72c25deafa2b2": "No tienes permiso para elegir instantáneas.",
+  "4e1802085d103e00": "No se pudieron cargar las instantáneas. Comprueba tu conexión con Box y actualiza la lista.",
+  "bf477c31d229e3d5": "Cargando instantáneas…",
+  "6474d81b0d9ea91c": "Aún no hay instantáneas. Las instantáneas guardadas en Box aparecerán aquí.",
+  "ca55c8cb71dd6412": "Solo se pueden usar instantáneas listas para los hilos nuevos.",
+  "971763147ddacc96": "Nombre de la instantánea",
+  "30ceb3f2fceacc94": "Los nombres se comparten entre los proyectos de este entorno. La instantánea en Box no cambia.",
+  "fb4d72380d24ca6e": "Inicia las Boxes de los hilos nuevos desde una instantánea preparada. Usa solo instantáneas creadas sin credenciales del agente.",
+  "a386231cbf78b57b": "Elige un entorno para seleccionar una instantánea."
 }

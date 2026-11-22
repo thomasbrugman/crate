@@ -24,7 +24,7 @@ import { runtimeModeConfig, runtimeModeOptions } from "../chat/runtimeModeConfig
 import { PULL_REQUEST_MERGE_METHOD_LABELS } from "../pullRequest/pullRequestDetail.logic";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { DraftInput } from "../ui/draft-input";
+import { BoxSnapshotPicker } from "./BoxSnapshotPicker";
 import { toastManager } from "../ui/toast";
 import { Switch } from "../ui/switch";
 import { resolveDefaultModelSettingsPresentation } from "./ProjectDefaultsSettings.logic";
@@ -366,18 +366,21 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             settingKeys={["upstashBoxSnapshotId"]}
             title={gt("Upstash Box snapshot")}
             description={gt(
-              "Optional. Restore new thread Boxes from a snapshot created without harness credentials.",
+              "Start new thread Boxes from a prepared snapshot. Only use snapshots created without harness credentials.",
             )}
             control={
-              <DraftInput
-                aria-label={gt("Upstash Box snapshot")}
-                autoCapitalize="none"
-                spellCheck={false}
-                value={settings.upstashBoxSnapshotId}
-                onCommit={(upstashBoxSnapshotId) =>
-                  updateSettings({ upstashBoxSnapshotId: upstashBoxSnapshotId.trim() })
-                }
-              />
+              target && new Set(targets.map((candidate) => candidate.environmentId)).size <= 1 ? (
+                <BoxSnapshotPicker
+                  key={target.environmentId}
+                  environmentId={target.environmentId}
+                  value={settings.upstashBoxSnapshotId}
+                  onChange={(upstashBoxSnapshotId) => updateSettings({ upstashBoxSnapshotId })}
+                />
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  {gt("Choose one environment to select a snapshot.")}
+                </span>
+              )
             }
           />
         </>

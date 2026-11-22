@@ -12229,7 +12229,6 @@
   "67f4aa1a06528a91": "Préparation des identifiants",
   "10a8d3ed31c3da0c": "Collez une clé API Command Code ou le contenu de ~/.commandcode/auth.json.",
   "b348145623c69867": "Instantané Upstash Box",
-  "2dbd2da341f1f37e": "Facultatif. Restaurez les Boxes des nouveaux fils à partir d’un instantané créé sans identifiants d’agents.",
   "276872b1b4120d7a": "Collez une clé API Anthropic ou un jeton obtenu avec claude setup-token.",
   "7d49aae75c90c5c6": "Collez une clé API OpenAI ou le contenu de ~/.codex/auth.json après vous être connecté.",
   "7317ccaec18e412a": "Sert à configurer les anciennes Boxes {harness}, pas les identifiants Git.",
@@ -12256,5 +12255,18 @@
   "0dfc582858939130": "Ignoré",
   "9756b09ffd8a55c6": "En cours",
   "353b08f4363dbb2c": "En attente",
-  "6796d4f5acef3397": "Configuration requise"
+  "6796d4f5acef3397": "Configuration requise",
+  "f3f1d8f247e0def2": "Instantané sans nom",
+  "4212d65ace158b5b": "Nouvelle Box (sans instantané)",
+  "93772fd0276951d1": "Instantané enregistré indisponible",
+  "52820a0a9b8c2def": "Actualiser les instantanés",
+  "6ef72c25deafa2b2": "Vous n’avez pas l’autorisation de choisir des instantanés.",
+  "4e1802085d103e00": "Impossible de charger les instantanés. Vérifiez votre connexion à Box, puis actualisez la liste.",
+  "bf477c31d229e3d5": "Chargement des instantanés…",
+  "6474d81b0d9ea91c": "Aucun instantané pour le moment. Les instantanés enregistrés dans Box apparaîtront ici.",
+  "ca55c8cb71dd6412": "Seuls les instantanés prêts peuvent être utilisés pour de nouvelles conversations.",
+  "971763147ddacc96": "Nom de l’instantané",
+  "30ceb3f2fceacc94": "Les noms affichés sont partagés entre les projets de cet environnement. L’instantané dans Box reste inchangé.",
+  "fb4d72380d24ca6e": "Démarrez les Boxes des nouvelles conversations à partir d’un instantané préparé. Utilisez uniquement des instantanés créés sans identifiants d’agent.",
+  "a386231cbf78b57b": "Choisissez un environnement pour sélectionner un instantané."
 }

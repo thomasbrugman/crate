@@ -12236,7 +12236,6 @@
   "67f4aa1a06528a91": "Förbereder autentiseringsuppgifter",
   "10a8d3ed31c3da0c": "Klistra in en API-nyckel för Command Code eller innehållet i ~/.commandcode/auth.json.",
   "b348145623c69867": "Ögonblicksbild för Upstash Box",
-  "2dbd2da341f1f37e": "Valfritt. Återställ nya trådars Boxar från en ögonblicksbild skapad utan agenternas inloggningsuppgifter.",
   "276872b1b4120d7a": "Klistra in en Anthropic-API-nyckel eller en token från claude setup-token.",
   "7d49aae75c90c5c6": "Klistra in en OpenAI-API-nyckel eller innehållet i ~/.codex/auth.json när du har loggat in.",
   "7317ccaec18e412a": "Används för att konfigurera äldre {harness}-Boxes, inte för att ställa in Git-inloggningsuppgifter.",
@@ -12263,5 +12262,18 @@
   "0dfc582858939130": "Överhoppat",
   "9756b09ffd8a55c6": "Pågår",
   "353b08f4363dbb2c": "Väntar",
-  "6796d4f5acef3397": "Konfiguration krävs"
+  "6796d4f5acef3397": "Konfiguration krävs",
+  "f3f1d8f247e0def2": "Namnlös ögonblicksbild",
+  "4212d65ace158b5b": "Ny Box (utan ögonblicksbild)",
+  "93772fd0276951d1": "Sparad ögonblicksbild är inte tillgänglig",
+  "52820a0a9b8c2def": "Uppdatera ögonblicksbilder",
+  "6ef72c25deafa2b2": "Du har inte behörighet att välja ögonblicksbilder.",
+  "4e1802085d103e00": "Kunde inte läsa in ögonblicksbilder. Kontrollera din Box-anslutning och uppdatera listan.",
+  "bf477c31d229e3d5": "Läser in ögonblicksbilder…",
+  "6474d81b0d9ea91c": "Inga ögonblicksbilder ännu. Ögonblicksbilder som sparats i Box visas här.",
+  "ca55c8cb71dd6412": "Endast färdiga ögonblicksbilder kan användas för nya trådar.",
+  "971763147ddacc96": "Ögonblicksbildens namn",
+  "30ceb3f2fceacc94": "Visningsnamn delas mellan projekten i den här miljön. Ögonblicksbilden i Box ändras inte.",
+  "fb4d72380d24ca6e": "Starta nya trådars Box från en förberedd ögonblicksbild. Använd endast ögonblicksbilder som skapats utan agentens inloggningsuppgifter.",
+  "a386231cbf78b57b": "Välj en miljö för att välja en ögonblicksbild."
 }

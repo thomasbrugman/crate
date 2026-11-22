@@ -12238,7 +12238,6 @@
   "67f4aa1a06528a91": "Preparing credentials",
   "10a8d3ed31c3da0c": "Paste a Command Code API key or the contents of ~/.commandcode/auth.json.",
   "b348145623c69867": "Upstash Box snapshot",
-  "2dbd2da341f1f37e": "Optional. Restore new thread Boxes from a snapshot created without harness credentials.",
   "276872b1b4120d7a": "Paste an Anthropic API key or a token from claude setup-token.",
   "7d49aae75c90c5c6": "Paste an OpenAI API key or the contents of ~/.codex/auth.json after signing in.",
   "7317ccaec18e412a": "Used to set up legacy {harness} Boxes, not to configure Git credentials.",
@@ -12265,5 +12264,18 @@
   "0dfc582858939130": "Skipped",
   "9756b09ffd8a55c6": "In progress",
   "353b08f4363dbb2c": "Pending",
-  "6796d4f5acef3397": "Setup required"
+  "6796d4f5acef3397": "Setup required",
+  "f3f1d8f247e0def2": "Unnamed snapshot",
+  "4212d65ace158b5b": "Fresh Box (no snapshot)",
+  "93772fd0276951d1": "Saved snapshot unavailable",
+  "52820a0a9b8c2def": "Refresh snapshots",
+  "6ef72c25deafa2b2": "You do not have permission to choose snapshots.",
+  "4e1802085d103e00": "Could not load snapshots. Check your Box connection, then refresh.",
+  "bf477c31d229e3d5": "Loading snapshots…",
+  "6474d81b0d9ea91c": "No snapshots yet. Snapshots saved in Box will appear here.",
+  "ca55c8cb71dd6412": "Only ready snapshots can be used for new threads.",
+  "971763147ddacc96": "Snapshot name",
+  "30ceb3f2fceacc94": "Display names are shared by projects on this environment. The snapshot in Box is unchanged.",
+  "fb4d72380d24ca6e": "Start new thread Boxes from a prepared snapshot. Only use snapshots created without harness credentials.",
+  "a386231cbf78b57b": "Choose one environment to select a snapshot."
 }
