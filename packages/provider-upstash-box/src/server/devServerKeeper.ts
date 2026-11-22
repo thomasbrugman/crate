@@ -45,7 +45,7 @@ function listeners() {
       const socket = sockets.get(target.slice(8, -1));
       if (!target.startsWith('socket:[') || !socket) continue;
       const argv = (read('/proc/' + pid + '/cmdline') ?? '').split('\0').filter(Boolean);
-      if (argv.length === 0 || argv.some((arg) => arg.includes('t3stash-'))) continue;
+      if (argv.length === 0 || argv.includes(self)) continue;
       const known = servers.get(socket.port);
       if (known && !known.loopback) continue;
       let cwd = null;
@@ -58,6 +58,13 @@ function listeners() {
   }
   return [...servers.values()].sort((a, b) => a.port - b.port);
 }
+
+// Harness credentials reach agent-started servers through the environment; they must not be
+// persisted where they outlive the harness or end up in a snapshot.
+const secretName = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTH/i;
+const parseEnv = (raw) => Object.fromEntries(raw.split('\0').filter(Boolean)
+  .map((pair) => [pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)])
+  .filter(([name]) => !secretName.test(name)));
 
 function loadState() {
   try { return JSON.parse(read(statePath) ?? '[]'); } catch { return []; }
@@ -73,10 +80,7 @@ function record(current) {
     let env = same ? old.env : null;
     if (!same) {
       const raw = read('/proc/' + server.pid + '/environ');
-      env = raw ? Object.fromEntries(raw.split('\0').filter(Boolean).map((pair) => {
-        const index = pair.indexOf('=');
-        return [pair.slice(0, index), pair.slice(index + 1)];
-      })) : null;
+      env = raw ? parseEnv(raw) : null;
     }
     return { port: server.port, pid: server.pid, cwd: server.cwd, argv: server.argv, env, missing: 0 };
   });
@@ -85,8 +89,9 @@ function record(current) {
       next.push({ ...old, missing: (old.missing ?? 0) + 1 });
   }
   mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-  writeFileSync(statePath + '.tmp', JSON.stringify(next), { mode: 0o600 });
-  renameSync(statePath + '.tmp', statePath);
+  const temp = statePath + '.' + process.pid + '.tmp';
+  writeFileSync(temp, JSON.stringify(next), { mode: 0o600 });
+  renameSync(temp, statePath);
 }
 
 function detach(argv, cwd, env, log) {
@@ -120,8 +125,13 @@ if (command === 'list') {
 } else if (command === 'boot') {
   mkdirSync(stateDir + '/logs', { recursive: true, mode: 0o700 });
   const running = new Set(listeners().map((server) => server.port));
-  for (const entry of loadState()) {
-    if (running.has(entry.port) || !entry.argv?.length) continue;
+  const state = loadState();
+  const launched = new Set();
+  for (const entry of state) {
+    if (!entry.argv?.length || launched.has(entry.pid)) continue;
+    // A server listening on several ports is one process and is started once.
+    launched.add(entry.pid);
+    if (state.some((other) => other.pid === entry.pid && running.has(other.port))) continue;
     try {
       detach(entry.argv, entry.cwd ?? '/workspace/home', entry.env ?? process.env, stateDir + '/logs/' + entry.port + '.log');
     } catch {}
