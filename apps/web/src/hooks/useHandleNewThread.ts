@@ -3,7 +3,12 @@ import {
   scopeProjectRef,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import { DEFAULT_SERVER_SETTINGS, type ScopedProjectRef, type ThreadId } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  type ScopedProjectRef,
+  type ThreadId,
+  type UpstashBoxSize,
+} from "@t3tools/contracts";
 import { type AnyRouter, useRouter } from "@tanstack/react-router";
 import {
   composerDraftHasUserContent,
@@ -102,6 +107,7 @@ export function createNewThreadHandler(router: AnyRouter) {
       replace?: boolean;
       /** Composer text for the draft, set before it shows. A draft with user text keeps it. */
       prompt?: string;
+      boxSize?: UpstashBoxSize;
     },
   ): Promise<{ draftId: DraftId; threadId: ThreadId } | null> => {
     const projects = readProjects();
@@ -123,6 +129,8 @@ export function createNewThreadHandler(router: AnyRouter) {
     } = useComposerDraftStore.getState();
     // Never over text the user wrote: a draft can gain some while this awaits.
     const seedPrompt = (draftId: DraftId) => {
+      if (options?.boxSize !== undefined)
+        useComposerDraftStore.getState().setBoxSize(draftId, options.boxSize);
       if (options?.prompt === undefined) return;
       if (composerDraftHasUserContent(getComposerDraft(draftId))) return;
       setPrompt(draftId, options.prompt);

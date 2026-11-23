@@ -29,6 +29,16 @@ import { makeBoxGitSetup } from "./git.ts";
 
 const isBoxRuntimeError = Schema.is(BoxRuntimeError);
 
+function isStaleSnapshot(error: unknown): boolean {
+  return (
+    error instanceof BoxError &&
+    (error.statusCode === 404 ||
+      ([400, 409, 410, 422].includes(error.statusCode ?? 0) &&
+        /snapshot/i.test(error.message) &&
+        /not found|missing|deleted|not ready|not in.*ready/i.test(error.message)))
+  );
+}
+
 /** The thread's Box environment plus the agent that runs inside it. */
 export interface BoxRuntimeConfig {
   readonly apiKey: string;
@@ -59,7 +69,14 @@ function shareSetup(key: string, setup: () => Promise<BoxHandle>): Promise<BoxHa
   return promise;
 }
 
-export type BoxSetupStep = "connect" | "create" | "check" | "install" | "credentials" | "clone";
+export type BoxSetupStep =
+  | "connect"
+  | "create"
+  | "check"
+  | "install"
+  | "credentials"
+  | "clone"
+  | "snapshot-fallback";
 
 export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
   config: BoxRuntimeConfig,
@@ -76,6 +93,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
         `${NodeCrypto.createHash("sha256").update(config.apiKey).digest("hex")}:${name}`,
         async () => {
           let box: BoxHandle;
+          let snapshotUnavailable = false;
           onProgress("connect");
           try {
             box = await api.get(name, config.apiKey);
@@ -94,12 +112,19 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
                   networkPolicy: { mode: "allow-all" },
                 }
               : boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) });
-            box = await (
-              config.snapshotId
-                ? (api.restore?.(config.snapshotId, createConfig) ??
-                  Promise.reject(new BoxRuntimeError({ operation: "create" })))
-                : api.create({ ...createConfig, browser: true })
-            ).catch((createError: unknown) => {
+            const create = async () => {
+              if (!config.snapshotId) return api.create({ ...createConfig, browser: true });
+              try {
+                if (!api.restore) throw new BoxRuntimeError({ operation: "create" });
+                return await api.restore(config.snapshotId, createConfig);
+              } catch (error) {
+                if (!isStaleSnapshot(error)) throw error;
+                snapshotUnavailable = true;
+                onProgress("snapshot-fallback");
+                return api.create({ ...createConfig, browser: true });
+              }
+            };
+            box = await create().catch((createError: unknown) => {
               if (!isMissingStoredKey(createError)) throw createError;
               throw new BoxRuntimeError({
                 operation: "create",
@@ -110,8 +135,13 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
           }
           try {
             if (config.credentials) {
-              await prepareThreadBox(box, config, repositoryUrl, onProgress, () =>
-                configureBoxGit(box, config.githubToken),
+              await prepareThreadBox(
+                box,
+                config,
+                repositoryUrl,
+                onProgress,
+                () => configureBoxGit(box, config.githubToken),
+                snapshotUnavailable,
               );
               return box;
             }
@@ -309,9 +339,10 @@ async function prepareThreadBox(
   repositoryUrl: string | undefined,
   onProgress: (step: BoxSetupStep) => void,
   configureGit: () => Promise<void>,
+  snapshotUnavailable: boolean,
 ) {
   onProgress("check");
-  if (config.snapshotId) {
+  if (config.snapshotId && !snapshotUnavailable) {
     const repo = "/workspace/home/repo";
     await requireCommand(
       box,

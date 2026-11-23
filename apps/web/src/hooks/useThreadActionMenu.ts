@@ -27,6 +27,7 @@ import { titleRegenerationToast } from "../components/threadTitleRegenerationToa
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { copyThreadReference } from "../lib/copyThreadReference";
 import { m } from "../i18n/messages";
+import { readProjectSnapshotAction, saveProjectSnapshot } from "../lib/projectBoxSnapshot";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import { boxThreadDeletionWarning } from "../lib/boxThreadDeletionWarning";
 import { threadEnvironment } from "../state/threads";
@@ -139,7 +140,9 @@ export function useThreadActionMenu(input: {
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
+      const snapshotAction = readProjectSnapshotAction(threadRef);
       const items = buildThreadActionMenuItems({
+        ...(snapshotAction ? { projectSnapshot: { disabledReason: snapshotAction.reason } } : {}),
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         canFind: onFind !== undefined,
         branch: thread.branch ?? null,
@@ -196,6 +199,9 @@ export function useThreadActionMenu(input: {
         }
       };
       switch (action) {
+        case "save-project-snapshot":
+          await saveProjectSnapshot(threadRef);
+          return;
         case "find":
           onFind?.(threadRef);
           return;

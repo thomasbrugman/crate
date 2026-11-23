@@ -6,7 +6,13 @@ import {
   OrchestrationV2SearchThreadsResult,
 } from "./orchestrationV2.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
-import { BoxSnapshotList, BoxSnapshotsError } from "./boxSnapshot.ts";
+import {
+  BoxSnapshot,
+  BoxSnapshotList,
+  BoxSnapshotsError,
+  SaveProjectBoxSnapshotInput,
+  SaveProjectBoxSnapshotError,
+} from "./boxSnapshot.ts";
 import {
   McpAppCallToolInput,
   McpAppCallToolResult,
@@ -556,6 +562,7 @@ export const WS_METHODS = {
   peerLinksAnswerRequest: "peerLinks.answerRequest",
   serverGetSettings: "server.getSettings",
   serverListBoxSnapshots: "server.listBoxSnapshots",
+  saveProjectBoxSnapshot: "server.saveProjectBoxSnapshot",
   serverUpdateSettings: "server.updateSettings",
   serverDiscoverSourceControl: "server.discoverSourceControl",
   serverCheckSecretSource: "server.checkSecretSource",
@@ -924,6 +931,12 @@ const WsServerListBoxSnapshotsRpc = Rpc.make(WS_METHODS.serverListBoxSnapshots, 
   payload: Schema.Struct({}),
   success: BoxSnapshotList,
   error: Schema.Union([BoxSnapshotsError, EnvironmentAuthorizationError]),
+});
+
+const WsSaveProjectBoxSnapshotRpc = Rpc.make(WS_METHODS.saveProjectBoxSnapshot, {
+  payload: SaveProjectBoxSnapshotInput,
+  success: BoxSnapshot,
+  error: Schema.Union([SaveProjectBoxSnapshotError, EnvironmentAuthorizationError]),
 });
 
 const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSettings, {
@@ -2318,6 +2331,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetDatabaseStorageRpc,
   WsServerGetSettingsRpc,
   WsServerListBoxSnapshotsRpc,
+  WsSaveProjectBoxSnapshotRpc,
   WsServerReclaimDatabaseSpaceRpc,
   WsServerUpdateSettingsRpc,
   WsPeerLinksListRpc,

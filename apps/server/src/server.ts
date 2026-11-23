@@ -110,6 +110,7 @@ import * as PreviewBrowser from "./preview/PreviewBrowser.ts";
 import * as ProcessRunner from "./processRunner.ts";
 import { BoxApi, BoxExec, BoxServers } from "@t3tools/provider-upstash-box/server";
 import * as BoxSnapshots from "./project/BoxSnapshots.ts";
+import * as ProjectBoxSnapshots from "./project/ProjectBoxSnapshots.ts";
 import * as BoxThreadResolver from "./vcs/BoxThreadResolver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
@@ -764,10 +765,18 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(layerVcs),
   Layer.provideMerge(layerBoxGit),
   Layer.provideMerge(
-    BoxSnapshots.layer.pipe(
-      Layer.provide(BoxApi.layer),
-      Layer.provide(layerServerSettings),
-      Layer.provide(SecretResolver.layer),
+    Layer.mergeAll(
+      BoxSnapshots.layer.pipe(
+        Layer.provide(BoxApi.layer),
+        Layer.provide(layerServerSettings),
+        Layer.provide(SecretResolver.layer),
+      ),
+      ProjectBoxSnapshots.layer.pipe(
+        Layer.provide(BoxApi.layer),
+        Layer.provide(layerBoxThreadResolver),
+        Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
+        Layer.provide(layerServerSettings),
+      ),
     ),
   ),
   Layer.provideMerge(Layer.mergeAll(layerTerminal, layerPreview, layerDevice)),

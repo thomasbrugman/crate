@@ -108,6 +108,7 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
   install: "Installing harnesses",
   credentials: "Preparing credentials",
   clone: "Cloning the repository",
+  "snapshot-fallback": "Project snapshot unavailable; starting with a fresh Box",
 };
 
 const boxStoppedMessage = "This thread's Box stopped mid-turn. Send a message to start a new one.";

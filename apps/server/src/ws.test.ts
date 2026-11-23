@@ -104,6 +104,7 @@ import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import { BoxServers } from "@t3tools/provider-upstash-box/server";
 import * as BoxSnapshots from "./project/BoxSnapshots.ts";
+import * as ProjectBoxSnapshots from "./project/ProjectBoxSnapshots.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
@@ -817,6 +818,7 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
 // Build the production RPC layer; unrelated capabilities fail if this test calls them.
 const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(BoxThreadResolver.BoxThreadResolver)({}),
+  Layer.mock(ProjectBoxSnapshots.ProjectBoxSnapshots)({}),
   Layer.mock(DocumentText.DocumentText)({}),
   Layer.mock(ServerSecretStore.ServerSecretStore)({}),
   Layer.mock(SecretCheck.SecretCheck)({}),

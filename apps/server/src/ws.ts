@@ -219,6 +219,7 @@ import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as BoxThreadResolver from "./vcs/BoxThreadResolver.ts";
 import { BoxServers } from "@t3tools/provider-upstash-box/server";
 import * as BoxSnapshots from "./project/BoxSnapshots.ts";
+import * as ProjectBoxSnapshots from "./project/ProjectBoxSnapshots.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import { refreshPushedPullRequests } from "./git/refreshPushedPullRequests.ts";
@@ -1546,6 +1547,7 @@ export const layerWsRpc = (
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const boxServers = yield* BoxServers.BoxServers;
       const boxSnapshots = yield* BoxSnapshots.BoxSnapshots;
+      const projectBoxSnapshots = yield* ProjectBoxSnapshots.ProjectBoxSnapshots;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
       const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
       const acpRegistryCatalog = yield* AcpRegistrySupport.AcpRegistryCatalog;
@@ -2754,6 +2756,7 @@ export const layerWsRpc = (
         [WS_METHODS.serverCheckOtlpEndpoint]: (input) => otlpEndpointCheck.check(input),
         [WS_METHODS.serverListTextGeneratorModels]: (input) => textGenerators.listModels(input),
         [WS_METHODS.serverListBoxSnapshots]: () => boxSnapshots.list,
+        [WS_METHODS.saveProjectBoxSnapshot]: (input) => projectBoxSnapshots.save(input),
         [WS_METHODS.serverPrepareTriage]: (input) => triage.prepare(input),
         [WS_METHODS.serverSignalProcess]: (input) => processDiagnostics.signal(input),
         [WS_METHODS.serverReportClientActivity]: (input, metadata) =>

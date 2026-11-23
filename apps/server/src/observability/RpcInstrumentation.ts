@@ -71,6 +71,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.peerLinksAnswerRequest]: "peerLinks",
   [WS_METHODS.serverGetSettings]: "server",
   [WS_METHODS.serverListBoxSnapshots]: "server",
+  [WS_METHODS.saveProjectBoxSnapshot]: "server",
   [WS_METHODS.serverUpdateSettings]: "server",
   [WS_METHODS.serverSearchAcpRegistry]: "server",
   [WS_METHODS.serverPrepareAcpRegistryAgent]: "server",

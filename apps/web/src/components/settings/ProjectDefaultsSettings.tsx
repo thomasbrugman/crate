@@ -1,4 +1,5 @@
 import { managedRuntimeModeDenial } from "@t3tools/client-runtime/contract-labels";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import {
   DEFAULT_SERVER_SETTINGS,
   type ModelSelection,
@@ -25,6 +26,7 @@ import { PULL_REQUEST_MERGE_METHOD_LABELS } from "../pullRequest/pullRequestDeta
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { BoxSnapshotPicker } from "./BoxSnapshotPicker";
+import { ProjectBoxSetup } from "./ProjectBoxSetup";
 import { toastManager } from "../ui/toast";
 import { Switch } from "../ui/switch";
 import { resolveDefaultModelSettingsPresentation } from "./ProjectDefaultsSettings.logic";
@@ -361,6 +363,12 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
           {modelRow}
           {fallbackRow}
           {workspaceRow}
+          {isProjectScope &&
+          target?.projectId &&
+          targets.length === 1 &&
+          isUpstashBoxDriver(activeEntry?.driverKind) ? (
+            <ProjectBoxSetup environmentId={target.environmentId} projectId={target.projectId} />
+          ) : null}
           <SettingsRow
             serverScoped
             settingKeys={["upstashBoxSnapshotId"]}

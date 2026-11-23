@@ -106,6 +106,11 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { copyThreadReference } from "../lib/copyThreadReference";
 import {
+  readProjectSnapshotAction,
+  saveProjectSnapshot,
+  savingProjectSnapshotsAtom,
+} from "../lib/projectBoxSnapshot";
+import {
   queueWorkspaceFocusFromPalette,
   restoreWorkspaceFocusFromPalette,
 } from "../lib/workspaceFocus";
@@ -1336,6 +1341,23 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  const savingSnapshots = useAtomValue(savingProjectSnapshotsAtom);
+  const snapshotThreadRef = activeThread
+    ? scopeThreadRef(activeThread.environmentId, activeThread.id)
+    : null;
+  const snapshotAction = readProjectSnapshotAction(snapshotThreadRef, savingSnapshots);
+  if (snapshotAction && snapshotThreadRef) {
+    actionItems.push({
+      kind: "action",
+      value: "action:save-project-snapshot",
+      searchTerms: ["setup", "box", "snapshot", "environment"],
+      title: gt("Save as project snapshot"),
+      description: snapshotAction.reason ?? gt("Use this Box for new threads in this project."),
+      disabled: snapshotAction.reason !== null,
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      run: () => saveProjectSnapshot(snapshotThreadRef),
+    });
+  }
 
   if (projects.length > 0) {
     const activeProjectTitle =
