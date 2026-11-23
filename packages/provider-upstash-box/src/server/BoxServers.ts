@@ -55,7 +55,9 @@ export const make = Effect.gen(function* () {
   // Credentials are only returned when a URL is created, so they live for this server's lifetime.
   const urls = new Map<string, BoxApi.BoxPublicUrl>();
 
-  const publish = async (box: BoxApi.BoxHandle, ports: ReadonlyArray<number>) => {
+  const publishing = new Map<string, Promise<void>>();
+
+  const publishMissing = async (box: BoxApi.BoxHandle, ports: ReadonlyArray<number>) => {
     const publicUrls = box.publicUrls;
     if (!publicUrls) return;
     const missing = ports.filter((port) => !urls.has(`${box.id}:${port}`));
@@ -66,6 +68,19 @@ export const make = Effect.gen(function* () {
       if (existing.has(port)) await publicUrls.delete(port);
       urls.set(`${box.id}:${port}`, await publicUrls.create(port));
     }
+  };
+
+  // Concurrent scans would each replace the URL and hand out credentials the other revoked.
+  const publish = (box: BoxApi.BoxHandle, ports: ReadonlyArray<number>) => {
+    const next = (publishing.get(box.id) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => publishMissing(box, ports));
+    publishing.set(box.id, next);
+    const settle = () => {
+      if (publishing.get(box.id) === next) publishing.delete(box.id);
+    };
+    next.then(settle, settle);
+    return next;
   };
 
   return BoxServers.of({

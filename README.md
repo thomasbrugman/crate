@@ -96,7 +96,8 @@ used for legacy Command Code setup, not for Git.
   parent's commit when the task was delegated. Commit work you want the child to see first.
 - **Sizes and snapshots.** Pick small, medium or large per thread. Start a large setup thread from
   the project's **Environment setup** settings, prepare the environment, then choose **Save as
-  project snapshot** in the thread menu. New threads use it in their own size. Harness and Git
+  project snapshot** in the thread menu. You can also choose an existing snapshot under **Upstash
+  Box snapshot** in the project's settings. New threads use it in their own size. Harness and Git
   credentials use memory-backed storage; known legacy credential paths are excluded during capture.
 - **Boxes stick around.** Archiving a thread keeps its Box. Deleting the thread deletes it.
 - **Live terminal.** Once the first agent turn creates the Box, open the terminal drawer or a
@@ -109,9 +110,10 @@ used for legacy Command Code setup, not for Git.
 Some T3 Code features don't make sense when the agent isn't on your machine, and some just
 aren't built yet:
 
-- No diff view, file browser, preview or device panel for cloud threads. Ask the agent to inspect
-  files or show you a diff.
-- No rollback, approvals, steering an agent mid-turn, file attachments or reasoning streams.
+- No file previews or attachments in cloud threads. File mentions use the server checkout, and only
+  pushed files reach the Box. The Changes panel shows the Box's diff, and the Browser panel runs on
+  the Box's own Chromium.
+- No rollback, approvals, steering an agent mid-turn or reasoning streams.
 - Project setup scripts don't run in Boxes. Use a snapshot instead.
 - Box threads cannot hand off to a host worktree. Files saved by the MCP secret tool stay on the
   server, not in the Box.

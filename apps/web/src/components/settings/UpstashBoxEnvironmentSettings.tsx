@@ -114,7 +114,7 @@ export function UpstashBoxEnvironmentSettings({
         hint={m(hint)}
         credentialInput={credentialInput}
         environmentId={environmentId}
-        environmentLabel={gt("Upstash Box environment")}
+        environmentLabel={gt("Upstash Box")}
         instanceId={provider.instanceId}
         provider={provider}
         readOnly={readOnly}

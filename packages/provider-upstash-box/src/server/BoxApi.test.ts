@@ -102,3 +102,17 @@ it.effect("projects SDK handles and responses without retaining credential metad
     );
   }).pipe(Effect.provide(layer)),
 );
+
+it.effect("lists snapshots from the Box API region the SDK uses", () =>
+  Effect.gen(function* () {
+    const fetch = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      Response.json({ snapshots: [] }),
+    );
+    using _fetch = vi.spyOn(globalThis, "fetch").mockImplementation(fetch);
+    vi.stubEnv("UPSTASH_BOX_BASE_URL", "https://eu-central-1.box.upstash.com/");
+    yield* Effect.addFinalizer(() => Effect.sync(() => vi.unstubAllEnvs()));
+    const api = yield* BoxApi;
+    assert.deepEqual(yield* Effect.promise(() => api.listSnapshots!("key")), { snapshots: [] });
+    assert.equal(fetch.mock.calls[0]?.[0], "https://eu-central-1.box.upstash.com/v2/box/snapshots");
+  }).pipe(Effect.scoped, Effect.provide(layer)),
+);
