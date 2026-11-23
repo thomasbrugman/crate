@@ -95,7 +95,8 @@ used for legacy Command Code setup, not for Git.
   Delegated Box tasks appear as linked child threads and, in Git projects, get a worktree from the
   parent's commit when the task was delegated. Commit work you want the child to see first.
 - **Sizes and snapshots.** Pick small, medium or large per thread. To skip slow installs, set up a
-  Box once, snapshot it, and put the snapshot ID in your project defaults. New threads start from
+  Box once, snapshot it, and choose the snapshot under **Upstash Box snapshot** in the project's
+  settings. New threads start from
   it. Use a snapshot of a setup Box that has never contained credentials, not an active thread Box.
 - **Boxes stick around.** Archiving a thread keeps its Box. Deleting the thread deletes it.
 - **Live terminal.** Once the first agent turn creates the Box, open the terminal drawer or a
