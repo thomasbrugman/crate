@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import type { EnvironmentId, ProjectId, RuntimeMode } from "@t3tools/contracts";
+import type { EnvironmentId, ModelSelection, ProjectId, RuntimeMode } from "@t3tools/contracts";
 
 const testState = vi.hoisted(() => {
   let completeProjectFileRead: (value: null) => void = () => undefined;
@@ -53,6 +53,7 @@ const testState = vi.hoisted(() => {
     setLogicalProjectDraftThreadId: vi.fn(),
     setModelSelection: vi.fn(),
     setPrompt: vi.fn(),
+    setBoxSize: vi.fn(),
   };
 
   return {
@@ -113,6 +114,7 @@ const testState = vi.hoisted(() => {
       draftStore.setDraftThreadContext.mockClear();
       draftStore.setLogicalProjectDraftThreadId.mockClear();
       draftStore.setPrompt.mockClear();
+      draftStore.setBoxSize.mockClear();
       projectFileRead = new Promise<null>((resolve) => {
         completeProjectFileRead = resolve;
       });
@@ -315,14 +317,24 @@ describe.each([
 
   it("sets the prompt before the draft shows", async () => {
     testState.reset(draft);
+    const boxModel = { instanceId: "box", model: "box-model" } as ModelSelection;
     const pendingOpen = useNewThreadHandler()(
       { environmentId: "environment-ssh", projectId: "project-remote" } as never,
-      { prompt: "Read the playbook. " },
+      { prompt: "Read the playbook. ", boxSize: "large", modelSelection: boxModel },
     );
 
     testState.completeProjectFileRead(null);
     const opened = await pendingOpen;
 
+    expect(testState.draftStore.setBoxSize).toHaveBeenCalledWith(opened?.draftId, "large");
+    expect(testState.draftStore.setModelSelection).toHaveBeenLastCalledWith(
+      opened?.draftId,
+      boxModel,
+      { replaceOptions: true },
+    );
+    expect(testState.draftStore.setBoxSize.mock.invocationCallOrder[0]).toBeLessThan(
+      testState.router.navigate.mock.invocationCallOrder[0] ?? 0,
+    );
     expect(testState.draftStore.setPrompt).toHaveBeenCalledWith(
       opened?.draftId,
       "Read the playbook. ",

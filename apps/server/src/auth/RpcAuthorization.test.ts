@@ -86,6 +86,9 @@ describe("RPC authorization scopes", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.serverListBoxSnapshots)).toBe(
       AuthSettingsWriteScope,
     );
+    expect(requiredScopeForRpcMethod(WS_METHODS.saveProjectBoxSnapshot)).toBe(
+      AuthSettingsWriteScope,
+    );
   });
 
   it("rejects unknown RPC method names", () => {

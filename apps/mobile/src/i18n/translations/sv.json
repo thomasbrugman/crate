@@ -743,7 +743,10 @@
   "c1e03a860c856245": "Stoppad",
   "fd961a3820d46cfa": "Ansluter till Box",
   "9f6faa1464231d0f": "Skapar Box",
+  "1c3811f32bdfc2b7": "Projektets ögonblicksbild är inte tillgänglig; startar en ny Box",
   "21ace56348b5b799": "Kontrollerar Box-konfigurationen",
+  "9f754eebb3866690": "Installerar agenter",
+  "67f4aa1a06528a91": "Förbereder autentiseringsuppgifter",
   "9c08b1739f450ae2": "Klonar repositoryt",
   "49221d2a7a2da0de": "Konfigurerar Box",
   "f1d27d127ab27ac6": "Startar",
@@ -5341,7 +5344,5 @@
   "ad208e3e32c85029": "Dölj alla",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Verktygsanrop i chatten",
-  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid.",
-  "9f754eebb3866690": "Installerar agenter",
-  "67f4aa1a06528a91": "Förbereder autentiseringsuppgifter"
+  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid."
 }

@@ -93,11 +93,17 @@ describe("fallbackTextGenerationModelSelection", () => {
 describe("serverSettings helpers", () => {
   it("keeps other snapshot names when a project names or resets one snapshot", () => {
     const named = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
-      upstashBox: { snapshotNames: { first: "Frontend dependencies", second: "Backend ready" } },
+      upstashBox: {
+        apiKey: "test-key",
+        size: "large",
+        snapshotNames: { first: "Frontend dependencies", second: "Backend ready" },
+      },
     });
     const renamed = applyServerSettingsPatch(named, {
       upstashBox: { snapshotNames: { first: "Frontend ready" } },
     });
+    expect(renamed.upstashBox.apiKey).toBe("test-key");
+    expect(renamed.upstashBox.size).toBe("large");
     expect(renamed.upstashBox.snapshotNames).toEqual({
       first: "Frontend ready",
       second: "Backend ready",

@@ -466,6 +466,26 @@ describe("thread execution presentation", () => {
         (step) => step.state,
       ),
     ).toEqual(["done", "skipped", "done", "skipped", "skipped", "active"]);
+    const fallback = {
+      key: "upstash-box.setup.snapshot-fallback",
+      text: "Project snapshot unavailable; starting a fresh Box",
+    };
+    const fallingBack = deriveThreadActivityRun({
+      ...starting,
+      providerSessions: [{ ...boxSession, extensionStatuses: [fallback] }],
+    });
+    expect(fallingBack?.providerStartingLabel).toBe(fallback.text);
+    expect(fallingBack?.boxSetupChecklist?.find((step) => step.key === fallback.key)?.state).toBe(
+      "active",
+    );
+    expect(
+      deriveThreadActivityRun({
+        ...starting,
+        providerSessions: [
+          { ...cloning, extensionStatuses: [...cloning.extensionStatuses, fallback] },
+        ],
+      })?.boxSetupChecklist?.find((step) => step.key === fallback.key)?.state,
+    ).toBe("done");
     for (const status of ["ready", "error"] as const) {
       expect(
         deriveThreadActivityRun({ ...starting, providerSessions: [{ ...cloning, status }] })

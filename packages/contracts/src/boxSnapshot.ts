@@ -1,4 +1,28 @@
 import * as Schema from "effect/Schema";
+import { ProjectId, ThreadId } from "./baseSchemas.ts";
+
+export const SaveProjectBoxSnapshotInput = Schema.Struct({
+  projectId: ProjectId,
+  threadId: ThreadId,
+});
+
+export class SaveProjectBoxSnapshotError extends Schema.TaggedError<SaveProjectBoxSnapshotError>()(
+  "SaveProjectBoxSnapshotError",
+  {
+    reason: Schema.Literals([
+      "wrong-project",
+      "active-turn",
+      "not-box",
+      "worktree",
+      "unavailable",
+      "concurrent",
+    ]),
+  },
+) {
+  override get message(): string {
+    return `Could not save project Box snapshot (${this.reason}).`;
+  }
+}
 
 export const BoxSnapshot = Schema.Struct({
   id: Schema.String,

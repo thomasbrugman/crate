@@ -29,6 +29,16 @@ import { makeBoxGitSetup } from "./git.ts";
 
 const isBoxRuntimeError = Schema.is(BoxRuntimeError);
 
+function isStaleSnapshot(error: unknown): boolean {
+  return (
+    error instanceof BoxError &&
+    (error.statusCode === 404 ||
+      ([400, 409, 410, 422].includes(error.statusCode ?? 0) &&
+        /snapshot/i.test(error.message) &&
+        /not found|missing|deleted|not ready|not in.*ready/i.test(error.message)))
+  );
+}
+
 /** The thread's Box environment plus the agent that runs inside it. */
 export interface BoxRuntimeConfig {
   readonly apiKey: string;
@@ -59,7 +69,14 @@ function shareSetup(key: string, setup: () => Promise<BoxHandle>): Promise<BoxHa
   return promise;
 }
 
-export type BoxSetupStep = "connect" | "create" | "check" | "install" | "credentials" | "clone";
+export type BoxSetupStep =
+  | "connect"
+  | "create"
+  | "check"
+  | "install"
+  | "credentials"
+  | "clone"
+  | "snapshot-fallback";
 
 export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
   config: BoxRuntimeConfig,
@@ -76,6 +93,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
         `${NodeCrypto.createHash("sha256").update(config.apiKey).digest("hex")}:${name}`,
         async () => {
           let box: BoxHandle;
+          let snapshotUnavailable = false;
           onProgress("connect");
           try {
             box = await api.get(name, config.apiKey);
@@ -94,12 +112,19 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
                   networkPolicy: { mode: "allow-all" },
                 }
               : boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) });
-            box = await (
-              config.snapshotId
-                ? (api.restore?.(config.snapshotId, createConfig) ??
-                  Promise.reject(new BoxRuntimeError({ operation: "create" })))
-                : api.create({ ...createConfig, browser: true })
-            ).catch((createError: unknown) => {
+            const create = async () => {
+              if (!config.snapshotId) return api.create({ ...createConfig, browser: true });
+              try {
+                if (!api.restore) throw new BoxRuntimeError({ operation: "create" });
+                return await api.restore(config.snapshotId, createConfig);
+              } catch (error) {
+                if (!isStaleSnapshot(error)) throw error;
+                snapshotUnavailable = true;
+                onProgress("snapshot-fallback");
+                return api.create({ ...createConfig, browser: true });
+              }
+            };
+            box = await create().catch((createError: unknown) => {
               if (!isMissingStoredKey(createError)) throw createError;
               throw new BoxRuntimeError({
                 operation: "create",
@@ -110,8 +135,13 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
           }
           try {
             if (config.credentials) {
-              await prepareThreadBox(box, config, repositoryUrl, onProgress, () =>
-                configureBoxGit(box, config.githubToken),
+              await prepareThreadBox(
+                box,
+                config,
+                repositoryUrl,
+                onProgress,
+                () => configureBoxGit(box, config.githubToken),
+                snapshotUnavailable,
               );
               return box;
             }
@@ -129,6 +159,10 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
                     "test -f /home/boxuser/.local/bin/t3stash-harness.mjs",
                     "test -x /home/boxuser/.local/bin/command-code",
                     "test -f /home/boxuser/.commandcode/auth.json",
+                    `test -L ${BOX_HOME}/.commandcode/auth.json`,
+                    `test -L ${BOX_HOME}/.commandcode/config.json`,
+                    `test -f ${BOX_COMMAND_CODE_HOME}/.commandcode/auth.json`,
+                    `test -f ${BOX_COMMAND_CODE_HOME}/.commandcode/config.json`,
                   ]
                 : []),
               ...(repositoryUrl ? ["test -d /workspace/home/repo/.git"] : []),
@@ -231,6 +265,10 @@ export async function installConnectedHarnesses(
     box,
     `test "$(stat -f -c %T /dev/shm)" = tmpfs && umask 077 && mkdir -p ${BOX_CREDENTIALS_DIR}/codex ${BOX_CREDENTIALS_DIR}/claude ${BOX_COMMAND_CODE_HOME}/.commandcode`,
   );
+  await requireCommand(
+    box,
+    `ln -sfnT ${BOX_CREDENTIALS_DIR}/claude/.claude.json ${BOX_HOME}/.claude.json`,
+  );
   for (const harness of Object.keys(cliPackages) as BoxHarness[]) {
     const credential = connected.find((entry) => entry.harness === harness);
     const stamp = `${BOX_CREDENTIALS_DIR}/${harness}.sha256`;
@@ -250,7 +288,10 @@ export async function installConnectedHarnesses(
         box,
         [
           `mkdir -p ${BOX_HOME}/.commandcode/projects`,
-          `rm -f -- ${BOX_HOME}/.commandcode/auth.json`,
+          ...["auth.json", "config.json"].map(
+            (file) =>
+              `ln -sfnT ${BOX_COMMAND_CODE_HOME}/.commandcode/${file} ${BOX_HOME}/.commandcode/${file}`,
+          ),
           ...[".commandcode/projects", ".gitconfig"].map(
             (path) => `ln -sfnT ${BOX_HOME}/${path} ${BOX_COMMAND_CODE_HOME}/${path}`,
           ),
@@ -263,7 +304,7 @@ export async function installConnectedHarnesses(
       const oldAuth = harness === "codex" ? "auth.json" : ".credentials.json";
       await requireCommand(
         box,
-        `mkdir -p ${BOX_HOME}/${home}/${persistent} && rm -f -- ${BOX_HOME}/${home}/${oldAuth} && ln -sfn ${BOX_HOME}/${home}/${persistent} ${directory}/${target}/${persistent}`,
+        `mkdir -p ${BOX_HOME}/${home}/${persistent} && ln -sfnT ${directory}/${target}/${oldAuth} ${BOX_HOME}/${home}/${oldAuth} && ln -sfn ${BOX_HOME}/${home}/${persistent} ${directory}/${target}/${persistent}`,
       );
     }
     if (!credential) {
@@ -309,9 +350,10 @@ async function prepareThreadBox(
   repositoryUrl: string | undefined,
   onProgress: (step: BoxSetupStep) => void,
   configureGit: () => Promise<void>,
+  snapshotUnavailable: boolean,
 ) {
   onProgress("check");
-  if (config.snapshotId) {
+  if (config.snapshotId && !snapshotUnavailable) {
     const repo = "/workspace/home/repo";
     await requireCommand(
       box,
@@ -342,18 +384,26 @@ async function installCommandCode(box: BoxHandle, template: BoxHandle) {
   );
   if (install.exitCode !== 0) throw new Error("Command Code installation failed.");
   const mkdir = await box.exec.command(
-    "mkdir -p /home/boxuser/.commandcode /home/boxuser/.local/bin && chmod 700 /home/boxuser/.commandcode",
+    `test "$(stat -f -c %T /dev/shm)" = tmpfs && umask 077 && mkdir -p ${BOX_HOME}/.commandcode/projects ${BOX_HOME}/.local/bin ${BOX_COMMAND_CODE_HOME}/.commandcode && chmod 700 ${BOX_HOME}/.commandcode`,
   );
   if (mkdir.exitCode !== 0) throw new Error("Box workspace setup failed.");
-  for (const [source, destination] of [
-    ["~/.commandcode/auth.json", "/home/boxuser/.commandcode/auth.json"],
-    ["~/.commandcode/config.json", "/home/boxuser/.commandcode/config.json"],
-  ] as const) {
+  const writeVolatile = box.files.writeVolatile;
+  if (!writeVolatile) throw new Error("Box does not support volatile credentials.");
+  for (const file of ["auth.json", "config.json"]) {
+    const source = `~/.commandcode/${file}`;
     const result = await template.exec.command(`cat ${source}`);
     if (result.exitCode !== 0 || !result.stdout)
       throw new Error("Template bootstrap file is unavailable.");
-    await box.files.write({ path: destination, content: result.stdout });
+    await writeVolatile(`${BOX_COMMAND_CODE_HOME}/.commandcode/${file}`, result.stdout);
+    await requireCommand(
+      box,
+      `ln -sfnT ${BOX_COMMAND_CODE_HOME}/.commandcode/${file} ${BOX_HOME}/.commandcode/${file}`,
+    );
   }
+  await requireCommand(
+    box,
+    `ln -sfnT ${BOX_HOME}/.commandcode/projects ${BOX_COMMAND_CODE_HOME}/.commandcode/projects && ln -sfnT ${BOX_HOME}/.gitconfig ${BOX_COMMAND_CODE_HOME}/.gitconfig`,
+  );
   const permissions = await box.exec.command(
     "chmod 600 /home/boxuser/.commandcode/auth.json /home/boxuser/.commandcode/config.json",
   );

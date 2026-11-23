@@ -1908,6 +1908,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:box-snapshots",
       tag: WS_METHODS.serverListBoxSnapshots,
     }),
+    saveProjectBoxSnapshot: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:save-project-box-snapshot",
+      tag: WS_METHODS.saveProjectBoxSnapshot,
+    }),
     retryResourceTelemetry: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:retry-resource-telemetry",
       tag: WS_METHODS.serverRetryResourceTelemetry,

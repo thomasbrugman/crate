@@ -8,6 +8,75 @@ import { BoxApi, type BoxHandle } from "./BoxApi.ts";
 import { ensureBox } from "./bootstrap.ts";
 import { commandCodeHarness } from "./harness.ts";
 
+it.effect.each([
+  { status: 404, message: "Snapshot not found", fallback: true },
+  { status: 409, message: "Snapshot is not ready", fallback: true },
+  { status: 410, message: "Snapshot deleted", fallback: true },
+  { status: 401, message: "Unauthorized", fallback: false },
+  { status: 429, message: "Snapshot quota exceeded", fallback: false },
+  { status: 503, message: "Snapshot unavailable", fallback: false },
+])("restores with narrow stale snapshot fallback: %j", ({ status, message, fallback }) =>
+  Effect.gen(function* () {
+    let created = 0;
+    const commands: string[] = [];
+    const steps: string[] = [];
+    const box: BoxHandle = {
+      id: "fresh",
+      agent: {
+        stream: async () => {
+          throw new Error("unexpected");
+        },
+      },
+      exec: {
+        command: async (command) => {
+          commands.push(command);
+          return { stdout: "", exitCode: 0 };
+        },
+      },
+      files: { write: async () => undefined, writeVolatile: async () => undefined },
+      delete: async () => undefined,
+      resume: async () => undefined,
+      getStatus: async () => ({ status: "running" }),
+    };
+    const result = yield* ensureBox(
+      {
+        apiKey: "key",
+        templateBoxName: "template",
+        size: "small",
+        harness: "codex",
+        model: "test",
+        agentApiKey: "",
+        credentials: {},
+        snapshotId: "stale",
+      },
+      "fallback-thread",
+      "https://github.com/example/repo.git",
+      (step) => steps.push(step),
+    ).pipe(
+      Effect.provideService(BoxApi, {
+        get: async () => {
+          throw new BoxError("missing Box", 404);
+        },
+        restore: async () => {
+          throw new BoxError(message, status);
+        },
+        create: async (config) => {
+          created++;
+          assert.equal(config.size, "small");
+          return box;
+        },
+        list: async () => [],
+        checkModelKey: async () => 200,
+      }),
+      Effect.result,
+    );
+    assert.equal(result._tag, fallback ? "Success" : "Failure");
+    assert.equal(created, fallback ? 1 : 0);
+    assert.equal(steps.includes("snapshot-fallback"), fallback);
+    assert.isFalse(commands.some((command) => command.includes("remote get-url origin")));
+  }),
+);
+
 it.effect(
   "classifies authentication failures without retaining SDK errors or calling with no key",
   () =>
@@ -58,16 +127,19 @@ it.effect(
   "bootstraps credentials and repositories once, supports no remote, and sanitizes clone failures",
   () =>
     Effect.gen(function* () {
-      for (const [repositoryUrl, fails] of [
-        [undefined, false],
-        ["https://github.com/owner/repo.git", false],
-        ["https://github.com/owner/repo.git", true],
+      for (const [repositoryUrl, fails, existing] of [
+        [undefined, false, false],
+        ["https://github.com/owner/repo.git", false, false],
+        ["https://github.com/owner/repo.git", true, false],
+        [undefined, false, true],
       ] as const) {
         const created: BoxConfig[] = [];
-        let ready = false;
+        let ready = existing;
+        let migrated = false;
         let clones = 0;
         const commands: string[] = [];
         const writes: string[] = [];
+        const volatile = new Map<string, string>();
         const harnesses: string[] = [];
         const steps: string[] = [];
         const box: BoxHandle = {
@@ -80,16 +152,26 @@ it.effect(
           exec: {
             command: async (command) => {
               commands.push(command);
-              if (command.startsWith("test -f")) return { stdout: "", exitCode: ready ? 0 : 1 };
+              if (command.startsWith("test -f"))
+                return {
+                  stdout: "",
+                  exitCode: ready && (!command.includes("test -L") || migrated) ? 0 : 1,
+                };
               if (command.includes("git clone --")) {
                 clones++;
                 if (fails) throw new Error("private credentials in SDK request");
               }
-              if (command.startsWith("chmod 600 /home/boxuser/.commandcode")) ready = true;
+              if (command.startsWith("chmod 600 /home/boxuser/.commandcode")) {
+                ready = true;
+                migrated = true;
+              }
               return { stdout: "", exitCode: 0 };
             },
           },
           files: {
+            writeVolatile: async (path, content) => {
+              volatile.set(path, content);
+            },
             write: async ({ path, content }) => {
               writes.push(path);
               if (path.endsWith("t3stash-harness.mjs")) harnesses.push(content);
@@ -108,7 +190,7 @@ it.effect(
                   command: async () => ({ stdout: "private template credentials", exitCode: 0 }),
                 },
               };
-            if (!created.length) throw new BoxError("missing", 404);
+            if (!created.length && !existing) throw new BoxError("missing", 404);
             return box;
           },
           create: async (config: BoxConfig) => {
@@ -140,7 +222,7 @@ it.effect(
           yield* bootstrap;
           assert.deepEqual(steps, [
             "connect",
-            "create",
+            ...(!existing ? ["create"] : []),
             "check",
             "install",
             "credentials",
@@ -150,13 +232,24 @@ it.effect(
           ]);
           assert.equal(clones, repositoryUrl ? 1 : 0);
           assert.isFalse(writes.some((path) => /\.git(?:-credentials|config)$/u.test(path)));
+          assert.isFalse(writes.some((path) => /\/(?:auth|config)\.json$/u.test(path)));
+          assert.equal(
+            volatile.get("/dev/shm/t3stash-auth/command-home/.commandcode/auth.json"),
+            "private template credentials",
+          );
+          assert.equal(
+            volatile.get("/dev/shm/t3stash-auth/command-home/.commandcode/config.json"),
+            "private template credentials",
+          );
           assert.deepEqual(harnesses, [commandCodeHarness, commandCodeHarness]);
         }
-        assert.isTrue(created[0]?.browser);
-        assert.equal(
-          created[0]?.env?.BOXJOB_CC_CWD,
-          repositoryUrl ? "/workspace/home/repo" : "/workspace/home",
-        );
+        if (!existing) {
+          assert.isTrue(created[0]?.browser);
+          assert.equal(
+            created[0]?.env?.BOXJOB_CC_CWD,
+            repositoryUrl ? "/workspace/home/repo" : "/workspace/home",
+          );
+        }
       }
     }),
 );
@@ -403,6 +496,14 @@ it.effect.each([
         credentials.codex,
       );
       assert.deepEqual(templateReads, []);
+      assert.include(
+        commands.join("\n"),
+        "ln -sfnT /dev/shm/t3stash-auth/codex/auth.json /home/boxuser/.codex/auth.json",
+      );
+      assert.include(
+        commands.join("\n"),
+        "ln -sfnT /dev/shm/t3stash-auth/claude/.credentials.json /home/boxuser/.claude/.credentials.json",
+      );
       if (profileStatus !== 200) {
         const stampWrittenAfterFailure = volatile.has("/dev/shm/t3stash-git/stamp");
         githubUser.mockResolvedValueOnce(Response.json({ id: 123, login: "fixture-login" }));

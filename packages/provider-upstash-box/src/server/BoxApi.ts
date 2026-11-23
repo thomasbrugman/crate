@@ -15,6 +15,7 @@ import {
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type { BoxSnapshot } from "@t3tools/contracts";
 
 import type { BoxHarness } from "../harnesses.ts";
 
@@ -92,6 +93,7 @@ export interface BoxStream extends AsyncIterable<Chunk | BoxSubagentChunk> {
 }
 
 export interface BoxHandle {
+  readonly snapshot?: (options: { readonly name: string }) => Promise<BoxSnapshot>;
   readonly id: string;
   readonly agent: { readonly stream: (options: StreamOptions) => Promise<BoxStream> };
   readonly exec: {
@@ -162,6 +164,20 @@ export class BoxApi extends Context.Service<
 
 function projectBox(box: Box): BoxHandle {
   return {
+    snapshot: async (options) => {
+      try {
+        const snapshot = await box.snapshot(options);
+        if (snapshot.status !== "ready") throw new Error("Snapshot unavailable.");
+        return {
+          id: snapshot.id,
+          name: snapshot.name,
+          status: "ready",
+          createdAt: snapshot.created_at,
+        };
+      } catch {
+        throw new BoxRuntimeError({ operation: "snapshot" });
+      }
+    },
     id: box.id,
     agent: {
       stream: async (options) => {

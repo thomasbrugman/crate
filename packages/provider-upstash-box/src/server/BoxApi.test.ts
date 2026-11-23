@@ -3,7 +3,7 @@ import { Box, BoxError } from "@upstash/box";
 import * as Effect from "effect/Effect";
 import { vi } from "vite-plus/test";
 
-import { BoxApi, boxErrorDetails, layer } from "./BoxApi.ts";
+import { BoxApi, BoxRuntimeError, boxErrorDetails, layer } from "./BoxApi.ts";
 
 it("keeps only sanitized diagnostic fields from SDK errors", () => {
   const sentinel = "sdk-credential-fixture";
@@ -53,6 +53,13 @@ it.effect("projects SDK handles and responses without retaining credential metad
       delete: async () => metadata,
       resume: async () => undefined,
       getStatus: async () => ({ ...metadata, status: "running" }),
+      snapshot: async ({ name }: { name: string }) => ({
+        ...metadata,
+        id: "snapshot",
+        name,
+        status: "ready",
+        created_at: 1,
+      }),
     };
     using _get = vi.spyOn(Box, "get").mockResolvedValue(native as unknown as Box);
     using _list = vi.spyOn(Box, "list").mockResolvedValue([]);
@@ -61,6 +68,21 @@ it.effect("projects SDK handles and responses without retaining credential metad
     const run = yield* Effect.promise(() => box.agent.stream({ prompt: "hello" }));
     const command = yield* Effect.promise(() => box.exec.command("true"));
     const status = yield* Effect.promise(() => box.getStatus());
+    assert.deepEqual(yield* Effect.promise(() => box.snapshot!({ name: "setup" })), {
+      id: "snapshot",
+      name: "setup",
+      status: "ready",
+      createdAt: 1,
+    });
+    using _snapshot = vi.spyOn(native, "snapshot").mockRejectedValue(new Error(sentinel));
+    const snapshotError = yield* Effect.tryPromise({
+      try: () => box.snapshot!({ name: "setup" }),
+      catch: (error) => {
+        assert.instanceOf(error, BoxRuntimeError);
+        return error as BoxRuntimeError;
+      },
+    }).pipe(Effect.flip);
+    assert.notInclude(JSON.stringify(snapshotError), sentinel);
     for (const projected of [box, run, command, status]) {
       assert.isFalse(JSON.stringify(projected).includes(sentinel));
     }

@@ -28,6 +28,7 @@ async function setup(
   });
   let output = "";
   let args: string[] = [];
+  let env: Record<string, string> = {};
   await NodeVM.runInNewContext(
     `(async () => {${commandCodeHarness.replace(/^#!.*$|^import .*;$/gm, "")}})()`,
     {
@@ -43,8 +44,9 @@ async function setup(
       Buffer,
       join: (...parts: string[]) => parts.join("/"),
       homedir: () => "/home/boxuser",
-      spawn: (_bin: string, value: string[]) => {
+      spawn: (_bin: string, value: string[], options: { env: Record<string, string> }) => {
         args = [...value];
+        env = options.env;
         return child;
       },
       process: {
@@ -70,6 +72,7 @@ async function setup(
   );
   return {
     args,
+    env,
     child,
     frame: (event: Record<string, unknown>) => {
       child.stdout.write(JSON.stringify({ type: "event", event }) + "\n");
@@ -93,7 +96,9 @@ it("resumes the newest matching Command Code transcript only when no session was
     "other.jsonl": { mtimeMs: 3, header: { type: "session", id: "other", cwd: "/other" } },
     "broken.jsonl": { mtimeMs: 4, header: {} },
   };
-  assert.include((await setup({ files })).args.join(" "), "--resume newer");
+  const normal = await setup({ files });
+  assert.include(normal.args.join(" "), "--resume newer");
+  assert.equal(normal.env.HOME, "/dev/shm/t3stash-auth/command-home");
   assert.include((await setup({ files, session: "explicit" })).args.join(" "), "--resume explicit");
   assert.notInclude((await setup({ files, explicitSession: true })).args, "--resume");
   assert.notInclude((await setup()).args, "--resume");
