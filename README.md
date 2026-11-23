@@ -108,9 +108,10 @@ used for legacy Command Code setup, not for Git.
 Some T3 Code features don't make sense when the agent isn't on your machine, and some just
 aren't built yet:
 
-- No diff view, file browser, preview or device panel for cloud threads. Ask the agent to inspect
-  files or show you a diff.
-- No rollback, approvals, steering an agent mid-turn, file attachments or reasoning streams.
+- No file previews or attachments in cloud threads. File mentions use the server checkout, and only
+  pushed files reach the Box. The Changes panel shows the Box's diff, and the Browser panel runs on
+  the Box's own Chromium.
+- No rollback, approvals, steering an agent mid-turn or reasoning streams.
 - Project setup scripts don't run in Boxes. Use a snapshot instead.
 - Box threads cannot hand off to a host worktree. Files saved by the MCP secret tool stay on the
   server, not in the Box.
