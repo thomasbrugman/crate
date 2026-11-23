@@ -140,6 +140,8 @@ function boxSetupLabel(key: string | undefined) {
       return msg("Connecting to the Box");
     case "upstash-box.setup.create":
       return msg("Creating the Box");
+    case "upstash-box.setup.snapshot-fallback":
+      return msg("Project snapshot unavailable; starting a fresh Box");
     case "upstash-box.setup.check":
       return msg("Checking the Box setup");
     case "upstash-box.setup.install":
@@ -171,10 +173,18 @@ function providerStarting(
       : name === undefined
         ? msg("Starting", { $context: "a provider is launching" })
         : msg("Starting {provider}", { provider: name });
-  const steps = ["connect", "create", "check", "install", "credentials", "clone"].map(
-    (step) => `upstash-box.setup.${step}`,
-  );
   const reached = session?.extensionStatuses ?? [];
+  const steps = [
+    "connect",
+    ...(reached.some((status) => status.key === "upstash-box.setup.snapshot-fallback")
+      ? ["snapshot-fallback"]
+      : []),
+    "create",
+    "check",
+    "install",
+    "credentials",
+    "clone",
+  ].map((step) => `upstash-box.setup.${step}`);
   const activeKey = reached[0]?.key ?? steps[0];
   const activeIndex = steps.indexOf(activeKey!);
   return {

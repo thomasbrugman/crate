@@ -743,7 +743,10 @@
   "c1e03a860c856245": "Stopped",
   "fd961a3820d46cfa": "Connecting to the Box",
   "9f6faa1464231d0f": "Creating the Box",
+  "1c3811f32bdfc2b7": "Project snapshot unavailable; starting a fresh Box",
   "21ace56348b5b799": "Checking the Box setup",
+  "9f754eebb3866690": "Installing harnesses",
+  "67f4aa1a06528a91": "Preparing credentials",
   "9c08b1739f450ae2": "Cloning the repository",
   "49221d2a7a2da0de": "Setting up Box",
   "f1d27d127ab27ac6": "Starting",
@@ -5342,7 +5345,5 @@
   "ad208e3e32c85029": "Hide all",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Tool calls in chat",
-  "8d545d54c0a9e950": "Hide the commands, edits, and searches agents run. Hide successful keeps failures. Zen shows only final answers. Approvals, questions, and errors always show.",
-  "9f754eebb3866690": "Installing harnesses",
-  "67f4aa1a06528a91": "Preparing credentials"
+  "8d545d54c0a9e950": "Hide the commands, edits, and searches agents run. Hide successful keeps failures. Zen shows only final answers. Approvals, questions, and errors always show."
 }
