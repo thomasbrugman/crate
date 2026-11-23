@@ -74,6 +74,24 @@ const make = Effect.gen(function* () {
             return yield* new SaveProjectBoxSnapshotError({ reason: "active-turn" });
           const target = yield* resolver.resolveTerminal(input.threadId);
           if (!target) return yield* new SaveProjectBoxSnapshotError({ reason: "not-box" });
+          const shell = yield* projection.getShellSnapshot();
+          for (const thread of [...shell.threads, ...shell.archivedThreads]) {
+            if (thread.id === input.threadId) continue;
+            const other = yield* projection.getThreadRecords(thread.id, ["runs", "providerTurns"]);
+            if (
+              other.thread.deletedAt !== null ||
+              (!other.runs.some((run) =>
+                ["preparing", "queued", "starting", "running", "waiting"].includes(run.status),
+              ) &&
+                !other.providerTurns.some(
+                  (turn) => turn.status === "pending" || turn.status === "running",
+                ))
+            )
+              continue;
+            const owner = yield* resolver.resolveTerminal(thread.id);
+            if (owner?.nativeId === target.nativeId)
+              return yield* new SaveProjectBoxSnapshotError({ reason: "active-turn" });
+          }
           const project = yield* projects.get(input.projectId);
           if (Option.isNone(project) || project.value.deletedAt !== null)
             return yield* unavailable();

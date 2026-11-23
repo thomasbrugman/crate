@@ -28,6 +28,12 @@ it.effect.each([
   "not-ready",
   "wrong-project",
   "active-turn",
+  "shared-run",
+  "shared-turn",
+  "shared-archived",
+  "other-box",
+  "shared-idle",
+  "shared-deleted",
   "not-box",
   "concurrent",
 ] as const)("saves project snapshots safely: %s", (scenario) =>
@@ -92,13 +98,48 @@ it.effect.each([
     const release = yield* Deferred.make<void>();
     const commands: string[] = [];
     const original = projection.getThreadRecords;
+    const otherId = ThreadId.make("other-thread");
     const gated = {
       ...projection,
+      getShellSnapshot: () =>
+        projection.getShellSnapshot().pipe(
+          Effect.map((snapshot) => ({
+            ...snapshot,
+            archivedThreads:
+              scenario === "shared-archived"
+                ? [{ ...snapshot.threads[0]!, id: otherId }]
+                : snapshot.archivedThreads,
+            threads:
+              (scenario.startsWith("shared-") && scenario !== "shared-archived") ||
+              scenario === "other-box"
+                ? [...snapshot.threads, { ...snapshot.threads[0]!, id: otherId }]
+                : snapshot.threads,
+          })),
+        ),
       getThreadRecords: (...args: Parameters<typeof original>) =>
         Effect.gen(function* () {
           yield* Deferred.succeed(entered, undefined);
           if (scenario === "concurrent") yield* Deferred.await(release);
-          const records = yield* original(...args);
+          const records = yield* original(
+            args[0] === otherId ? threadId : args[0],
+            args[1],
+            args[2],
+          );
+          if (args[0] === otherId)
+            return {
+              ...records,
+              thread: {
+                ...records.thread,
+                id: otherId,
+                archivedAt: scenario === "shared-archived" ? now : null,
+                deletedAt: scenario === "shared-deleted" ? now : null,
+              },
+              runs:
+                scenario === "shared-idle" || scenario === "shared-turn"
+                  ? []
+                  : [{ status: "running" }],
+              providerTurns: scenario === "shared-turn" ? [{ status: "pending" }] : [],
+            };
           return scenario === "active-turn"
             ? { ...records, runs: [{ status: "running" }] }
             : records;
@@ -110,11 +151,16 @@ it.effect.each([
           Layer.provideMerge(
             Layer.mergeAll(
               Layer.mock(BoxThreadResolver.BoxThreadResolver)({
-                resolveTerminal: () =>
+                resolveTerminal: (id) =>
                   Effect.succeed(
                     scenario === "not-box"
                       ? null
-                      : { nativeId: "actual-box", apiKey: "private-key", worktree: false },
+                      : {
+                          nativeId:
+                            scenario === "other-box" && id === otherId ? "other-box" : "actual-box",
+                          apiKey: "private-key",
+                          worktree: false,
+                        },
                   ),
               }),
               Layer.mock(BoxApi.BoxApi)({
@@ -180,7 +226,7 @@ it.effect.each([
         yield* Deferred.succeed(release, undefined);
         yield* Fiber.join(first);
       } else assert.equal((yield* service.save(input).pipe(Effect.flip)).reason, "active-turn");
-    } else if (scenario === "success") {
+    } else if (["success", "other-box", "shared-idle", "shared-deleted"].includes(scenario)) {
       assert.equal((yield* service.save(input)).id, "new-snapshot");
     } else {
       const error = yield* service.save(input).pipe(Effect.flip);
@@ -188,12 +234,16 @@ it.effect.each([
         error.reason,
         ["capture-failure", "cleanup-failure", "not-ready"].includes(scenario)
           ? "unavailable"
-          : scenario,
+          : scenario.startsWith("shared-")
+            ? "active-turn"
+            : scenario,
       );
       assert.notInclude(JSON.stringify(error), "private-key");
     }
     const after = yield* settings.getSettings;
-    if (scenario === "success" || scenario === "concurrent") {
+    if (
+      ["success", "concurrent", "other-box", "shared-idle", "shared-deleted"].includes(scenario)
+    ) {
       assert.equal(after.projectSettingsOverrides[projectId]?.upstashBoxSnapshotId, "new-snapshot");
       assert.equal(after.projectSettingsOverrides[projectId]?.upstashBoxSetupThreadId, threadId);
       assert.match(after.upstashBox.snapshotNames["new-snapshot"]!, /^my-project-setup-/);
