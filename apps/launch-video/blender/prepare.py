@@ -10,12 +10,15 @@ parser = work_parser('Prepare audited screen sequences, captions and end card')
 parser.add_argument('--clips', type=Path, help='Source clips directory (default: WORK_DIR/clips)')
 parser.add_argument('--font', type=Path, required=True, help='Inter variable TTF (optical size/weight axes)')
 parser.add_argument('--graphics-only', action='store_true')
+parser.add_argument('--style-script', type=Path, default=Path(__file__).resolve().parent.parent/'cut.py')
 args = parser.parse_args()
 D = args.work_dir
 D.mkdir(parents=True, exist_ok=True)
 C = args.clips or D/'clips'
-STYLE = runpy.run_path(str(Path(__file__).resolve().parent.parent/'cut.py'))
-(D/'shots.json').write_text(json.dumps(SHOTS, indent=2))
+STYLE = runpy.run_path(str(args.style_script))
+shots = json.loads((D/'beat_grid.json').read_text())['shots'] if (D/'beat_grid.json').exists() else SHOTS
+(D/'shots.json').write_text(json.dumps(shots, indent=2))
+(D/'graphics.json').write_text(json.dumps(dict(font=str(args.font.resolve()))))
 
 def extract(name, file, start, seconds, vf='null'):
     if args.graphics_only:
@@ -41,7 +44,7 @@ extract('phone','t3stash-readme-phone-60fps.mp4',0,5,
 caption_font = ImageFont.truetype(str(args.font), 50)
 caption_font.set_variation_by_axes([14, 600])
 label_font = ImageFont.truetype(str(args.font), 22)
-for shot in SHOTS[:-1]:
+for shot in shots[:-1]:
     image = Image.new('RGBA',(1920,1080))
     draw = ImageDraw.Draw(image)
     if shot['caption']:

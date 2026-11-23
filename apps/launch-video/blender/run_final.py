@@ -12,7 +12,7 @@ render_options(parser)
 parser.add_argument('--blender', default='blender')
 parser.add_argument('--threads', type=int, default=12)
 parser.add_argument('--music', type=Path, required=True)
-parser.add_argument('--music-start', type=float, default=0)
+parser.add_argument('--music-start', type=float)
 args = parser.parse_args()
 D = args.work_dir
 D.mkdir(parents=True, exist_ok=True)
@@ -25,6 +25,7 @@ for name in ('laptop_model', 'phone_model'):
     value = getattr(args, name)
     if value:
         options.extend(['--'+name.replace('_', '-'), str(value.resolve())])
+music_options = ['--music-start', str(args.music_start)] if args.music_start is not None else []
 with (D/'final_render.log').open('a', buffering=1) as log:
     print('FINAL_START', datetime.datetime.now(datetime.timezone.utc).isoformat(), file=log)
     try:
@@ -33,7 +34,10 @@ with (D/'final_render.log').open('a', buffering=1) as log:
                         *options], check=True, stdout=log, stderr=subprocess.STDOUT,
                        pass_fds=(lock.fileno(),))
         subprocess.run([sys.executable, str(SCRIPTS/'assemble.py'), str(D), '--final',
-                        '--music', str(args.music.resolve()), '--music-start', str(args.music_start)],
+                        '--music', str(args.music.resolve()), *music_options],
+                       check=True, stdout=log, stderr=subprocess.STDOUT,
+                       pass_fds=(lock.fileno(),))
+        subprocess.run([sys.executable, str(SCRIPTS/'deliver.py'), str(D)],
                        check=True, stdout=log, stderr=subprocess.STDOUT,
                        pass_fds=(lock.fileno(),))
     except Exception as error:

@@ -2,14 +2,16 @@
 import bpy, sys, os, json, time, math
 from pathlib import Path
 from mathutils import Vector
+from mathutils.geometry import barycentric_transform
+from bpy_extras.object_utils import world_to_camera_view
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import complete_png, render_options, work_parser
+from common import ROW_UVS, can_resume_frame, render_options, work_parser
 from device_shot import build_scene
 
 parser = work_parser(__doc__)
 render_options(parser)
-parser.add_argument('--mode', choices=('boards', 'animatic', 'benchmark', 'final'), default='boards')
+parser.add_argument('--mode', choices=('boards', 'animatic', 'benchmark', 'final', 'anchors'), default='boards')
 parser.add_argument('--shot', type=int, choices=range(1, 7))
 args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
 D = args.work_dir
@@ -39,8 +41,8 @@ if LAPTOP_FINISH == 'silver':
 surface('Keycap', (0.012, 0.014, 0.018), 0, 0.72)
 shots = json.loads((D/'shots.json').read_text())
 sc.render.use_persistent_data = True
-QUALITY = MODE in ('benchmark', 'final')
-sc.render.fps = 60 if QUALITY else 30
+QUALITY = MODE in ('benchmark', 'final', 'anchors')
+sc.render.fps = 60 if QUALITY or (D/'beat_grid.json').exists() else 30
 sc.render.resolution_percentage = 100 if QUALITY else 50
 sc.cycles.samples = 20 if QUALITY else 2
 sc.cycles.use_denoising = QUALITY
@@ -128,7 +130,30 @@ def setup(index):
 timings=[]
 for index in range(6):
     if selected is not None and index!=selected:continue
+    if MODE == 'anchors' and index != 3:continue
     count=setup(index)
+    if MODE == 'anchors' or (MODE == 'final' and index == 3):
+        mesh = lap_screen.data
+        mesh.calc_loop_triangles()
+        uv = mesh.uv_layers.active.data
+        triangle = max(mesh.loop_triangles, key=lambda tri: abs(
+            (uv[tri.loops[1]].uv-uv[tri.loops[0]].uv).cross(
+             uv[tri.loops[2]].uv-uv[tri.loops[0]].uv)))
+        uv_points = [Vector((*uv[loop].uv, 0)) for loop in triangle.loops]
+        vertices = [mesh.vertices[vertex].co for vertex in triangle.vertices]
+        points = [lap_screen.matrix_world @ barycentric_transform(Vector((*point, 0)),
+                  *uv_points, *vertices) for point in ROW_UVS]
+        tracking = {}
+        for frame in range(1, count+1):
+            sc.frame_set(frame)
+            bpy.context.view_layer.update()
+            projected = [world_to_camera_view(sc, cam, point) for point in points]
+            tracking[str(frame)] = [[round(p.x*1920, 3), round((1-p.y)*1080, 3)]
+                                    for p in projected]
+        (D/'tracking').mkdir(exist_ok=True)
+        (D/'tracking'/f'{shots[index]["name"]}.json').write_text(json.dumps(tracking))
+        print('TRACKED', shots[index]['name'], count, flush=True)
+        if MODE == 'anchors':continue
     # Sequences are prepared at 60 fps even when the draft is rendered at 30.
     frames = [max(1,count//2)] if MODE=='benchmark' else ([1,count//2,count] if MODE=='boards' else range(1,count+1))
     folder = D/('benchmarks' if MODE=='benchmark' else ('final_frames' if MODE=='final' else 'frames'))/shots[index]['name']
@@ -136,7 +161,7 @@ for index in range(6):
     started=time.monotonic()
     for frame in frames:
         destination = folder/f'{frame:04d}.png'
-        if MODE == 'final' and complete_png(destination):
+        if can_resume_frame(destination, MODE):
             print('SKIP', index+1, frame, flush=True)
             continue
         sc.frame_set(frame)
