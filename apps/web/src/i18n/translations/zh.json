@@ -6063,7 +6063,7 @@
   "a0fd24f965eb070b": "无法导入会话历史。",
   "a506c135c2183ac3": "{count, plural, other {{count} 个文件夹}}",
   "efc48b9736a534bc": "刚刚",
-  "edf393ff951b533a": "欢迎使用 T3 Code",
+  "5f1be11acd225c40": "欢迎使用 t3stash",
   "3cc77f9daa7eeafd": [
     "正在设置",
     " ",
@@ -11747,7 +11747,7 @@
   "9c73aa0c2e2b4e7d": "选择快捷键",
   "300a948f90c4d75c": "后退",
   "2a50e229df85d553": "前进",
-  "8aa6404c8018ea67": "T3 Code 首页",
+  "78309c38960d26a9": "t3stash 首页",
   "8e9626aa27cb188a": "issue",
   "9d2fc1003e82feb1": "用量",
   "20283eb1dd6119f9": "{count, plural, other {{count} 个附件}}",
