@@ -279,8 +279,11 @@ export const layer = Layer.succeed(BoxApi, {
   },
   listSnapshots: async (apiKey) => {
     // The SDK only lists a living Box's snapshots; the account endpoint includes deleted sources.
+    const baseUrl = (
+      process.env.UPSTASH_BOX_BASE_URL ?? "https://us-east-1.box.upstash.com"
+    ).replace(/\/$/, "");
     // @effect-diagnostics-next-line globalFetch:off - This service is the Promise boundary the Box SDK already uses.
-    const response = await fetch("https://us-east-1.box.upstash.com/v2/box/snapshots", {
+    const response = await fetch(`${baseUrl}/v2/box/snapshots`, {
       headers: { authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(10_000),
     });
