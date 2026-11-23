@@ -1,4 +1,5 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
 import { ThreadId, type BoxSnapshot, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
@@ -8,7 +9,8 @@ import { useEffect, useEffectEvent, useState } from "react";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useQuietThreadShell } from "../../state/entities";
-import { serverEnvironment } from "../../state/server";
+import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
+import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
@@ -23,6 +25,7 @@ export function ProjectBoxSetup({
 }) {
   const gt = useGT();
   const settings = useEnvironmentSettings(environmentId);
+  const configs = useAtomValue(environmentServerConfigsAtom);
   const overrides = settings.projectSettingsOverrides[projectId];
   const snapshotId = overrides?.upstashBoxSnapshotId;
   const setupId = overrides?.upstashBoxSetupThreadId;
@@ -67,7 +70,16 @@ export function ProjectBoxSetup({
             onClick={async () => {
               setStarting(true);
               try {
+                const modelSelection = resolveProjectDefaultProviderModelSelection(
+                  (configs.get(environmentId)?.providers ?? []).filter((provider) =>
+                    isUpstashBoxDriver(provider.driver),
+                  ),
+                  settings,
+                  projectId,
+                );
+                if (!modelSelection) throw new Error("No Box provider available");
                 await startThread(scopeProjectRef(environmentId, projectId), {
+                  modelSelection,
                   envMode: "local",
                   branch: null,
                   worktreePath: null,

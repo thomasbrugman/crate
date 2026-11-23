@@ -6,6 +6,7 @@ import {
 import {
   DEFAULT_SERVER_SETTINGS,
   type ScopedProjectRef,
+  type ModelSelection,
   type ThreadId,
   type UpstashBoxSize,
 } from "@t3tools/contracts";
@@ -108,6 +109,7 @@ export function createNewThreadHandler(router: AnyRouter) {
       /** Composer text for the draft, set before it shows. A draft with user text keeps it. */
       prompt?: string;
       boxSize?: UpstashBoxSize;
+      modelSelection?: ModelSelection;
     },
   ): Promise<{ draftId: DraftId; threadId: ThreadId } | null> => {
     const projects = readProjects();
@@ -129,6 +131,8 @@ export function createNewThreadHandler(router: AnyRouter) {
     } = useComposerDraftStore.getState();
     // Never over text the user wrote: a draft can gain some while this awaits.
     const seedPrompt = (draftId: DraftId) => {
+      if (options?.modelSelection !== undefined)
+        setModelSelection(draftId, options.modelSelection, { replaceOptions: true });
       if (options?.boxSize !== undefined)
         useComposerDraftStore.getState().setBoxSize(draftId, options.boxSize);
       if (options?.prompt === undefined) return;
