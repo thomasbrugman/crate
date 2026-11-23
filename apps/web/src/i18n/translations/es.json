@@ -11464,6 +11464,7 @@
   "bc74c76021689cfe": "Este hilo no pertenece a este proyecto.",
   "5e71cf759c19737c": "Espera a que termine el turno antes de guardar una instantánea.",
   "85e4e87bf098ece6": "Este hilo no tiene una Upstash Box.",
+  "6337f457390b55bf": "Guarda las instantáneas desde el hilo principal de configuración del proyecto, no desde un worktree delegado.",
   "a2695c8058db6115": "Ya se está guardando una instantánea de este proyecto.",
   "b10168db193b2b27": "No se pudo guardar la instantánea. Comprueba la conexión de la Box e inténtalo de nuevo.",
   "28a4cd11ce51865e": "Endpoint de API personalizado",

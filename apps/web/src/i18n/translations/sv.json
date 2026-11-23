@@ -11477,6 +11477,7 @@
   "bc74c76021689cfe": "Den här tråden tillhör inte projektet.",
   "5e71cf759c19737c": "Vänta tills turen är klar innan du sparar en ögonblicksbild.",
   "85e4e87bf098ece6": "Den här tråden har ingen Upstash Box.",
+  "6337f457390b55bf": "Spara ögonblicksbilder från projektets huvudsakliga konfigurationstråd, inte från ett delegerat arbetsträd.",
   "a2695c8058db6115": "En ögonblicksbild sparas redan för projektet.",
   "b10168db193b2b27": "Kunde inte spara ögonblicksbilden. Kontrollera anslutningen till Box och försök igen.",
   "28a4cd11ce51865e": "Anpassad API-slutpunkt",

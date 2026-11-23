@@ -11468,6 +11468,7 @@
   "bc74c76021689cfe": "Esta conversa não pertence a este projeto.",
   "5e71cf759c19737c": "Aguarde o fim do turno antes de salvar um snapshot.",
   "85e4e87bf098ece6": "Esta conversa não tem uma Upstash Box.",
+  "6337f457390b55bf": "Salve snapshots na thread principal de configuração do projeto, não em um worktree delegado.",
   "a2695c8058db6115": "Um snapshot já está sendo salvo para este projeto.",
   "b10168db193b2b27": "Não foi possível salvar o snapshot. Verifique a conexão com a Box e tente novamente.",
   "28a4cd11ce51865e": "Endpoint de API personalizado",

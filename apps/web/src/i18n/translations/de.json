@@ -11471,6 +11471,7 @@
   "bc74c76021689cfe": "Dieser Thread gehört nicht zu diesem Projekt.",
   "5e71cf759c19737c": "Warte, bis der Turn abgeschlossen ist, bevor du einen Snapshot speicherst.",
   "85e4e87bf098ece6": "Dieser Thread hat keine Upstash Box.",
+  "6337f457390b55bf": "Speichere Snapshots im Haupt-Setup-Thread des Projekts, nicht in einem delegierten Worktree.",
   "a2695c8058db6115": "Für dieses Projekt wird bereits ein Snapshot gespeichert.",
   "b10168db193b2b27": "Snapshot konnte nicht gespeichert werden. Prüfe die Box-Verbindung und versuche es erneut.",
   "28a4cd11ce51865e": "Eigener API-Endpunkt",

@@ -35,6 +35,7 @@ it.effect.each([
   "shared-idle",
   "shared-deleted",
   "not-box",
+  "worktree",
   "concurrent",
 ] as const)("saves project snapshots safely: %s", (scenario) =>
   Effect.gen(function* () {
@@ -159,7 +160,7 @@ it.effect.each([
                           nativeId:
                             scenario === "other-box" && id === otherId ? "other-box" : "actual-box",
                           apiKey: "private-key",
-                          worktree: false,
+                          worktree: scenario === "worktree",
                         },
                   ),
               }),

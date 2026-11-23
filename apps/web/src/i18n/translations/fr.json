@@ -11469,6 +11469,7 @@
   "bc74c76021689cfe": "Ce fil n’appartient pas à ce projet.",
   "5e71cf759c19737c": "Attendez la fin du tour avant d’enregistrer un instantané.",
   "85e4e87bf098ece6": "Ce fil ne dispose pas d’une Upstash Box.",
+  "6337f457390b55bf": "Enregistrez les instantanés depuis le fil principal de configuration du projet, pas depuis un worktree délégué.",
   "a2695c8058db6115": "Un instantané est déjà en cours d’enregistrement pour ce projet.",
   "b10168db193b2b27": "Impossible d’enregistrer l’instantané. Vérifiez la connexion à la Box et réessayez.",
   "28a4cd11ce51865e": "API personnalisée",

@@ -31,6 +31,7 @@ export function readProjectSnapshotAction(
   const thread = readThreadShell(threadRef);
   const config = appAtomRegistry.get(environmentServerConfigsAtom).get(threadRef.environmentId);
   if (!thread || !config) return null;
+  if (thread.lineage.relationshipToParent === "subagent") return null;
   const provider = providerInstanceEntriesFor(
     config.providers,
     config.settings,

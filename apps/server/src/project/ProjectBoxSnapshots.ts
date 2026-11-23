@@ -74,6 +74,8 @@ const make = Effect.gen(function* () {
             return yield* new SaveProjectBoxSnapshotError({ reason: "active-turn" });
           const target = yield* resolver.resolveTerminal(input.threadId);
           if (!target) return yield* new SaveProjectBoxSnapshotError({ reason: "not-box" });
+          if (target.worktree)
+            return yield* new SaveProjectBoxSnapshotError({ reason: "worktree" });
           const shell = yield* projection.getShellSnapshot();
           for (const thread of [...shell.threads, ...shell.archivedThreads]) {
             if (thread.id === input.threadId) continue;

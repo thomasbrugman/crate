@@ -11479,6 +11479,7 @@
   "bc74c76021689cfe": "This thread does not belong to this project.",
   "5e71cf759c19737c": "Wait for the turn to finish before saving a snapshot.",
   "85e4e87bf098ece6": "This thread does not have an Upstash Box.",
+  "6337f457390b55bf": "Save snapshots from the project's main setup thread, not a delegated worktree.",
   "a2695c8058db6115": "A snapshot is already being saved for this project.",
   "b10168db193b2b27": "Could not save the snapshot. Check the Box connection and try again.",
   "28a4cd11ce51865e": "Custom API endpoint",

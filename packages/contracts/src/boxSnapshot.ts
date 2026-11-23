@@ -13,6 +13,7 @@ export class SaveProjectBoxSnapshotError extends Schema.TaggedError<SaveProjectB
       "wrong-project",
       "active-turn",
       "not-box",
+      "worktree",
       "unavailable",
       "concurrent",
     ]),
