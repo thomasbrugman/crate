@@ -94,9 +94,10 @@ used for legacy Command Code setup, not for Git.
   run in the parent's Box. All three Box harnesses can also delegate through Orchestration V2.
   Delegated Box tasks appear as linked child threads and, in Git projects, get a worktree from the
   parent's commit when the task was delegated. Commit work you want the child to see first.
-- **Sizes and snapshots.** Pick small, medium or large per thread. To skip slow installs, set up a
-  Box once, snapshot it, and put the snapshot ID in your project defaults. New threads start from
-  it. Use a snapshot of a setup Box that has never contained credentials, not an active thread Box.
+- **Sizes and snapshots.** Pick small, medium or large per thread. Start a large setup thread from
+  the project's **Environment setup** settings, prepare the environment, then choose **Save as
+  project snapshot** in the thread menu. New threads use it in their own size. Harness and Git
+  credentials use memory-backed storage; known legacy credential paths are excluded during capture.
 - **Boxes stick around.** Archiving a thread keeps its Box. Deleting the thread deletes it.
 - **Live terminal.** Once the first agent turn creates the Box, open the terminal drawer or a
   terminal tab. Each terminal runs its own shell in the Box, not on your Mac. If the Box connection

@@ -159,6 +159,10 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
                     "test -f /home/boxuser/.local/bin/t3stash-harness.mjs",
                     "test -x /home/boxuser/.local/bin/command-code",
                     "test -f /home/boxuser/.commandcode/auth.json",
+                    `test -L ${BOX_HOME}/.commandcode/auth.json`,
+                    `test -L ${BOX_HOME}/.commandcode/config.json`,
+                    `test -f ${BOX_COMMAND_CODE_HOME}/.commandcode/auth.json`,
+                    `test -f ${BOX_COMMAND_CODE_HOME}/.commandcode/config.json`,
                   ]
                 : []),
               ...(repositoryUrl ? ["test -d /workspace/home/repo/.git"] : []),
@@ -261,6 +265,10 @@ export async function installConnectedHarnesses(
     box,
     `test "$(stat -f -c %T /dev/shm)" = tmpfs && umask 077 && mkdir -p ${BOX_CREDENTIALS_DIR}/codex ${BOX_CREDENTIALS_DIR}/claude ${BOX_COMMAND_CODE_HOME}/.commandcode`,
   );
+  await requireCommand(
+    box,
+    `ln -sfnT ${BOX_CREDENTIALS_DIR}/claude/.claude.json ${BOX_HOME}/.claude.json`,
+  );
   for (const harness of Object.keys(cliPackages) as BoxHarness[]) {
     const credential = connected.find((entry) => entry.harness === harness);
     const stamp = `${BOX_CREDENTIALS_DIR}/${harness}.sha256`;
@@ -280,7 +288,10 @@ export async function installConnectedHarnesses(
         box,
         [
           `mkdir -p ${BOX_HOME}/.commandcode/projects`,
-          `rm -f -- ${BOX_HOME}/.commandcode/auth.json`,
+          ...["auth.json", "config.json"].map(
+            (file) =>
+              `ln -sfnT ${BOX_COMMAND_CODE_HOME}/.commandcode/${file} ${BOX_HOME}/.commandcode/${file}`,
+          ),
           ...[".commandcode/projects", ".gitconfig"].map(
             (path) => `ln -sfnT ${BOX_HOME}/${path} ${BOX_COMMAND_CODE_HOME}/${path}`,
           ),
@@ -293,7 +304,7 @@ export async function installConnectedHarnesses(
       const oldAuth = harness === "codex" ? "auth.json" : ".credentials.json";
       await requireCommand(
         box,
-        `mkdir -p ${BOX_HOME}/${home}/${persistent} && rm -f -- ${BOX_HOME}/${home}/${oldAuth} && ln -sfn ${BOX_HOME}/${home}/${persistent} ${directory}/${target}/${persistent}`,
+        `mkdir -p ${BOX_HOME}/${home}/${persistent} && ln -sfnT ${directory}/${target}/${oldAuth} ${BOX_HOME}/${home}/${oldAuth} && ln -sfn ${BOX_HOME}/${home}/${persistent} ${directory}/${target}/${persistent}`,
       );
     }
     if (!credential) {
@@ -373,18 +384,26 @@ async function installCommandCode(box: BoxHandle, template: BoxHandle) {
   );
   if (install.exitCode !== 0) throw new Error("Command Code installation failed.");
   const mkdir = await box.exec.command(
-    "mkdir -p /home/boxuser/.commandcode /home/boxuser/.local/bin && chmod 700 /home/boxuser/.commandcode",
+    `test "$(stat -f -c %T /dev/shm)" = tmpfs && umask 077 && mkdir -p ${BOX_HOME}/.commandcode/projects ${BOX_HOME}/.local/bin ${BOX_COMMAND_CODE_HOME}/.commandcode && chmod 700 ${BOX_HOME}/.commandcode`,
   );
   if (mkdir.exitCode !== 0) throw new Error("Box workspace setup failed.");
-  for (const [source, destination] of [
-    ["~/.commandcode/auth.json", "/home/boxuser/.commandcode/auth.json"],
-    ["~/.commandcode/config.json", "/home/boxuser/.commandcode/config.json"],
-  ] as const) {
+  const writeVolatile = box.files.writeVolatile;
+  if (!writeVolatile) throw new Error("Box does not support volatile credentials.");
+  for (const file of ["auth.json", "config.json"]) {
+    const source = `~/.commandcode/${file}`;
     const result = await template.exec.command(`cat ${source}`);
     if (result.exitCode !== 0 || !result.stdout)
       throw new Error("Template bootstrap file is unavailable.");
-    await box.files.write({ path: destination, content: result.stdout });
+    await writeVolatile(`${BOX_COMMAND_CODE_HOME}/.commandcode/${file}`, result.stdout);
+    await requireCommand(
+      box,
+      `ln -sfnT ${BOX_COMMAND_CODE_HOME}/.commandcode/${file} ${BOX_HOME}/.commandcode/${file}`,
+    );
   }
+  await requireCommand(
+    box,
+    `ln -sfnT ${BOX_HOME}/.commandcode/projects ${BOX_COMMAND_CODE_HOME}/.commandcode/projects && ln -sfnT ${BOX_HOME}/.gitconfig ${BOX_COMMAND_CODE_HOME}/.gitconfig`,
+  );
   const permissions = await box.exec.command(
     "chmod 600 /home/boxuser/.commandcode/auth.json /home/boxuser/.commandcode/config.json",
   );

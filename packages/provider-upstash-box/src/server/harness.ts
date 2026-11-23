@@ -87,10 +87,9 @@ if (passthroughModel && passthroughModel !== 'custom') args.push('--model', pass
 if (session) args.push('--resume', session);
 if (process.env.BOXJOB_CC_PERMISSION !== 'default') args.push('--yolo');
 
-const env = { ...process.env };
+const env = { ...process.env, HOME: '${BOX_COMMAND_CODE_HOME}' };
 const bridge = argv.includes('--t3-mcp-relay') ? await startBoxMcp(emit) : null;
 if (argv.includes('--explicit-session')) {
-	env.HOME = '${BOX_COMMAND_CODE_HOME}';
 	delete env.COMMAND_CODE_API_KEY;
 	try {
 		env.COMMAND_CODE_API_KEY = readFileSync('${BOX_CREDENTIALS_DIR}/commandCode-key', 'utf8');

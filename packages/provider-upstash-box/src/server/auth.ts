@@ -74,13 +74,28 @@ export const makeBoxHarnessAuth = Effect.fn("UpstashBox.makeAuth")(function* (
       });
       const output = yield* Queue.sliding<string>(64);
       const decoder = new TextDecoder();
+      const loginHome = "/dev/shm/t3stash-login";
+      yield* Effect.tryPromise({
+        try: async () => {
+          const result = await box.exec.command(
+            `test "$(stat -f -c %T /dev/shm)" = tmpfs && umask 077 && mkdir -p ${loginHome}`,
+          );
+          if (result.exitCode !== 0) throw new Error("Volatile sign-in storage unavailable.");
+        },
+        catch: () => failure("start", "Could not prepare the Box sign-in terminal."),
+      });
       yield* context.setProgress("Opening the sign-in terminal.");
       const session = yield* Effect.acquireRelease(
         Effect.tryPromise({
           try: () =>
             box.exec.session({
               argv: [`${BOX_HOME}/.local/bin/${cli.bin}`, ...login[harness].args],
-              env: [`HOME=${BOX_HOME}`, `CODEX_HOME=${BOX_HOME}/.codex`, "BROWSER=/bin/false"],
+              env: [
+                `HOME=${loginHome}`,
+                `CODEX_HOME=${loginHome}/.codex`,
+                `CLAUDE_CONFIG_DIR=${loginHome}/.claude`,
+                "BROWSER=/bin/false",
+              ],
               tty: true,
               cols: 80,
               rows: 24,
@@ -131,9 +146,11 @@ export const makeBoxHarnessAuth = Effect.fn("UpstashBox.makeAuth")(function* (
       yield* context.verifying;
       const credential = yield* Effect.tryPromise({
         try: async () => {
-          const value = (
-            await box.files.read(`${BOX_HOME}/${login[harness].file}`, { length: 16_384 })
-          ).trim();
+          const result = await box.exec.command(
+            `head -c 16384 ${loginHome}/${login[harness].file}`,
+          );
+          if (result.exitCode !== 0) throw new Error("No credentials returned.");
+          const value = result.stdout.trim();
           if (!isAuthJson(value)) throw new Error("No credentials returned.");
           return value;
         },
