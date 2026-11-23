@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from common import SHOTS, complete_png, concat_entry, render_options, work_parser
+from common import SHOTS, beat_cuts, complete_png, concat_entry, delivery_bitrate, render_options, work_parser
 
 
 class PipelineOptionsTest(unittest.TestCase):
@@ -33,6 +33,22 @@ class PipelineOptionsTest(unittest.TestCase):
     def test_cut_frame_budget(self):
         self.assertEqual(sum(round(s['seconds']*60) for s in SHOTS[:-1]), 1590)
         self.assertEqual(round(SHOTS[-1]['seconds']*60), 240)
+        shots = beat_cuts(SHOTS, 96, [0, 6, 14, 22, 30, 38, 44, 50])
+        self.assertEqual([shot['start_frame'] for shot in shots], [0, 225, 525, 825, 1125, 1425, 1650])
+        self.assertEqual(sum(shot['frames'] for shot in shots), 1875)
+        self.assertEqual([shot['frames'] for shot in shots], [225, 300, 300, 300, 300, 225, 225])
+        self.assertTrue(all(shot['caption_start_frame'] == 0 for shot in shots))
+        for bpm, cuts in [(0, list(range(8))), (96, []), (96, list(range(1, 9))),
+                          (96, [0, 1, 1, 3, 4, 5, 6, 7])]:
+            with self.subTest(bpm=bpm, cuts=cuts), self.assertRaises(ValueError):
+                beat_cuts(SHOTS, bpm, cuts)
+
+    def test_delivery_bitrate(self):
+        self.assertEqual(delivery_bitrate(31.25), 2_150_000)
+        self.assertLess((delivery_bitrate(60)+128_000)*60/8, 9_500_000)
+        for duration in (0, -1):
+            with self.subTest(duration=duration), self.assertRaises(ValueError):
+                delivery_bitrate(duration)
 
     def test_concat_entry_quoting(self):
         for path, expected in [

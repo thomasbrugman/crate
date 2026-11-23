@@ -62,7 +62,7 @@ alternate with the same capture directory and keep captures, music, and exports 
 ## Full 3D launch cut
 
 The Blender 4.2 LTS pipeline in `blender/` renders six independent device shots and a
-credited end card: 30.5 seconds at 1080p/60 fps. Use Python 3.10+, Pillow, FFmpeg,
+credited end card: about 31 seconds at 1080p/60 fps. Use Python 3.10+, Pillow, NumPy, FFmpeg,
 Blender with Cycles/OpenImageDenoise, DejaVu Sans fonts (for the existing end card),
 and an [Inter variable TTF](https://github.com/google/fonts/tree/main/ofl/inter)
 (optical-size and weight axes). Keep **all assets and outputs outside the checkout**.
@@ -103,6 +103,39 @@ Publish these credits with the video (also generated in `WORK/model_credits.txt`
 Stage `onboarding.mp4`, `snapshot-setting.mp4`, `readme.mp4`,
 `recut-workspace.mp4`, `t3stash-readme-phone-60fps.mp4` (1206×2622 portrait) and
 `wordmark.png` in `WORK/clips/`. Supply your licensed music separately.
+
+For a beat-synced cut, run the onset analysis before preparation:
+
+```sh
+python3 apps/launch-video/blender/beat_sync.py /path/to/music.mp3 WORK
+```
+
+This writes `beat_grid.json` (tempo, phase, onset evidence, music offset and cut frames)
+and `shots.json`. The Bridge of Roses arrangement uses 96 BPM, a 2.380-second offset,
+and beat boundaries `0,6,14,22,30,38,44,50`: 31.25 seconds, exactly 1,875 frames.
+The grid is estimated from onsets, not an authoritative musical meter transcription;
+inspect the printed peak times and audition before using a different track. Override
+`--start-beat` and `--cut-beats` to choose a different arrangement. Preparation preserves
+the grid; assembly and the runner automatically use its music offset unless overridden.
+Beat-synced animatics also use 60 fps, at half resolution/two samples, so cuts remain exact.
+
+Shot 4 uses editorial `BOX 01/02/03` callouts for the visible phone-docs, macOS-review
+and Node-version task rows, not captured Box IDs. Generate their per-frame screen anchors
+with the same model/finish/lid options as the render:
+
+```sh
+blender -b --python apps/launch-video/blender/render_shots.py -- WORK --mode anchors
+```
+
+Assembly uses `tracking/04_parallel.json` and `graphics.json` to create crisp tracked overlays.
+If retiming an existing cut, archive the affected shot directories in both `frames/` and
+`final_frames/` before rendering: existing PNGs are assumed valid. Reuse only shots whose
+duration, camera, model, materials, lights and screen sequences are unchanged. The three
+five-second task/parallel/phone shots remain reusable in this arrangement; labels are 2D.
+After final assembly, the runner verifies 1080p60/AAC and full-decodes the master, then makes
+`t3stash-launch-3d-imessage.mp4` with two-pass H.264 (up to 2150k video / 128k AAC), checks
+it is below 9,500,000 bytes and decodes it too. Results go to `delivery_verification.json`.
+Run `python3 apps/launch-video/blender/deliver.py WORK` to repeat delivery without rerendering.
 The track credit is “Music: Bridge of Roses by Ian Aisling”.
 Masks and in-points match the audited launch captures: **inspect every new source
 segment for credentials and raw Upstash data before rendering**. Fixed pixel masks
