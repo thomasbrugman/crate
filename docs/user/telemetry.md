@@ -1,13 +1,17 @@
 # Product usage data
 
-The T3 Code server sends product usage events to T3 Code's own endpoint at `ingest.t3.codes`,
-associated with a hashed account or installation identifier. To count how many installations one person
-uses, the server also sends hashed account identifiers: your T3 Connect account, your OpenAI and
-Claude accounts when you are signed in, and a random identifier for each device that connects. The endpoint keeps a copy of each
-event and forwards events to PostHog. Events include the provider, model, reasoning effort,
-permission mode, turn and request results, duration, release channel, and token counts when
-available. Child-agent token counts are reported separately from the main agent's. Model names
-are sent only when they appear in a provider's public model list.
+t3stash does not send product usage events anywhere by default. The server's analytics are off
+unless whoever runs it points them at their own PostHog project with `T3CODE_POSTHOG_KEY` and
+`T3CODE_POSTHOG_HOST`. Without both, no event leaves the server, and nothing is ever sent to T3
+Code's PostHog project or its `ingest.t3.codes` endpoint.
+
+When a PostHog project is configured, events are associated with a hashed account or installation
+identifier. To count how many installations one person uses, the server also sends hashed account
+identifiers: your T3 Connect account, your OpenAI and Claude accounts when you are signed in, and a
+random identifier for each device that connects. Events include the provider, model, reasoning
+effort, permission mode, turn and request results, duration, release channel, and token counts when
+available. Child-agent token counts are reported separately from the main agent's. Model names are
+sent only when they appear in a provider's public model list.
 
 Product events do not include prompts, responses, file contents, authentication tokens, conversation IDs,
 raw provider events, or child-agent output.
