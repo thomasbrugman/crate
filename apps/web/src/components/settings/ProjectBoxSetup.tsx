@@ -68,16 +68,19 @@ export function ProjectBoxSetup({
             variant="outline"
             disabled={!canSave || starting}
             onClick={async () => {
+              const modelSelection = resolveProjectDefaultProviderModelSelection(
+                (configs.get(environmentId)?.providers ?? []).filter((provider) =>
+                  isUpstashBoxDriver(provider.driver),
+                ),
+                settings,
+                projectId,
+              );
+              if (!modelSelection) {
+                toastManager.add({ type: "error", title: gt("Could not create setup thread") });
+                return;
+              }
               setStarting(true);
               try {
-                const modelSelection = resolveProjectDefaultProviderModelSelection(
-                  (configs.get(environmentId)?.providers ?? []).filter((provider) =>
-                    isUpstashBoxDriver(provider.driver),
-                  ),
-                  settings,
-                  projectId,
-                );
-                if (!modelSelection) throw new Error("No Box provider available");
                 await startThread(scopeProjectRef(environmentId, projectId), {
                   modelSelection,
                   envMode: "local",
