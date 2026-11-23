@@ -6,7 +6,7 @@ from mathutils.geometry import barycentric_transform
 from bpy_extras.object_utils import world_to_camera_view
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import ROW_UVS, complete_png, render_options, work_parser
+from common import ROW_UVS, can_resume_frame, render_options, work_parser
 from device_shot import build_scene
 
 parser = work_parser(__doc__)
@@ -161,7 +161,7 @@ for index in range(6):
     started=time.monotonic()
     for frame in frames:
         destination = folder/f'{frame:04d}.png'
-        if MODE in ('final', 'animatic') and complete_png(destination):
+        if can_resume_frame(destination, MODE):
             print('SKIP', index+1, frame, flush=True)
             continue
         sc.frame_set(frame)

@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from common import SHOTS, beat_cuts, complete_png, concat_entry, delivery_bitrate, render_options, work_parser
+from common import SHOTS, beat_cuts, can_resume_frame, complete_png, concat_entry, delivery_bitrate, render_options, work_parser
 
 
 class PipelineOptionsTest(unittest.TestCase):
@@ -10,6 +10,7 @@ class PipelineOptionsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'0001.png'
             self.assertFalse(complete_png(path))
+            self.assertFalse(can_resume_frame(path, 'final'))
             path.touch()
             self.assertFalse(complete_png(path))
             header = bytes.fromhex('89504e470d0a1a0a')
@@ -20,6 +21,8 @@ class PipelineOptionsTest(unittest.TestCase):
             self.assertFalse(complete_png(path))
             path.write_bytes(header + tail)
             self.assertTrue(complete_png(path))
+            self.assertTrue(can_resume_frame(path, 'final'))
+            self.assertFalse(can_resume_frame(path, 'animatic'))
 
     def test_work_dir_and_model_overrides(self):
         parser = work_parser('test')

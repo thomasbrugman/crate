@@ -58,3 +58,7 @@ def complete_png(path):
             return False
         image.seek(-12, 2)
         return image.read() == bytes.fromhex('0000000049454e44ae426082')
+
+
+def can_resume_frame(path, mode):
+    return mode == 'final' and complete_png(path)

@@ -129,7 +129,8 @@ blender -b --python apps/launch-video/blender/render_shots.py -- WORK --mode anc
 
 Assembly uses `tracking/04_parallel.json` and `graphics.json` to create crisp tracked overlays.
 If retiming an existing cut, archive the affected shot directories in both `frames/` and
-`final_frames/` before rendering: existing PNGs are assumed valid. Reuse only shots whose
+`final_frames/` before rendering. Final rendering assumes existing PNGs are valid;
+animatics always overwrite frames to avoid mixing preview frame rates. Reuse only shots whose
 duration, camera, model, materials, lights and screen sequences are unchanged. The three
 five-second task/parallel/phone shots remain reusable in this arrangement; labels are 2D.
 After final assembly, the runner verifies 1080p60/AAC and full-decodes the master, then makes
