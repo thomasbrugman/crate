@@ -22,9 +22,7 @@ export function SecretInput({
     type: "password" as const,
     autoComplete: "off",
     spellCheck: false,
-    placeholder: configured
-      ? gt("Stored secret, enter a new value to replace")
-      : (placeholder ?? gt("Not set")),
+    placeholder: configured ? gt("Saved, type to replace") : (placeholder ?? gt("Not set")),
   };
   if (onCommit) {
     return (
