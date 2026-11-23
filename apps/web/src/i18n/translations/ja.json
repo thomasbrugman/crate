@@ -11165,6 +11165,7 @@
   ],
   "b2ac3183408cf717": "中",
   "379acbbb0a06da0b": "Upstash Box 環境",
+  "b03574feb8c4b778": "Upstash Box",
   "c95534c403e2d267": "スレッドごとに専用の Box が作成されます。未設定時は UPSTASH_BOX_API_KEY を使用します。",
   "5cc965d9a688198b": "Upstash Box API キー",
   "2c5674665579a329": "削除",

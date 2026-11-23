@@ -11210,6 +11210,7 @@
   ],
   "b2ac3183408cf717": "Mediano",
   "379acbbb0a06da0b": "Entorno de Upstash Box",
+  "b03574feb8c4b778": "Upstash Box",
   "c95534c403e2d267": "Cada hilo obtiene su propio Box. Usa UPSTASH_BOX_API_KEY como alternativa.",
   "5cc965d9a688198b": "Clave de API de Upstash Box",
   "2c5674665579a329": "Quitar",

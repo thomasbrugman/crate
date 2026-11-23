@@ -11237,6 +11237,7 @@
   ],
   "b2ac3183408cf717": "中",
   "379acbbb0a06da0b": "Upstash Box 环境",
+  "b03574feb8c4b778": "Upstash Box",
   "c95534c403e2d267": "每个线程都有自己的 Box。未设置时使用 UPSTASH_BOX_API_KEY。",
   "5cc965d9a688198b": "Upstash Box API 密钥",
   "2c5674665579a329": "移除",

@@ -11225,6 +11225,7 @@
   ],
   "b2ac3183408cf717": "Medium",
   "379acbbb0a06da0b": "Upstash Box environment",
+  "b03574feb8c4b778": "Upstash Box",
   "c95534c403e2d267": "Each thread gets its own Box. Falls back to UPSTASH_BOX_API_KEY.",
   "5cc965d9a688198b": "Upstash Box API key",
   "2c5674665579a329": "Remove",

@@ -11223,6 +11223,7 @@
   ],
   "b2ac3183408cf717": "Medelstor",
   "379acbbb0a06da0b": "Upstash Box-miljö",
+  "b03574feb8c4b778": "Upstash Box",
   "c95534c403e2d267": "Varje tråd får en egen Box. Använder UPSTASH_BOX_API_KEY som reserv.",
   "5cc965d9a688198b": "API-nyckel för Upstash Box",
   "2c5674665579a329": "Ta bort",

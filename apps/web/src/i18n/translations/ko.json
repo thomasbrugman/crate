@@ -11162,6 +11162,7 @@
   ],
   "b2ac3183408cf717": "중간",
   "379acbbb0a06da0b": "Upstash Box 환경",
+  "b03574feb8c4b778": "Upstash Box",
   "c95534c403e2d267": "스레드마다 전용 Box가 생성됩니다. 설정하지 않으면 UPSTASH_BOX_API_KEY를 사용합니다.",
   "5cc965d9a688198b": "Upstash Box API 키",
   "2c5674665579a329": "제거",
