@@ -11216,6 +11216,7 @@
   ],
   "b2ac3183408cf717": "Mittel",
   "379acbbb0a06da0b": "Upstash-Box-Umgebung",
+  "b03574feb8c4b778": "Upstash Box",
   "c95534c403e2d267": "Jeder Thread erhält seine eigene Box. Fällt auf UPSTASH_BOX_API_KEY zurück.",
   "5cc965d9a688198b": "Upstash-Box-API-Schlüssel",
   "2c5674665579a329": "Entfernen",

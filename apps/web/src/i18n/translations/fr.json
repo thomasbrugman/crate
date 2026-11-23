@@ -11215,6 +11215,7 @@
   ],
   "b2ac3183408cf717": "Moyenne",
   "379acbbb0a06da0b": "Environnement Upstash Box",
+  "b03574feb8c4b778": "Upstash Box",
   "c95534c403e2d267": "Chaque fil obtient sa propre Box. Utilise UPSTASH_BOX_API_KEY par défaut.",
   "5cc965d9a688198b": "Clé API Upstash Box",
   "2c5674665579a329": "Supprimer",
