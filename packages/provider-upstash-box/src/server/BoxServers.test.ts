@@ -117,6 +117,21 @@ it.effect(
     }),
 );
 
+it.effect("publishes a URL once when scans overlap", () =>
+  Effect.gen(function* () {
+    const fake = fakeBox({ existingUrls: [5173] });
+    const servers = yield* service(fake.box);
+    const [first, second] = yield* Effect.all([servers.list(threadId), servers.list(threadId)], {
+      concurrency: "unbounded",
+    });
+    assert.deepEqual(first, second);
+    assert.deepEqual(
+      fake.calls.filter((call) => /^(create|delete)/.test(call)),
+      ["delete 5173", "create 5173"],
+    );
+  }),
+);
+
 it.effect("keeps an init command someone else set", () =>
   Effect.gen(function* () {
     const fake = fakeBox({ initCommand: "./start.sh" });
