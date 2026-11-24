@@ -6,7 +6,6 @@ import {
   DEFAULT_UNIFIED_SETTINGS,
   type ChatWidth,
   type EffortDisplay,
-  type EnvironmentIdentificationMode,
   MAX_APPEARANCE_CONTRAST,
   MAX_GLASS_OPACITY,
   MAX_PANEL_ANIMATION_DURATION_MS,
@@ -14,13 +13,7 @@ import {
   MIN_GLASS_OPACITY,
   MIN_PANEL_ANIMATION_DURATION_MS,
 } from "@t3tools/contracts/settings";
-import {
-  resolveSidebarStageBackdropVariant,
-  type SidebarStageBackdropVariant,
-  useEnvironmentStageLabel,
-} from "../SidebarStageBackdrop";
 import { useCustomThemes } from "../../hooks/useCustomThemes";
-import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -38,41 +31,10 @@ import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 import { TypographySection } from "./TypographySettings";
 import { ThreadDetailsItemsRow } from "./ThreadDetailsItemsRow";
 
-const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
-  artwork: msg("Artwork"),
-  "nightly-artwork": msg("Nightly artwork"),
-  "dev-artwork": msg("Dev artwork"),
+const ENVIRONMENT_IDENTIFICATION_LABELS = {
   pill: msg("Version pill"),
   none: msg("None"),
 };
-
-// The default "artwork" follows the running channel, so it is labeled as that channel's art,
-// or as "None" on Latest. The other channel's art is offered as a fixed choice.
-function environmentIdentificationOptions(
-  stageVariant: SidebarStageBackdropVariant | null,
-): ReadonlyArray<readonly [EnvironmentIdentificationMode, string]> {
-  if (stageVariant === "dev") {
-    return [
-      ["artwork", msg("Dev artwork")],
-      ["nightly-artwork", msg("Nightly artwork")],
-      ["pill", msg("Version pill")],
-      ["none", msg("None")],
-    ];
-  }
-  if (stageVariant === "nightly") {
-    return [
-      ["artwork", msg("Nightly artwork")],
-      ["dev-artwork", msg("Dev artwork")],
-      ["pill", msg("Version pill")],
-      ["none", msg("None")],
-    ];
-  }
-  return [
-    ["artwork", msg("None")],
-    ["nightly-artwork", msg("Nightly artwork")],
-    ["dev-artwork", msg("Dev artwork")],
-  ];
-}
 
 const CHAT_WIDTH_LABELS: Record<ChatWidth, string> = {
   comfortable: msg("Comfortable"),
@@ -103,29 +65,8 @@ export function AppearanceSettingsPanel() {
   const [isImportThemeOpen, setIsImportThemeOpen] = useState(false);
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
-  const environmentStageLabel = useEnvironmentStageLabel();
-  const environmentStageVariant = resolveSidebarStageBackdropVariant(environmentStageLabel);
-  const environmentIdentificationOptionList =
-    environmentIdentificationOptions(environmentStageVariant);
-  const environmentIdentificationLabel = m(
-    environmentIdentificationOptionList.find(
-      ([value]) => value === settings.environmentIdentificationMode,
-    )?.[1] ?? ENVIRONMENT_IDENTIFICATION_LABELS[settings.environmentIdentificationMode],
-  );
-  const effectiveEnvironmentIdentificationMode = useEnvironmentIdentificationMode();
-  const themeHidesEnvironmentArtwork =
-    effectiveEnvironmentIdentificationMode === "pill" &&
-    resolveSidebarStageBackdropVariant(
-      environmentStageLabel,
-      settings.environmentIdentificationMode,
-    ) !== null;
-  const environmentIdentificationDescription = themeHidesEnvironmentArtwork
-    ? environmentStageVariant
-      ? gt("Only built-in themes show artwork, so this theme shows the version pill.")
-      : gt("Only built-in themes show artwork.")
-    : environmentStageVariant
-      ? gt("Choose how Dev and Nightly environments are identified.")
-      : gt("Show Dev or Nightly artwork in the sidebar header.");
+  const environmentIdentification =
+    settings.environmentIdentificationMode === "pill" ? "pill" : "none";
   const glassOpacityRatio =
     (settings.glassOpacity - MIN_GLASS_OPACITY) / (MAX_GLASS_OPACITY - MIN_GLASS_OPACITY);
   const glassOpacitySliderStyle = {
@@ -423,9 +364,9 @@ export function AppearanceSettingsPanel() {
           />
           <SettingsRow
             {...searchableSetting("environment-identification")}
-            description={environmentIdentificationDescription}
+            description={gt("Choose how Dev and Nightly environments are identified.")}
             resetAction={
-              settings.environmentIdentificationMode !== DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
+              environmentIdentification === "pill" ? (
                 <SettingResetButton
                   ariaLabel={gt("Reset environment identification to default")}
                   onClick={() =>
@@ -438,12 +379,14 @@ export function AppearanceSettingsPanel() {
             }
             control={
               <Select
-                value={settings.environmentIdentificationMode}
+                value={environmentIdentification}
                 onValueChange={(value) => {
-                  const option = environmentIdentificationOptionList.find(
-                    ([optionValue]) => optionValue === value,
-                  );
-                  if (option) updateSettings({ environmentIdentificationMode: option[0] });
+                  if (value === "pill" || value === "none") {
+                    updateSettings({
+                      environmentIdentificationMode:
+                        value === "pill" ? value : DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
+                    });
+                  }
                 }}
               >
                 <SelectTrigger
@@ -451,10 +394,12 @@ export function AppearanceSettingsPanel() {
                   className="w-full sm:w-40"
                   aria-label={gt("Environment identification")}
                 >
-                  <SelectValue>{environmentIdentificationLabel}</SelectValue>
+                  <SelectValue>
+                    {m(ENVIRONMENT_IDENTIFICATION_LABELS[environmentIdentification])}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
-                  {environmentIdentificationOptionList.map(([value, label]) => (
+                  {Object.entries(ENVIRONMENT_IDENTIFICATION_LABELS).map(([value, label]) => (
                     <SelectItem hideIndicator key={value} value={value}>
                       {m(label)}
                     </SelectItem>

@@ -9,6 +9,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Semaphore from "effect/Semaphore";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import {
   PullRequestOperationError,
@@ -20,9 +21,11 @@ import {
   type PullRequestStack,
   ProjectId,
   type RepositoryIdentity,
+  ThreadId,
   type ThreadPullRequestKey,
 } from "@t3tools/contracts";
 import type { ReviewGuideStackLayer } from "@t3tools/provider-core/server/textGeneration";
+import { BoxExec, BoxInvestigationTarget } from "@t3tools/provider-upstash-box/server";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 
@@ -34,6 +37,9 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { PATCH_RENDER_PREFIX_ARGS } from "../vcs/GitVcsDriverCore.ts";
+import * as BoxThreadResolver from "../vcs/BoxThreadResolver.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
+import { listLinkedPullRequestThreads } from "./linkedThreads.ts";
 import * as PullRequestService from "./PullRequestService.ts";
 import { pullRequestSyncKey } from "./pullRequestSyncKey.ts";
 import { reviewGuideInputFromPullRequest } from "./pullRequestReviewGuideInput.ts";
@@ -73,6 +79,9 @@ const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const config = yield* ServerConfig.ServerConfig;
   const serviceScope = yield* Effect.scope;
+  const boxThreads = yield* Effect.serviceOption(BoxThreadResolver.BoxThreadResolver);
+  const boxExec = yield* Effect.serviceOption(BoxExec.BoxExec);
+  const sql = yield* Effect.serviceOption(SqlClient.SqlClient);
   const runs = yield* Ref.make<ReadonlyMap<string, PullRequestReviewGuideRun>>(new Map());
   let runCounter = 0;
   // Serialize claims and guide writes so a newer claim cannot steal ownership between checking and storing.
@@ -153,11 +162,13 @@ const make = Effect.gen(function* () {
 
   const checkoutHead = Effect.fn("PullRequestReviewGuideService.checkoutHead")(function* (
     workspaceRoot: string,
-    locator: RepositoryIdentity["locator"],
+    locator: RepositoryIdentity["locator"] | null,
+    key: ThreadPullRequestKey,
     detail: PullRequestDetail,
     headSha: string,
     stack: PullRequestStack | null,
     runId: string,
+    inBox: boolean,
   ) {
     // Identity names can be stale; match effective fetch URLs, including insteadOf rewrites.
     const names = yield* git
@@ -167,19 +178,47 @@ const make = Effect.gen(function* () {
         args: ["remote"],
       })
       .pipe(Effect.map((result) => result.stdout.split("\n").filter((name) => name.length > 0)));
-    const remote = yield* Effect.findFirst(
-      [locator.remoteName, ...names.filter((name) => name !== locator.remoteName)],
-      (name) =>
-        git
-          .execute({
-            operation: "PullRequestReviewGuideService.remoteUrl",
-            cwd: workspaceRoot,
-            args: ["remote", "get-url", "--", name],
-          })
-          .pipe(
-            Effect.map((result) => result.stdout.trim() === locator.remoteUrl),
-            Effect.orElseSucceed(() => false),
-          ),
+    // Box checkouts have no host-side identity: match the remote that fetches the pull
+    // request's repository instead of the locator's URL.
+    const preferredNames =
+      locator !== null
+        ? [locator.remoteName, ...names.filter((name) => name !== locator.remoteName)]
+        : [
+            "origin",
+            "upstream",
+            ...names.filter((name) => name !== "origin" && name !== "upstream"),
+          ];
+    const remote = yield* Effect.findFirst(preferredNames, (name) =>
+      git
+        .execute({
+          operation: "PullRequestReviewGuideService.remoteUrl",
+          cwd: workspaceRoot,
+          args: ["remote", "get-url", "--", name],
+        })
+        .pipe(
+          Effect.map((result) => {
+            const url = result.stdout.trim();
+            if (locator !== null) return url === locator.remoteUrl;
+            // Forgejo keys keep the web port in the host; remote normalization drops it, so
+            // compare the port-free key and check the remote's authority carries the port.
+            const keyPort = /:(\d+)$/u.exec(key.host)?.[1];
+            const keyWithoutPort =
+              keyPort === undefined ? key.host : key.host.slice(0, -keyPort.length - 1);
+            const canonical = sourceControlDefinitions.canonicalRepositoryKey;
+            if (
+              canonical(sourceControlDefinitions.repositoryKeyFromRemote(url)) !==
+              canonical(`${keyWithoutPort}/${key.repository}`)
+            )
+              return false;
+            if (keyPort === undefined) return true;
+            try {
+              return new URL(url).port === keyPort;
+            } catch {
+              return false;
+            }
+          }),
+          Effect.orElseSucceed(() => false),
+        ),
     ).pipe(Effect.map(Option.getOrUndefined));
     if (remote === undefined) {
       return yield* new PullRequestOperationError({
@@ -297,11 +336,13 @@ const make = Effect.gen(function* () {
       },
       { concurrency: 4 },
     );
-    const directory = yield* fileSystem.makeTempDirectoryScoped({
-      directory: config.worktreesDir,
-      prefix: "review-guide-",
-    });
-    const path = `${directory}/checkout`;
+    // A Box thread's checkout lives in its Box, so the scratch worktree does too.
+    const path = inBox
+      ? `/tmp/t3-review-guide-${yield* Clock.currentTimeMillis}-${runId}`
+      : `${yield* fileSystem.makeTempDirectoryScoped({
+          directory: config.worktreesDir,
+          prefix: "review-guide-",
+        })}/checkout`;
     yield* git.execute({
       operation: "PullRequestReviewGuideService.addWorktree",
       cwd: workspaceRoot,
@@ -363,11 +404,43 @@ const make = Effect.gen(function* () {
     return parseReviewGuideChange(nameOnly, patch);
   });
 
+  // A pull request linked to a Box thread is read in that thread's Box, where its checkout lives.
+  const boxThreadFor = Effect.fn("PullRequestReviewGuideService.boxThreadFor")(function* (
+    key: ThreadPullRequestKey,
+    projectId: PullRequestRef["projectId"],
+  ) {
+    if (Option.isNone(boxThreads) || Option.isNone(sql)) return undefined;
+    const linked = yield* listLinkedPullRequestThreads(key).pipe(
+      Effect.provideService(SqlClient.SqlClient, sql.value),
+      Effect.orElseSucceed(() => ({ threads: [] })),
+    );
+    for (const thread of linked.threads) {
+      if (thread.projectId !== projectId) continue;
+      const threadId = ThreadId.make(thread.id);
+      const resolved = yield* Effect.all([
+        boxThreads.value.resolve(threadId),
+        boxThreads.value.resolveTerminal(threadId),
+      ]).pipe(Effect.option);
+      if (Option.isSome(resolved) && resolved.value[1] !== null) {
+        const [target, box] = resolved.value;
+        return { target, nativeId: box.nativeId, apiKey: box.apiKey };
+      }
+    }
+    return undefined;
+  });
+
   const write = Effect.fn("PullRequestReviewGuideService.write")(function* (
     input: PullRequestRef,
     key: ThreadPullRequestKey,
     workspaceRoot: string,
-    locator: RepositoryIdentity["locator"],
+    locator: RepositoryIdentity["locator"] | null,
+    box:
+      | {
+          readonly target: VcsThreadTarget.Target;
+          readonly nativeId: string;
+          readonly apiKey: string;
+        }
+      | undefined,
     detail: PullRequestDetail,
     headSha: string,
     runId: string,
@@ -388,25 +461,34 @@ const make = Effect.gen(function* () {
       providers,
       input.projectId,
     );
-    const { generated, change } = yield* checkoutHead(
+    const reading = checkoutHead(
       workspaceRoot,
       locator,
+      key,
       detail,
       headSha,
       stack,
       runId,
+      box !== undefined,
     ).pipe(
       Effect.flatMap((checkout) =>
         Effect.all(
           {
-            generated: textGeneration.generateReviewGuide({
-              ...reviewGuideInputFromPullRequest(detail, activity, checkout.baseCommit),
-              cwd: checkout.path,
-              modelSelection,
-              projectId: input.projectId,
-              instructions: projectSettings.reviewGuideInstructions,
-              stack: checkout.stack,
-            }),
+            generated: textGeneration
+              .generateReviewGuide({
+                ...reviewGuideInputFromPullRequest(detail, activity, checkout.baseCommit),
+                cwd: checkout.path,
+                modelSelection,
+                projectId: input.projectId,
+                instructions: projectSettings.reviewGuideInstructions,
+                stack: checkout.stack,
+              })
+              .pipe(
+                Effect.provideService(
+                  BoxInvestigationTarget,
+                  box && { nativeId: box.nativeId, apiKey: box.apiKey, cwd: checkout.path },
+                ),
+              ),
             change: readChange(checkout.path, checkout.baseCommit),
           },
           { concurrency: "unbounded" },
@@ -414,6 +496,14 @@ const make = Effect.gen(function* () {
       ),
       Effect.scoped,
     );
+    const { generated, change } = yield* box === undefined
+      ? reading
+      : reading.pipe(
+          Effect.provideService(VcsThreadTarget.VcsThreadTarget, box.target),
+          Option.isSome(boxExec)
+            ? Effect.provideService(BoxExec.BoxExec, boxExec.value)
+            : (effect) => effect,
+        );
     const guide: PullRequestReviewGuide = {
       headSha,
       generatedAt: yield* nowIso,
@@ -455,7 +545,11 @@ const make = Effect.gen(function* () {
       });
     }
     const { key, workspaceRoot, identity } = yield* keyFor(input);
-    const locator = yield* requireOwnRepository(key, identity);
+    // A linked Box checkout is proof the pull request belongs to this project even when
+    // the host cannot resolve a repository identity for it.
+    const box = yield* boxThreadFor(key, input.projectId);
+    const locator =
+      box !== undefined && identity == null ? null : yield* requireOwnRepository(key, identity);
     const runKey = keyString(key);
     yield* pullRequests.invalidate({ reference: input });
     const [detail, stored] = yield* Effect.all([pullRequests.detail(input), readStored(key)], {
@@ -506,7 +600,7 @@ const make = Effect.gen(function* () {
         return updated;
       });
     const runId = `${runCounter++}`;
-    yield* write(input, key, workspaceRoot, locator, detail, currentHeadSha, runId, owns).pipe(
+    yield* write(input, key, workspaceRoot, locator, box, detail, currentHeadSha, runId, owns).pipe(
       Effect.andThen(finish(null)),
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)

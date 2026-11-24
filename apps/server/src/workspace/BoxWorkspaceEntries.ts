@@ -25,11 +25,11 @@ const { existsSync, lstatSync } = require("node:fs");
 const { basename, dirname } = require("node:path");
 const [query, limitText, kind, imageOnly] = process.argv.slice(1);
 const limit = Number(limitText);
-const internal = [".git", ".t3stash-worktrees", ".t3stash-attachments", "node_modules"];
+const internal = [".git", ".crate-worktrees", ".crate-attachments", "node_modules"];
 const scratch = process.cwd() === "/workspace/home";
 const ignored = scratch ? [
   ".git", ".box", ".box-internal", ".claude", ".codex", ".cursor", ".local",
-  ".t3stash-worktrees", ".t3stash-attachments", "node_modules",
+  ".crate-worktrees", ".crate-attachments", "node_modules",
 ] : internal;
 const git = existsSync(".git");
 const result = spawnSync(git ? "git" : "find", git

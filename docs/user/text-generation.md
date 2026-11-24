@@ -40,4 +40,8 @@ Review guides read the checkout over many steps, so they always use a coding age
 control writer model is a text generator, review guides use Codex or Claude instead, and fail if
 neither is set up. To choose which, pick one in **Settings → Source control & issues → Review guide model**.
 
+Claude Code and Codex in an Upstash Box write review guides too. When the pull request is linked to
+a Box thread, they read the change in that thread's Box, with read-only tools. Command Code has no
+read-only mode, so a review guide aimed at it uses Codex or Claude instead.
+
 A [managed policy](./managed-policy.md) that limits providers also turns off text generators.

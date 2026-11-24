@@ -509,8 +509,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.panelAnimationDurationMs !== DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs
       ? [gt("Panel animations")]
       : []),
-    ...(settings.environmentIdentificationMode !==
-    DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode
+    ...(settings.environmentIdentificationMode === "pill"
       ? [gt("Environment identification")]
       : []),
     ...(settings.language !== DEFAULT_UNIFIED_SETTINGS.language ? [gt("Language")] : []),
@@ -2518,7 +2517,7 @@ export function AboutSettingsPanel() {
         />
         <SettingsRow
           {...setting("open-source-licenses")}
-          description={gt("Notices for dependencies, assets, and optional tools used by t3stash.")}
+          description={gt("Notices for dependencies, assets, and optional tools used by Crate.")}
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

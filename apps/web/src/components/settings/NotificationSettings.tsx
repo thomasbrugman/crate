@@ -28,7 +28,7 @@ export function NotificationSettings() {
       description={
         permissionMessage ??
         gt(
-          "System alerts when a thread finishes, fails, or needs input or approval. Applies to this device while t3stash is open.",
+          "System alerts when a thread finishes, fails, or needs input or approval. Applies to this device while Crate is open.",
         )
       }
       control={

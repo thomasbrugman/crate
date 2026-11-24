@@ -19,3 +19,4 @@ export { openBoxProviderProcess } from "./server/providerSessionProcess.ts";
 export { sessionPayload } from "./server/providerSessionPayload.ts";
 export { encodeFrame } from "./server/providerSessionWire.ts";
 export { BOX_COMMAND_CODE_HOME, BOX_CREDENTIALS_DIR } from "./server/credentials.ts";
+export { BoxInvestigationTarget } from "./server/textGeneration.ts";

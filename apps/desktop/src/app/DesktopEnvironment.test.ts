@@ -13,9 +13,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Crate.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/Crate.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -79,9 +79,9 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(packaged);
       const overridden = yield* makeEnvironment(packaged, { T3CODE_HOME: "/explicit-home" });
 
-      assert.equal(environment.baseDir, "/Users/alice/.t3stash");
-      assert.equal(environment.stateDir, "/Users/alice/.t3stash/userdata");
-      assert.equal(environment.branding.displayName, "t3stash");
+      assert.equal(environment.baseDir, "/Users/alice/.crate");
+      assert.equal(environment.stateDir, "/Users/alice/.crate/userdata");
+      assert.equal(environment.branding.displayName, "Crate");
       assert.equal(overridden.stateDir, "/explicit-home/userdata");
     }),
   );

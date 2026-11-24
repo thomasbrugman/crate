@@ -1,12 +1,17 @@
 # Brand icons
 
-The three Icon Composer projects are the source of truth for full application icons:
+`prod/logo.svg` is the canonical Crate mascot. On Linux, run
+`python scripts/render-crate-icons.py --font ~/.fonts/Inter-Bold.ttf` from the repository root
+with CairoSVG and Pillow installed. It copies the SVG to the Icon Composer projects and
+regenerates the PNG/ICO icon exports and the README lockups.
+
+The three Icon Composer projects support native exports:
 
 - `dev/app-icon.icon`
 - `nightly/app-icon.icon`
 - `prod/app-icon.icon`
 
-Each project uses `text.svg` for the T3 mark and `background.svg` when the background is a vector layer. Additional layers use semantic names that describe their role and placement.
+Each project uses `box-buddy.svg` for the mascot.
 
 Run `vp run icons:export` from the repository root to regenerate the tracked iOS, Linux, Windows, and web assets. The development web exports are also copied to `apps/web/public` for the browser favicon, web app manifest icons, and splash screen. Run `vp run icons:check` to verify that the generated assets and public copies match their sources without changing files.
 
@@ -56,7 +61,7 @@ the central two thirds of a 288dp canvas, so the Icon Composer exports cannot be
 their rounded-square silhouette gets framed again and the wordmark is cropped. The Android artwork
 is instead rendered from the same Icon Composer SVG sources by `vp run icons:export:android`:
 
-- `apps/mobile/assets/android-icon-foreground.png`: the shared transparent wordmark, sized to stay
+- `apps/mobile/assets/android-icon-foreground.png`: the shared transparent mascot, sized to stay
   inside the safe zone
 - `apps/mobile/assets/android-icon-background-dev.png` and `-nightly.png`: full-bleed variant
   artwork (blueprint grid and annotations; night sky and clouds). Production uses a solid color.

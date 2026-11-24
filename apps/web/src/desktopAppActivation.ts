@@ -85,7 +85,7 @@ export async function handleDesktopAppActivationRequest(
       return failure(
         request.requestId,
         "project-create-failed",
-        errorMessage(error, "t3stash could not add the project."),
+        errorMessage(error, "Crate could not add the project."),
       );
     }
   }
@@ -99,7 +99,7 @@ export async function handleDesktopAppActivationRequest(
       return failure(
         request.requestId,
         "thread-open-failed",
-        "t3stash could not open a new thread for the project.",
+        "Crate could not open a new thread for the project.",
       );
     }
     return {
@@ -113,7 +113,7 @@ export async function handleDesktopAppActivationRequest(
     return failure(
       request.requestId,
       "thread-open-failed",
-      errorMessage(error, "t3stash could not open a new thread for the project."),
+      errorMessage(error, "Crate could not open a new thread for the project."),
     );
   }
 }

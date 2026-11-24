@@ -3,6 +3,7 @@ import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textG
 import * as TextGenerationOperations from "@t3tools/provider-core/server/textGenerationOperations";
 import { toJsonSchemaObject } from "@t3tools/provider-core/server/textGenerationUtils";
 import { BoxError } from "@upstash/box";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
@@ -22,11 +23,18 @@ const MAX_PROMPT_BYTES = 96_000;
 export const textGenerationBoxName = (harness: LegacyBoxHarness) =>
   `t3-text-${Buffer.from(harness).toString("hex")}`;
 
+/** The thread Box whose checkout a review guide investigates; unset means no checkout is reachable. */
+export const BoxInvestigationTarget = Context.Reference<
+  { readonly nativeId: string; readonly apiKey: string; readonly cwd: string } | undefined
+>("t3/upstashBox/BoxInvestigationTarget", { defaultValue: () => undefined });
+
 export function textGenerationCommand(input: {
   readonly harness: LegacyBoxHarness;
   readonly prompt: string;
   readonly model: string;
   readonly credentialKind: string;
+  /** Investigate this checkout with read-only tools instead of answering from the prompt alone. */
+  readonly investigateCwd?: string | undefined;
 }): string {
   const model = input.model.replace(/^(?:openai|anthropic)\//u, "");
   const args =
@@ -38,8 +46,16 @@ export function textGenerationCommand(input: {
           "--explicit-session",
           ...(model === "default" ? [] : ["--model", model]),
         ]
-      : [BOX_MANAGED_HARNESS_PATH, input.harness, input.prompt, model, "", input.credentialKind];
-  const cwd = BOX_WORKSPACE_PATH;
+      : [
+          BOX_MANAGED_HARNESS_PATH,
+          input.harness,
+          input.prompt,
+          model,
+          "",
+          input.credentialKind,
+          ...(input.investigateCwd === undefined ? [] : ["investigate"]),
+        ];
+  const cwd = quoteShell(input.investigateCwd ?? BOX_WORKSPACE_PATH);
   return `cd ${cwd} && PATH=${BOX_HOME}/.local/bin:$PATH BOXJOB_CC_CWD=${cwd} exec node ${args.map(quoteShell).join(" ")}`;
 }
 
@@ -52,8 +68,8 @@ function limitBytes(text: string, maxBytes: number): string {
     .replace(/\uFFFD$/u, "")}\n[truncated]`;
 }
 
-export function structuredPrompt(prompt: string, schema: unknown): string {
-  return `${limitBytes(prompt, MAX_PROMPT_BYTES)}\n\nDo not use any tools. Reply with only a JSON object that matches this JSON Schema, with no other text:\n${JSON.stringify(schema)}`;
+export function structuredPrompt(prompt: string, schema: unknown, investigate = false): string {
+  return `${limitBytes(prompt, MAX_PROMPT_BYTES)}\n\n${investigate ? "When you finish investigating, reply" : "Do not use any tools. Reply"} with only a JSON object that matches this JSON Schema, with no other text:\n${JSON.stringify(schema)}`;
 }
 
 async function collectReply(
@@ -109,22 +125,34 @@ export const makeBoxTextGeneration = Effect.fn("UpstashBox.makeTextGeneration")(
     const credentialKind = harnessCredentialKind(harness, credential);
     if (config.credentials && !credentialKind)
       return yield* fail("Connect this harness in Settings → Providers.");
-    const box = yield* ensureBox(
-      {
-        ...config,
-        size: "small",
-        harness,
-        model: request.modelSelection.model,
-        agentApiKey,
-        // Prompts carry untrusted issue and PR text, so this Box never holds GitHub credentials.
-        githubToken: "",
-      },
-      textGenerationBoxName(harness),
-    ).pipe(
-      Effect.provideService(BoxApi, api),
-      Effect.mapError((cause) => fail("Could not start the text generation Box.", cause)),
+    const investigation = request.investigate ? yield* BoxInvestigationTarget : undefined;
+    if (request.investigate && (!investigation || !config.credentials || harness === "commandCode"))
+      return yield* TextGenerationOperations.investigationUnsupported(request.operation, label);
+    const box = investigation
+      ? yield* Effect.tryPromise({
+          try: () => api.get(investigation.nativeId, investigation.apiKey),
+          catch: (cause) => fail("Could not reach this thread's Box.", cause),
+        })
+      : yield* ensureBox(
+          {
+            ...config,
+            size: "small",
+            harness,
+            model: request.modelSelection.model,
+            agentApiKey,
+            // Prompts carry untrusted issue and PR text, so this Box never holds GitHub credentials.
+            githubToken: "",
+          },
+          textGenerationBoxName(harness),
+        ).pipe(
+          Effect.provideService(BoxApi, api),
+          Effect.mapError((cause) => fail("Could not start the text generation Box.", cause)),
+        );
+    const prompt = structuredPrompt(
+      request.prompt,
+      toJsonSchemaObject(request.outputSchema),
+      investigation !== undefined,
     );
-    const prompt = structuredPrompt(request.prompt, toJsonSchemaObject(request.outputSchema));
     const reply = yield* Effect.tryPromise({
       try: (signal) =>
         collectReply(
@@ -138,6 +166,7 @@ export const makeBoxTextGeneration = Effect.fn("UpstashBox.makeTextGeneration")(
                     prompt,
                     model: request.modelSelection.model,
                     credentialKind: credentialKind ?? "",
+                    investigateCwd: investigation?.cwd,
                   }),
                 )
               : target.agent.stream({ prompt }),
@@ -145,7 +174,7 @@ export const makeBoxTextGeneration = Effect.fn("UpstashBox.makeTextGeneration")(
         ),
       catch: (cause) => fail(`${label} could not generate text.`, cause),
     }).pipe(
-      Effect.timeoutOption(TEXT_GENERATION_TIMEOUT_MS),
+      Effect.timeoutOption(request.investigate?.timeoutMs ?? TEXT_GENERATION_TIMEOUT_MS),
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.fail(fail(`${label} timed out.`)),
@@ -155,8 +184,5 @@ export const makeBoxTextGeneration = Effect.fn("UpstashBox.makeTextGeneration")(
     );
     return yield* TextGenerationOperations.decodeJsonReply(request, label, reply);
   });
-  return TextGenerationOperations.fromRunner(
-    label,
-    TextGenerationOperations.withoutInvestigation(label, run),
-  ) satisfies ProviderTextGeneration;
+  return TextGenerationOperations.fromRunner(label, run) satisfies ProviderTextGeneration;
 });

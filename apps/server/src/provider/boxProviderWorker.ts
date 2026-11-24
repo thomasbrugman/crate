@@ -45,8 +45,8 @@ import { AntigravityDriver } from "./Drivers/AntigravityDriver.ts";
 import * as ModelManifest from "./ModelManifest.ts";
 import { isAntigravitySignInRequiredError } from "./antigravityAuthSupport.ts";
 
-const stateDir = "/home/boxuser/.local/share/t3stash-provider-worker";
-const credentialsDir = "/dev/shm/t3stash-auth";
+const stateDir = "/home/boxuser/.local/share/crate-provider-worker";
+const credentialsDir = "/dev/shm/crate-auth";
 const profileStateDir = `${credentialsDir}/worker-state`;
 const harnessSchema = Schema.Literals(["opencode", "cursor", "antigravity"]);
 type Harness = typeof harnessSchema.Type;

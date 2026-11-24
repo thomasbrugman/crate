@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "t3stash",
-  "short_name": "t3stash",
+  "name": "Crate",
+  "short_name": "Crate",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -9,7 +9,7 @@ Run the server on your Mac with `t3 serve --host 0.0.0.0` to allow connections
 from your phone on the same network. Open `http://<Mac-LAN-IP>:3773` in Safari
 on iPhone (Chrome on Android). On iPhone, choose **Share → Add to Home Screen**;
 on Android, choose **Add to Home screen** or **Install app** in Chrome's menu.
-The installed app is named **t3stash**. Keep the Mac and server running.
+The installed app is named **Crate**. Keep the Mac and server running.
 
 Open the installed app, then run `t3 pair` on the Mac for a fresh pairing link.
 Paste the link (or just its token) into the **Pairing token** field and choose

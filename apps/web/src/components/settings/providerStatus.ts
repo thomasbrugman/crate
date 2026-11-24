@@ -73,7 +73,7 @@ export function getProviderSummary(
       headline: resolve(msg("Disabled", { $context: "provider status" })),
       detail:
         provider.message ??
-        resolve(msg("This provider is installed but disabled for new sessions in t3stash.")),
+        resolve(msg("This provider is installed but disabled for new sessions in Crate.")),
     };
   }
   if (!provider.installed) {

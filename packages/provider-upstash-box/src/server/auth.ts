@@ -50,7 +50,7 @@ export const makeBoxHarnessAuth = Effect.fn("UpstashBox.makeAuth")(function* (
               apiKey,
               runtime: "node",
               ttl: 600,
-              labels: ["t3stash-auth"],
+              labels: ["crate-auth"],
               networkPolicy: { mode: "allow-all" },
             }),
           catch: () => failure("start", "Could not create the temporary sign-in Box."),
@@ -75,7 +75,7 @@ export const makeBoxHarnessAuth = Effect.fn("UpstashBox.makeAuth")(function* (
       });
       const output = yield* Queue.sliding<string>(64);
       const decoder = new TextDecoder();
-      const loginHome = "/dev/shm/t3stash-login";
+      const loginHome = "/dev/shm/crate-login";
       yield* Effect.tryPromise({
         try: async () => {
           const result = await box.exec.command(

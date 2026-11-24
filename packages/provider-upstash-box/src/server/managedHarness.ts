@@ -1,4 +1,10 @@
 import { boxMcpStdio } from "./boxMcpStdio.ts";
+import {
+  CLAUDE_INVESTIGATION_ALLOWED,
+  CLAUDE_INVESTIGATION_DENIED,
+  CLAUDE_INVESTIGATION_TOOLS,
+} from "@t3tools/provider-core/server/textGenerationOperations";
+
 import { BOX_CREDENTIALS_DIR } from "./credentials.ts";
 
 export const managedHarness = String.raw`import { spawn } from 'node:child_process';
@@ -8,9 +14,11 @@ ${boxMcpStdio}
 
 const [harness, markedPrompt, model, session, kind, ...flags] = process.argv.slice(2);
 const planMode = flags.includes('plan');
+// A review guide reads the checkout with read-only tools; agent turns keep full access.
+const readOnly = flags.includes('investigate');
 const codexPlanInstructions = 'You are in plan mode. Do not edit files or run commands that change state. ' +
   'Explore as needed, then reply with your complete plan inside <proposed_plan></proposed_plan> tags.';
-const userPrompt = markedPrompt.replace(/^t3stash-run:[0-9a-f]+\n/, '');
+const userPrompt = markedPrompt.replace(/^crate-run:[0-9a-f]+\n/, '');
 const prompt = planMode && harness === 'codex' ? codexPlanInstructions + '\n\n' + userPrompt : userPrompt;
 const emit = (type, data) => process.stdout.write('event: ' + type + '\ndata: ' + JSON.stringify(data) + '\n\n');
 const bridge = flags.includes('relay') ? await startBoxMcp(emit) : null;
@@ -35,11 +43,19 @@ const mcpArgs = !bridge ? []
        '-c', 'mcp_servers.t3-code.tool_timeout_sec=3900'];
 const args = harness === 'claudeCode'
   ? ['--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages',
-     '--permission-mode', planMode ? 'plan' : 'bypassPermissions', ...claudeSettings, ...mcpArgs, '--model', model,
+     ...(readOnly
+       ? ['--tools', ${JSON.stringify(CLAUDE_INVESTIGATION_TOOLS)},
+          '--allowedTools', ${JSON.stringify(CLAUDE_INVESTIGATION_ALLOWED)},
+          '--disallowedTools', ${JSON.stringify(CLAUDE_INVESTIGATION_DENIED)},
+          '--permission-mode', 'dontAsk', '--setting-sources', 'user',
+          '--disable-slash-commands', '--strict-mcp-config']
+       : ['--permission-mode', planMode ? 'plan' : 'bypassPermissions', ...claudeSettings]),
+     ...mcpArgs, '--model', model,
      ...(session ? ['--resume', session] : []), '--', prompt]
-  : [...mcpArgs, 'exec', ...(planMode ? ['--sandbox', 'read-only'] : []),
+  : [...mcpArgs, 'exec',
+     ...(readOnly || planMode ? ['--sandbox', 'read-only'] : []),
      ...(session ? ['resume'] : []), '--json',
-     ...(planMode ? [] : ['--dangerously-bypass-approvals-and-sandbox']),
+     ...(readOnly ? ['--ephemeral'] : planMode ? [] : ['--dangerously-bypass-approvals-and-sandbox']),
      '--skip-git-repo-check', '--model', model,
      '--', ...(session ? [session] : []), prompt];
 const env = { ...process.env };

@@ -1,27 +1,20 @@
 {
   "fill": {
-    "solid": "display-p3:0.00000,0.00000,0.00000,1.00000"
+    "solid": "display-p3:0.78824,0.55686,0.33333,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "text.svg",
-          "name": "Text",
+          "glass": false,
+          "image-name": "box-buddy.svg",
+          "name": "Box Buddy",
           "position": {
-            "scale": 8.5,
+            "scale": 2,
             "translation-in-points": [0, 0]
           }
         }
-      ],
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
-      },
-      "translucency": {
-        "enabled": true,
-        "value": 0.5
-      }
+      ]
     }
   ],
   "supported-platforms": {

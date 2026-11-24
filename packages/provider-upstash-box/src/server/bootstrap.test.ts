@@ -175,7 +175,7 @@ it.effect(
             },
             write: async ({ path, content }) => {
               writes.push(path);
-              if (path.endsWith("t3stash-harness.mjs")) harnesses.push(content);
+              if (path.endsWith("crate-harness.mjs")) harnesses.push(content);
             },
           },
           delete: async () => undefined,
@@ -236,11 +236,11 @@ it.effect(
           assert.isFalse(writes.some((path) => /\.git(?:-credentials|config)$/u.test(path)));
           assert.isFalse(writes.some((path) => /\/(?:auth|config)\.json$/u.test(path)));
           assert.equal(
-            volatile.get("/dev/shm/t3stash-auth/command-home/.commandcode/auth.json"),
+            volatile.get("/dev/shm/crate-auth/command-home/.commandcode/auth.json"),
             "private template credentials",
           );
           assert.equal(
-            volatile.get("/dev/shm/t3stash-auth/command-home/.commandcode/config.json"),
+            volatile.get("/dev/shm/crate-auth/command-home/.commandcode/config.json"),
             "private template credentials",
           );
           assert.deepEqual(harnesses, [commandCodeHarness, commandCodeHarness]);
@@ -376,13 +376,13 @@ it.effect.each([
             commands.push(command);
             if (command.includes("git clone"))
               assert.equal(
-                volatile.get("/dev/shm/t3stash-git/credential"),
+                volatile.get("/dev/shm/crate-git/credential"),
                 "username=x-access-token\npassword=fixture-github-token\n",
               );
             return {
               stdout: "",
-              exitCode: command.startsWith("test -s /dev/shm/t3stash-git/credential")
-                ? volatile.has("/dev/shm/t3stash-git/stamp")
+              exitCode: command.startsWith("test -s /dev/shm/crate-git/credential")
+                ? volatile.has("/dev/shm/crate-git/stamp")
                   ? 0
                   : 1
                 : command.startsWith("test -f") && !command.includes(" || npm i ")
@@ -493,20 +493,17 @@ it.effect.each([
         assert.notInclude(JSON.stringify(created), credential);
       }
       assert.equal(
-        volatile.get("/dev/shm/t3stash-auth/command-home/.commandcode/auth.json"),
+        volatile.get("/dev/shm/crate-auth/command-home/.commandcode/auth.json"),
         credentials.commandCode,
       );
-      assert.equal(volatile.get("/dev/shm/t3stash-auth/claudeCode-token"), credentials.claudeCode);
-      assert.include(
-        volatile.get("/dev/shm/t3stash-auth/codex/auth.json") ?? "",
-        credentials.codex,
-      );
+      assert.equal(volatile.get("/dev/shm/crate-auth/claudeCode-token"), credentials.claudeCode);
+      assert.include(volatile.get("/dev/shm/crate-auth/codex/auth.json") ?? "", credentials.codex);
       assert.include(commands.join("\n"), "npm i -g --prefix /home/boxuser/.local opencode-ai@");
       assert.include(commands.join("\n"), "@cursor/sdk@1.3.1");
       assert.include([...files.values()], "fixture worker bundle");
       for (const harness of ["opencode", "cursor", "antigravity"] as const) {
         assert.equal(
-          volatile.get(`/dev/shm/t3stash-auth/${harness}/credential`),
+          volatile.get(`/dev/shm/crate-auth/${harness}/credential`),
           credentials[harness],
         );
         assert.notInclude(commands.join("\n"), credentials[harness]);
@@ -516,21 +513,21 @@ it.effect.each([
       assert.deepEqual(templateReads, []);
       assert.include(
         commands.join("\n"),
-        "ln -sfnT /dev/shm/t3stash-auth/codex/auth.json /home/boxuser/.codex/auth.json",
+        "ln -sfnT /dev/shm/crate-auth/codex/auth.json /home/boxuser/.codex/auth.json",
       );
       assert.include(
         commands.join("\n"),
-        "ln -sfnT /dev/shm/t3stash-auth/claude/.credentials.json /home/boxuser/.claude/.credentials.json",
+        "ln -sfnT /dev/shm/crate-auth/claude/.credentials.json /home/boxuser/.claude/.credentials.json",
       );
       if (profileStatus !== 200) {
-        const stampWrittenAfterFailure = volatile.has("/dev/shm/t3stash-git/stamp");
+        const stampWrittenAfterFailure = volatile.has("/dev/shm/crate-git/stamp");
         githubUser.mockResolvedValueOnce(Response.json({ id: 123, login: "fixture-login" }));
         yield* prepareBox;
         assert.equal(githubUser.mock.calls.length, 2);
         assert.isFalse(stampWrittenAfterFailure);
         assert.include(commands.join("\n"), "user.name 'fixture-login'");
         assert.include(commands.join("\n"), "123+fixture-login@users.noreply.github.com");
-        assert.isTrue(volatile.has("/dev/shm/t3stash-git/stamp"));
+        assert.isTrue(volatile.has("/dev/shm/crate-git/stamp"));
       }
     }),
 );

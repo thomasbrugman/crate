@@ -65,7 +65,8 @@ export const exec = Effect.fn("BoxGitHost.exec")(function* (input: {
   const api = yield* Effect.serviceOption(BoxExec.BoxExec);
   const unavailable = () => new BoxGitError({ detail: "Box unavailable for Git execution." });
   if (!target || Option.isNone(api)) return yield* unavailable();
-  const cwd = input.cwd === undefined ? target.checkoutRoot : mapPath(target, input.cwd, true);
+  const cwd =
+    input.cwd === undefined ? target.checkoutRoot : mapPath(target, input.cwd, true, true);
   if (cwd === undefined)
     return yield* new BoxGitError({ detail: "Git path is outside the thread's project root." });
   const env = Object.entries(input.env ?? {}).filter(

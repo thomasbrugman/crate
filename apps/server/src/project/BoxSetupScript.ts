@@ -31,7 +31,7 @@ export class BoxSetupScript extends Context.Service<
 // Inside the checkout's own git dir, so `git status` never shows it. It records which Box
 // claimed the run and holds `done` once the script succeeded, so a snapshot taken mid-setup
 // runs it again in the restored Box.
-const MARKER = "t3stash-setup-script";
+const MARKER = "crate-setup-script";
 const NO_CHECKOUT = 3;
 const ALREADY_RAN = 4;
 

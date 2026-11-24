@@ -39,7 +39,7 @@ export const readBoxWorkerModels = Effect.fn("UpstashBox.readWorkerModels")(func
           runtime: "node",
           size: "small",
           keepAlive: false,
-          labels: ["t3stash-catalog"],
+          labels: ["crate-catalog"],
         }),
       catch: failure,
     }),

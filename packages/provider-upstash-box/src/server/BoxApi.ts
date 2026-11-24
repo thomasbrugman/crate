@@ -24,8 +24,8 @@ import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
 export const BOX_HOME = "/home/boxuser";
 export const BOX_WORKSPACE_PATH = "/workspace/home";
 export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
-export const BOX_WORKTREES_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-worktrees`;
-export const BOX_ATTACHMENTS_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-attachments`;
+export const BOX_WORKTREES_PATH = `${BOX_WORKSPACE_PATH}/.crate-worktrees`;
+export const BOX_ATTACHMENTS_PATH = `${BOX_WORKSPACE_PATH}/.crate-attachments`;
 
 export const boxWorktreePath = (threadId: string) =>
   `${BOX_WORKTREES_PATH}/${Buffer.from(threadId).toString("hex")}`;
@@ -381,7 +381,7 @@ export function boxConfig(input: {
     runtime: "node",
     size: input.size ?? "small",
     keepAlive: false,
-    labels: ["t3stash"],
+    labels: ["crate"],
     networkPolicy: { mode: "allow-all" },
   } satisfies BoxConfig;
   if (isWorkerBoxHarness(input.harness)) return base;
@@ -397,7 +397,7 @@ export function boxConfig(input: {
       },
       agent: {
         harness: Agent.Custom,
-        customHarness: { command: "node", args: ["/home/boxuser/.local/bin/t3stash-harness.mjs"] },
+        customHarness: { command: "node", args: ["/home/boxuser/.local/bin/crate-harness.mjs"] },
       },
     };
   const apiKey = input.agentApiKey || BoxApiKey.StoredKey;

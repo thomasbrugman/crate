@@ -39,20 +39,6 @@ import { resolveAttachmentPath } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
 
 const CLAUDE_TIMEOUT_MS = 180_000;
-/** `--tools` takes bare names; patterns go in the allow list. */
-const CLAUDE_INVESTIGATION_TOOLS = "Read,Grep,Glob,Bash";
-/** In dontAsk mode every call outside this list, Bash included, is refused. */
-const CLAUDE_INVESTIGATION_ALLOWED = [
-  "Read",
-  "Grep",
-  "Glob",
-  "Bash(git diff:*)",
-  "Bash(git log:*)",
-  "Bash(git show:*)",
-].join(",");
-// Denies override allows; block git --output/-o because allowed trailing args can otherwise write anywhere.
-const CLAUDE_INVESTIGATION_DENIED = ["Bash(git * --output*)", "Bash(git * -o *)"].join(",");
-
 const NO_SESSION_PERSISTENCE = "--no-session-persistence";
 // Claude Code before 2.0.63 exits with this on stderr; those runs retry without the flag.
 const NO_SESSION_PERSISTENCE_REJECTED = `error: unknown option '${NO_SESSION_PERSISTENCE}'`;
@@ -295,11 +281,11 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
           ...(investigate
             ? [
                 "--tools",
-                CLAUDE_INVESTIGATION_TOOLS,
+                TextGenerationOperations.CLAUDE_INVESTIGATION_TOOLS,
                 "--allowedTools",
-                CLAUDE_INVESTIGATION_ALLOWED,
+                TextGenerationOperations.CLAUDE_INVESTIGATION_ALLOWED,
                 "--disallowedTools",
-                CLAUDE_INVESTIGATION_DENIED,
+                TextGenerationOperations.CLAUDE_INVESTIGATION_DENIED,
               ]
             : ["--tools", ""]),
           ...(investigate ? ["--setting-sources", "user"] : []),

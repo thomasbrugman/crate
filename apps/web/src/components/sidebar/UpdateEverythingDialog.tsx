@@ -4,6 +4,7 @@ import { Atom } from "effect/reactivity";
 import { ChevronRightIcon } from "lucide-react";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { Fragment, type RefObject, useRef } from "react";
+import { APP_BASE_NAME } from "~/branding";
 
 import { environmentThreadShells } from "~/state/threads";
 import {
@@ -142,7 +143,7 @@ function UpdateEverythingDialogContent({
         <AlertDialogDescription>
           {version !== null ? (
             <>
-              t3stash <span className="font-mono text-xs">{version}</span>
+              {APP_BASE_NAME} <span className="font-mono text-xs">{version}</span>
             </>
           ) : null}
           {version !== null && providerCount > 0 ? " · " : null}
@@ -176,7 +177,7 @@ function UpdateEverythingDialogContent({
               <span role="columnheader">
                 <T>Machine</T>
               </span>
-              <span role="columnheader">t3stash</span>
+              <span role="columnheader">{APP_BASE_NAME}</span>
               <span role="columnheader">
                 <T>Providers</T>
               </span>

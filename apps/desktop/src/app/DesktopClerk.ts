@@ -13,7 +13,7 @@ import { receiveCodexAuthCallback, CodexAuthCallbackError } from "./CodexAuthCal
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import { providerAuthReturnUrl } from "@t3tools/shared/providerAuthReturnUrl";
 import { promptLinkAppPath } from "@t3tools/shared/promptLinks";
-import { isAppLinkProtocol, readPairingAppLink, T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
+import { isAppLinkProtocol, readPairingAppLink, CRATE_APP_SCHEME } from "@t3tools/shared/remote";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
 import * as ElectronApp from "../electron/ElectronApp.ts";
@@ -219,11 +219,7 @@ export const make = Effect.gen(function* () {
         if (!value || (promptLinkAppPath(value) === null && readPairingAppLink(value) === null))
           return false;
         const protocol = new URL(value).protocol;
-        if (
-          scheme === T3STASH_APP_SCHEME &&
-          isAppLinkProtocol(protocol) &&
-          protocol !== `${scheme}:`
-        )
+        if (scheme === CRATE_APP_SCHEME && isAppLinkProtocol(protocol) && protocol !== `${scheme}:`)
           return false;
         void runPromise(webLinks.receive(value));
         return true;

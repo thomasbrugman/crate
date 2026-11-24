@@ -191,7 +191,7 @@ it.effect.each(cases)("resolves persisted Box identity and project context: %j",
         checkoutRoot: scenario.noRepository
           ? "/workspace/home"
           : scenario.sharedBox
-            ? "/workspace/home/.t3stash-worktrees/626f782d746872656164"
+            ? "/workspace/home/.crate-worktrees/626f782d746872656164"
             : "/workspace/home/repo",
       });
       assert.deepEqual(calls, ["persisted-box"]);
