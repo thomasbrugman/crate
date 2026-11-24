@@ -1,6 +1,7 @@
 import { threadPullRequestKeyOf } from "@t3tools/client-runtime/thread-pull-requests";
 import * as Dialog from "../../components/ui/Dialog";
 import type {
+  BoxComposerCapabilitiesInput,
   EnvironmentId,
   ProjectId,
   ServerProvider,
@@ -61,6 +62,7 @@ import { useEffect, useState } from "react";
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { providerWorkspaceSnapshotRefresh } from "../../state/provider-workspace-snapshot-refresh";
 import {
+  useBoxComposerCapabilities,
   useComposerPathSearch,
   useComposerPullRequestSearch,
   useThreadSearch,
@@ -231,13 +233,14 @@ export function resolveComposerCommandSelection(input: {
   readonly draftMessage: string;
   readonly trigger: Pick<ComposerTrigger, "rangeStart" | "rangeEnd">;
   readonly item: ComposerCommandItem;
+  readonly skillAsSlash?: boolean;
 }): { readonly text: string; readonly cursor: number } {
   const { draftMessage, trigger, item } = input;
   let replacement = "";
   if (item.type === "path") {
     replacement = `${serializeComposerFileLink(item.path)} `;
   } else if (item.type === "skill") {
-    replacement = `$${item.skill.name} `;
+    replacement = `${input.skillAsSlash ? "/" : "$"}${item.skill.name} `;
   } else if (item.type === "slash-command") {
     replacement = `/${item.command} `;
   } else if (item.type === "provider-slash-command") {
@@ -257,6 +260,8 @@ export function useComposerCommandMenu({
   linkedEnvironments = NO_LINKED_ENVIRONMENTS,
   currentThreadId = null,
   projectCwd,
+  cloudThread,
+  boxHarness,
   pullRequestProjectId = null,
   pullRequestRepository = null,
   threadPullRequests,
@@ -282,6 +287,8 @@ export function useComposerCommandMenu({
   readonly linkedEnvironments?: ReadonlyMap<EnvironmentId, string>;
   readonly currentThreadId?: ThreadId | null;
   readonly projectCwd: string | null;
+  readonly cloudThread?: boolean;
+  readonly boxHarness?: BoxComposerCapabilitiesInput["harness"] | undefined;
   readonly pullRequestProjectId?: ProjectId | null;
   readonly pullRequestRepository?: string | null;
   readonly threadPullRequests?: ReadonlyArray<ThreadPullRequestLink>;
@@ -318,12 +325,9 @@ export function useComposerCommandMenu({
   const setSelection = (next: ComposerEditorSelection) =>
     setLocalSelection({ ownerKey, start: next.start, end: next.end });
 
-  const skills = selectedProviderStatus
-    ? resolveProviderSkillsForCwd(selectedProviderStatus, projectCwd)
-    : [];
   const selectedProviderInstanceId = selectedProviderStatus?.instanceId;
   const refreshWorkspaceSnapshot = useAtomRefresh(
-    environmentId && projectCwd && selectedProviderInstanceId
+    !boxHarness && environmentId && projectCwd && selectedProviderInstanceId
       ? providerWorkspaceSnapshotRefresh({
           environmentId,
           instanceId: selectedProviderInstanceId,
@@ -351,9 +355,25 @@ export function useComposerCommandMenu({
     }
     return detectComposerTrigger(draftMessage, selection.end);
   })();
+  const { data: boxComposerCapabilities } = useBoxComposerCapabilities(
+    environmentId,
+    boxHarness &&
+      hasThread &&
+      currentThreadId &&
+      (trigger?.kind === "slash-command" || trigger?.kind === "skill")
+      ? { threadId: currentThreadId, harness: boxHarness }
+      : null,
+  );
+  const skills = boxHarness
+    ? (boxComposerCapabilities?.skills ?? [])
+    : selectedProviderStatus
+      ? resolveProviderSkillsForCwd(selectedProviderStatus, projectCwd)
+      : [];
+  const boxThreadId = cloudThread && hasThread ? currentThreadId : null;
   const pathSearch = useComposerPathSearch({
     environmentId,
-    cwd: trigger?.kind === "path" ? projectCwd : null,
+    cwd: trigger?.kind === "path" && !boxThreadId ? projectCwd : null,
+    ...(boxThreadId ? { boxThreadId } : {}),
     query: trigger?.kind === "path" ? trigger.query : null,
   });
   // Mounts older settled threads matching the mention, here and on linked machines, which shells
@@ -412,7 +432,9 @@ export function useComposerCommandMenu({
             ? {
                 ...selectedProviderStatus,
                 slashCommands: getProviderSlashCommandsForSlashMenu(
-                  resolveProviderSlashCommandsForCwd(selectedProviderStatus, projectCwd),
+                  boxHarness
+                    ? (boxComposerCapabilities?.slashCommands ?? [])
+                    : resolveProviderSlashCommandsForCwd(selectedProviderStatus, projectCwd),
                   visibleSkills,
                 ),
               }
@@ -685,7 +707,15 @@ export function useComposerCommandMenu({
       return;
     }
 
-    const result = resolveComposerCommandSelection({ draftMessage, trigger, item });
+    const result = resolveComposerCommandSelection({
+      draftMessage,
+      trigger,
+      item,
+      skillAsSlash:
+        trigger.kind === "slash-command" &&
+        trigger.rangeStart === 0 &&
+        (boxHarness === "commandCode" || boxHarness === "claudeCode"),
+    });
     setSelection({ start: result.cursor, end: result.cursor });
     onChangeDraftMessage(result.text);
   };

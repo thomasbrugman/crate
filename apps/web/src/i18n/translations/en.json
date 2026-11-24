@@ -3355,8 +3355,6 @@
     }
   ],
   "1b1131295f62c44c": "Provider process is gone. Interrupt or restart the child thread to respond.",
-  "52278fd875d1a073": "Box workspace details",
-  "eb51025bee426871": "Attachments and file previews are not available in cloud threads. File mentions use the server checkout; only pushed files are available in the Box.",
   "2cc98601912fed53": "Not available in cloud threads. Ask the agent to use its Box tools.",
   "da66023072c473d1": [
     "Couldn't load output: ",

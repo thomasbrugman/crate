@@ -211,6 +211,7 @@ import { parseBase64DataUrl } from "./imageMime.ts";
 import { deletePendingAttachment, issueAttachmentUploadUrl } from "./assets/AttachmentUpload.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
+import * as BoxWorkspaceEntries from "./workspace/BoxWorkspaceEntries.ts";
 import * as KnownWorkspaces from "./workspace/KnownWorkspaces.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
 import { readWorkflowScript } from "./orchestration-v2/workflowScriptQuery.ts";
@@ -2975,18 +2976,21 @@ export const layerWsRpc = (
             ),
           ),
         [WS_METHODS.projectsSearchEntries]: (input) =>
-          workspaceEntries.search(input).pipe(
-            Effect.mapError(
-              (cause) =>
-                new ProjectSearchEntriesError({
-                  cwd: input.cwd,
-                  queryLength: input.query.length,
-                  limit: input.limit,
-                  ...projectEntriesFailureContext(cause),
-                  cause,
-                }),
-            ),
-          ),
+          input.boxThreadId !== undefined
+            ? BoxWorkspaceEntries.search({ ...input, boxThreadId: input.boxThreadId })
+            : workspaceEntries.search(input).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProjectSearchEntriesError({
+                      cwd: input.cwd,
+                      queryLength: input.query.length,
+                      limit: input.limit,
+                      ...projectEntriesFailureContext(cause),
+                      cause,
+                    }),
+                ),
+              ),
+        [WS_METHODS.projectsBoxComposerCapabilities]: BoxWorkspaceEntries.discover,
         [WS_METHODS.projectsSearchContents]: (input) =>
           workspaceEntries.searchContents(input).pipe(
             Effect.mapError(

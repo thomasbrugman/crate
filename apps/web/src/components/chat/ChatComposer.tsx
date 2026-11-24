@@ -59,6 +59,9 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
+import { getUpstashBoxHarness } from "@t3tools/client-runtime/provider-clients";
+import { projectEnvironment } from "../../state/projects";
+import { useEnvironmentQuery } from "../../state/query";
 import { type FolderDropTarget, folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { splitTransferredFiles } from "./workspaceFileDrop";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
@@ -132,7 +135,6 @@ import {
   useRetainedContextPayloads,
 } from "./composerContextUndo";
 import { ComposerBanner } from "./ComposerBanner";
-import { CloudThreadHelp } from "./CloudThreadHelp";
 import { ComposerSurface } from "./ComposerSurface";
 import { CollapsedComposerPromptPreview } from "./CollapsedComposerPromptPreview";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./ComposerBannerStack";
@@ -801,12 +803,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     m,
   );
   const attachmentBlockReason =
-    (props.cloudThread &&
-    (composerImages.length > 0 ||
-      composerFiles.length > 0 ||
-      (editingQueuedAttachments?.length ?? 0) > 0)
-      ? gt("Not available in cloud threads. Ask the agent to use its Box tools.")
-      : null) ??
     (questionAttachmentTarget &&
     !supportsQuestionAttachments &&
     (composerImages.length > 0 || composerFiles.length > 0)
@@ -997,16 +993,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         (multipleModelSelections === null ? providerSendBlockReason : null)));
   const isSendDisabled = sendDisabledReason !== null;
   const selectedProviderStatus = selectedProviderEntry?.snapshot ?? null;
-  const selectedProviderSkills = selectedProviderStatus
-    ? resolveProviderSkillsForCwd(selectedProviderStatus, gitCwd)
-    : NO_PROVIDER_SKILLS;
-  const selectedProviderSlashCommands = selectedProviderStatus
-    ? resolveProviderSlashCommandsForCwd(selectedProviderStatus, gitCwd)
-    : NO_PROVIDER_SLASH_COMMANDS;
-  const { refresh: refreshWorkspaceSnapshotOnTyping, scanning: workspaceSkillsScanning } =
+  const boxHarness = getUpstashBoxHarness(selectedProviderStatus?.driver);
+  const boxComposerThreadId =
+    props.cloudThread && routeKind === "server" ? activeThread?.id : undefined;
+  const { refresh: refreshWorkspaceSnapshotOnTyping, scanning: localWorkspaceSkillsScanning } =
     useProviderWorkspaceSnapshotRefresh({
       environmentId,
-      gitCwd,
+      gitCwd: boxHarness ? null : gitCwd,
       instanceId: selectedProviderEntry?.instanceId,
     });
 
@@ -1050,6 +1043,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   } = useComposerTriggerState(() =>
     isLiteralPendingAnswer ? null : detectComposerTrigger(prompt, prompt.length),
   );
+  const boxComposerCapabilities = useEnvironmentQuery(
+    environmentId &&
+      boxComposerThreadId &&
+      boxHarness &&
+      (composerTrigger?.kind === "slash-command" || composerTrigger?.kind === "skill")
+      ? projectEnvironment.boxComposerCapabilities({
+          environmentId,
+          input: { threadId: boxComposerThreadId, harness: boxHarness },
+        })
+      : null,
+  );
+  const selectedProviderSkills = boxHarness
+    ? (boxComposerCapabilities.data?.skills ?? NO_PROVIDER_SKILLS)
+    : selectedProviderStatus
+      ? resolveProviderSkillsForCwd(selectedProviderStatus, gitCwd)
+      : NO_PROVIDER_SKILLS;
+  const selectedProviderSlashCommands = boxHarness
+    ? (boxComposerCapabilities.data?.slashCommands ?? NO_PROVIDER_SLASH_COMMANDS)
+    : selectedProviderStatus
+      ? resolveProviderSlashCommandsForCwd(selectedProviderStatus, gitCwd)
+      : NO_PROVIDER_SLASH_COMMANDS;
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   const composerSuggestionId = useId();
   const composerSuggestionListId = `${composerSuggestionId}-${encodeURIComponent(draftId ?? activeThreadId ?? "new")}-suggestions`;
@@ -1185,6 +1199,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     environmentId,
     linkedEnvironments,
     gitCwd,
+    boxThreadId: boxComposerThreadId,
     activeThreadId,
     pullRequestProjectId,
     pullRequestRepository,
@@ -1197,7 +1212,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderSkills,
     selectedProviderSlashCommands,
     showSkillsInSlashMenu: settings.showSkillsInSlashMenu,
-    workspaceSkillsScanning,
+    workspaceSkillsScanning: boxHarness
+      ? boxComposerCapabilities.isPending
+      : localWorkspaceSkillsScanning,
     questionAttachmentTarget,
     modelMentions: { instanceEntries: providerInstanceEntries, modelOptionsByInstance },
   });
@@ -1998,7 +2015,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     const { snapshot, trigger } = resolveActiveComposerTrigger();
     if (!trigger) return;
     if (item.type === "path") {
-      if (!isPathSuggestionCurrent(item.searchTarget, trigger, environmentId, gitCwd)) return;
+      if (
+        !isPathSuggestionCurrent(
+          item.searchTarget,
+          trigger,
+          environmentId,
+          boxComposerThreadId ? null : gitCwd,
+        ) ||
+        item.searchTarget?.boxThreadId !== boxComposerThreadId
+      )
+        return;
       const replacement = `${serializeComposerFileLink(item.path)} `;
       const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
         snapshot.value,
@@ -2075,7 +2101,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return;
     }
     if (item.type === "skill") {
-      const replacement = `$${item.skill.name} `;
+      const prefix =
+        trigger.kind === "slash-command" &&
+        trigger.rangeStart === 0 &&
+        (boxHarness === "commandCode" || boxHarness === "claudeCode")
+          ? "/"
+          : "$";
+      const replacement = `${prefix}${item.skill.name} `;
       const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
         snapshot.value,
         trigger.rangeEnd,
@@ -2752,9 +2784,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const { addComposerAttachments, removeComposerImage, foldPastedText } =
     useComposerAttachmentIntake({
-      unavailableReason: props.cloudThread
-        ? gt("Not available in cloud threads. Ask the agent to use its Box tools.")
-        : undefined,
       activeThreadId,
       activePendingProgress,
       activePendingIsResponding,
@@ -3457,9 +3486,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         onRemoveFile={removeComposerFileFromDraft}
       />
     ) : null;
-  const composerAttachButton = props.cloudThread ? (
-    <CloudThreadHelp />
-  ) : showComposerAttachAction ? (
+  const composerAttachButton = showComposerAttachAction ? (
     <ComposerAttachButton
       addComposerAttachments={addComposerAttachments}
       focusComposer={focusComposer}

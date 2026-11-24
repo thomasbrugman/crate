@@ -3355,8 +3355,6 @@
     }
   ],
   "1b1131295f62c44c": "Le processus du fournisseur n’existe plus. Interrompez ou redémarrez le fil enfant pour répondre.",
-  "52278fd875d1a073": "Détails de l’espace de travail Box",
-  "eb51025bee426871": "Les pièces jointes et les aperçus de fichiers ne sont pas disponibles dans les fils cloud. Les mentions de fichiers utilisent la copie du serveur ; seuls les fichiers poussés sont disponibles dans la Box.",
   "2cc98601912fed53": "Non disponible dans les fils de discussion cloud. Demandez à l’agent d’utiliser ses outils Box.",
   "da66023072c473d1": [
     "Impossible de charger la sortie : ",
