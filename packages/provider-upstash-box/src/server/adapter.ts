@@ -90,7 +90,7 @@ clean_checkout() (
 for path in ./* ./.[!.]* ./..?*; do
   test -e "$path" || test -L "$path" || continue
   case "$path" in
-    ./repo|./.t3stash-worktrees|./.t3stash-attachments|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
+    ./repo|./.t3stash-worktrees|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
     *) exit 1 ;;
   esac
 done

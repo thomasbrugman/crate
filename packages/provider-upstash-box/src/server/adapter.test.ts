@@ -375,6 +375,14 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
       }
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.equal(deleted, 2);
+      const attachments = NodePath.join(home, ".t3stash-attachments");
+      yield* Effect.promise(() => NodeFSP.mkdir(attachments));
+      yield* Effect.promise(() =>
+        NodeFSP.writeFile(NodePath.join(attachments, "notes.txt"), "edited"),
+      );
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
+      yield* Effect.promise(() => NodeFSP.rm(attachments, { recursive: true }));
       for (const checkout of [repo, worktree]) {
         for (const file of [".env", ".commandcode/notes.md"]) {
           const path = NodePath.join(checkout, file);
