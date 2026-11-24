@@ -369,10 +369,11 @@ export function useComposerCommandMenu({
     : selectedProviderStatus
       ? resolveProviderSkillsForCwd(selectedProviderStatus, projectCwd)
       : [];
+  const boxThreadId = cloudThread && hasThread ? currentThreadId : null;
   const pathSearch = useComposerPathSearch({
     environmentId,
-    cwd: trigger?.kind === "path" && !cloudThread ? projectCwd : null,
-    ...(cloudThread && hasThread && currentThreadId ? { boxThreadId: currentThreadId } : {}),
+    cwd: trigger?.kind === "path" && !boxThreadId ? projectCwd : null,
+    ...(boxThreadId ? { boxThreadId } : {}),
     query: trigger?.kind === "path" ? trigger.query : null,
   });
   // Mounts older settled threads matching the mention, here and on linked machines, which shells

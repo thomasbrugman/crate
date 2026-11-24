@@ -1188,6 +1188,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerPreviewAnnotations.length === 0 &&
     composerReviewComments.length === 0;
   const linkedEnvironments = useLinkedEnvironments(environmentId);
+  const boxComposerThreadId = props.cloudThread ? activeThread?.id : undefined;
   const {
     items: composerMenuItems,
     isLoading: isComposerMenuLoading,
@@ -1197,7 +1198,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     environmentId,
     linkedEnvironments,
     gitCwd,
-    cloudThread: props.cloudThread === true,
+    boxThreadId: boxComposerThreadId,
     activeThreadId,
     pullRequestProjectId,
     pullRequestRepository,
@@ -2018,10 +2019,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           item.searchTarget,
           trigger,
           environmentId,
-          props.cloudThread ? null : gitCwd,
+          boxComposerThreadId ? null : gitCwd,
         ) ||
-        item.searchTarget?.boxThreadId !==
-          (props.cloudThread ? (activeThreadId ?? undefined) : undefined)
+        item.searchTarget?.boxThreadId !== boxComposerThreadId
       )
         return;
       const replacement = `${serializeComposerFileLink(item.path)} `;
