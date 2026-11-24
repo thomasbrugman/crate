@@ -28,13 +28,27 @@ export class BoxSetupScript extends Context.Service<
   }
 >()("t3/project/BoxSetupScript") {}
 
-// Inside the checkout's own git dir, so snapshots keep it and `git status` never shows it.
+// Inside the checkout's own git dir, so `git status` never shows it. It records which Box
+// claimed the run and holds `done` once the script succeeded, so a snapshot taken mid-setup
+// runs it again in the restored Box.
 const MARKER = "t3stash-setup-script";
 const NO_CHECKOUT = 3;
 const ALREADY_RAN = 4;
 
-const gitDir = (checkout: string) =>
-  `"$(git -C ${BoxApi.quoteShell(checkout)} rev-parse --absolute-git-dir 2>/dev/null)"`;
+const markerDir = (checkout: string) =>
+  `"$(git -C ${BoxApi.quoteShell(checkout)} rev-parse --absolute-git-dir 2>/dev/null)/${MARKER}"`;
+
+const claimCommand = (checkout: string, boxId: string) => {
+  const dir = markerDir(checkout);
+  const owner = BoxApi.quoteShell(boxId);
+  return [
+    `git -C ${BoxApi.quoteShell(checkout)} rev-parse --absolute-git-dir >/dev/null 2>&1 || exit ${NO_CHECKOUT}`,
+    `if mkdir -- ${dir} 2>/dev/null; then printf %s ${owner} > ${dir}/box; exit 0; fi`,
+    `test -e ${dir}/done && exit ${ALREADY_RAN}`,
+    `test "$(cat ${dir}/box 2>/dev/null)" = ${owner} && exit ${ALREADY_RAN}`,
+    `printf %s ${owner} > ${dir}/box`,
+  ].join("; ");
+};
 
 const make = Effect.gen(function* () {
   const resolver = yield* BoxThreadResolver;
@@ -54,18 +68,18 @@ const make = Effect.gen(function* () {
           const checkout = target.worktree
             ? await BoxApi.ensureBoxWorktree(box, input.threadId, input.baseCommit)
             : BoxApi.BOX_REPOSITORY_PATH;
-          const dir = gitDir(checkout);
-          const claimed = await box.exec.command(
-            `test -n ${dir} || exit ${NO_CHECKOUT}; mkdir -- ${dir}/${MARKER} 2>/dev/null || exit ${ALREADY_RAN}`,
-          );
-          const release = () =>
+          const dir = markerDir(checkout);
+          const claimed = await box.exec.command(claimCommand(checkout, target.nativeId));
+          const mark = (command: string) =>
             Effect.promise(() =>
-              box.exec.command(`rmdir -- ${dir}/${MARKER}`).then(
+              box.exec.command(command).then(
                 () => undefined,
                 () => undefined,
               ),
             );
-          return claimed.exitCode === 0 ? { checkout, release } : null;
+          const release = () => mark(`rm -rf -- ${dir}`);
+          const finish = () => mark(`touch -- ${dir}/done`);
+          return claimed.exitCode === 0 ? { checkout, release, finish } : null;
         },
         catch: () => new BoxSetupScriptError({ message: "The Box checkout could not be read." }),
       }).pipe(
@@ -101,7 +115,7 @@ const make = Effect.gen(function* () {
         yield* started.completion.pipe(
           Effect.tap(({ exitCode }) =>
             exitCode === 0
-              ? Effect.void
+              ? claim.finish()
               : Effect.logWarning("Box setup script failed", {
                   threadId: input.threadId,
                   script: started.scriptName,
@@ -112,8 +126,11 @@ const make = Effect.gen(function* () {
         );
         return;
       }
-      const { exitCode } = yield* started.completion;
-      if (exitCode === 0) return;
+      // Stopping the turn leaves the script unfinished, so the next turn runs it again.
+      const { exitCode } = yield* started.completion.pipe(
+        Effect.onInterrupt(() => claim.release()),
+      );
+      if (exitCode === 0) return yield* claim.finish();
       yield* claim.release();
       return yield* new BoxSetupScriptError({
         message: `Setup script "${started.scriptName}" exited with ${exitCode ?? "no exit code"}. Its output is in the ${started.terminalId} terminal; send a message to run it again.`,
