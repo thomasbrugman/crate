@@ -68,7 +68,8 @@ interface ActiveTurn {
 
 // Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
 // untracked or ignored files, stashes, commits missing from the remote, or files beside the repository.
-// Every Box starts with the agent configuration directories below in its workspace.
+// Every Box starts with the agent configuration directories below in its workspace, and
+// untracked Command Code taste files are harness state rather than work.
 const SAVED_WORK_CHECK = String.raw`
 cd /workspace/home || exit 1
 home=$(pwd -P) || exit 1
@@ -77,7 +78,7 @@ clean_checkout() (
   test "$(git rev-parse --show-toplevel)" = "$1" &&
   test "$(git rev-parse --path-format=absolute --git-common-dir)" = "$home/repo/.git" &&
   status=$(git -c status.showUntrackedFiles=all status --porcelain --ignored) &&
-  test -z "$status" &&
+  test -z "$(printf '%s\n' "$status" | grep -Ev '^(\?\?|!!) \.commandcode/taste/')" &&
   unpushed=$(git rev-list --count HEAD --branches --not --remotes) &&
   test "$unpushed" = 0
 )

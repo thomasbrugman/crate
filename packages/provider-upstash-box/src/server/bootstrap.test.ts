@@ -6,6 +6,7 @@ import { vi } from "vite-plus/test";
 
 import { BoxApi, type BoxHandle } from "./BoxApi.ts";
 import { ensureBox } from "./bootstrap.ts";
+import { EXCLUDE_HARNESS_FILES_COMMAND } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 
 it.effect.each([
@@ -231,6 +232,7 @@ it.effect(
             "check",
           ]);
           assert.equal(clones, repositoryUrl ? 1 : 0);
+          assert.include(commands, EXCLUDE_HARNESS_FILES_COMMAND);
           assert.isFalse(writes.some((path) => /\.git(?:-credentials|config)$/u.test(path)));
           assert.isFalse(writes.some((path) => /\/(?:auth|config)\.json$/u.test(path)));
           assert.equal(
