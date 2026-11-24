@@ -6,6 +6,7 @@ import {
   type ProviderDriverKind,
   type ProviderInstanceId,
   type ProviderThreadId,
+  type RunId,
 } from "@t3tools/contracts";
 import { providerMessageTextWithAttachmentPaths } from "@t3tools/provider-core/server/attachmentPrompt";
 import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
@@ -44,6 +45,7 @@ import {
 import { capabilities as baseCapabilities } from "./capabilities.ts";
 import { harnessCredentialKind } from "./credentials.ts";
 import { execHarness } from "./execHarness.ts";
+import { forkWorkspace } from "./forkWorkspace.ts";
 import { EXCLUDE_HARNESS_FILES_COMMAND, makeBoxGitSetup } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 import { cancelBoxRun } from "./stop.ts";
@@ -109,6 +111,8 @@ done
 if test -e repo || test -L repo; then
   test ! -L repo && test -d repo/.git && clean_checkout "$home/repo" || exit 1
   stash=$(git -C repo stash list) && test -z "$stash" || exit 1
+  checkpoints=$(git -C repo for-each-ref --count=1 refs/t3/orchestration-v2/checkpoints/) &&
+    test -z "$checkpoints" || exit 1
 fi
 if test -e .t3stash-worktrees || test -L .t3stash-worktrees; then
   test ! -L .t3stash-worktrees && test -d .t3stash-worktrees || exit 1
@@ -156,6 +160,16 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   const { driver, harness } = agent;
   const capabilities = {
     ...baseCapabilities,
+    threads: { ...baseCapabilities.threads, canRollbackThread: harness === "commandCode" },
+    checkpointing: {
+      ...baseCapabilities.checkpointing,
+      appCanCheckpointFilesystem: harness === "commandCode",
+      providerRollbackReturnsSnapshot: harness === "commandCode",
+    },
+    turns: {
+      ...baseCapabilities.turns,
+      supportsSteeringByInterruptRestart: harness === "commandCode",
+    },
     tools: { ...baseCapabilities.tools, supportsMcpTools: mcpSessions !== undefined },
     subagents:
       harness === "claudeCode"
@@ -248,6 +262,13 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const boxes = new Map<string, BoxHandle>();
       const recreatedThreads = new Set<ProviderThreadId>();
       let active: ActiveTurn | undefined;
+      let interruptedPrompt:
+        | {
+            readonly runId: RunId;
+            readonly providerThreadId: ProviderThreadId;
+            readonly text: string;
+          }
+        | undefined;
       const now = yield* DateTime.now;
       let providerSession: OrchestrationV2ProviderSession = {
         id: input.providerSessionId,
@@ -348,6 +369,18 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   }),
             ),
           );
+          if (request.boxFork) {
+            const { sourceBoxId, checkpointRef } = request.boxFork;
+            yield* Effect.tryPromise({
+              try: async () =>
+                forkWorkspace(await api.get(sourceBoxId, config.apiKey), box, checkpointRef),
+              catch: () =>
+                new Adapter.ProviderAdapterProtocolError({
+                  driver,
+                  detail: "Could not copy the source checkpoint into the fork's Box.",
+                }),
+            }).pipe(Effect.tapError(() => setSessionStatus("error")));
+          }
           yield* setSessionStatus("ready");
           const at = yield* DateTime.now;
           const thread: OrchestrationV2ProviderThread = {
@@ -515,6 +548,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               ? yield* mcpSessions.read(request.threadId)
               : undefined;
           const mcpSession = mcp?.providerInstanceId === instanceId ? mcp : undefined;
+          const previousPrompt =
+            interruptedPrompt?.runId === request.runId &&
+            interruptedPrompt.providerThreadId === providerThread.id
+              ? interruptedPrompt.text
+              : undefined;
+          interruptedPrompt = undefined;
           const attachmentDirectory = `${BOX_ATTACHMENTS_PATH}/${Buffer.from(request.attemptId).toString("hex")}`;
           const attachments: Array<{ path: string; destination: string }> = [];
           const attachmentDestinations = new Map<string, string>();
@@ -537,7 +576,9 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             resolveAttachmentPath: (attachment) =>
               attachmentDestinations.get(attachment.id) ?? null,
           });
+          // Managed agents start in the Box workspace, so they are told where the clone is.
           const messageContext = [
+            ...(previousPrompt === undefined ? [] : [previousPrompt]),
             ...(request.appContext ?? []).map(({ text }) => text),
             ...(!credentials && harness !== "commandCode" && request.runtimePolicy.repositoryUrl
               ? [`The repository is checked out at ${BOX_REPOSITORY_PATH}.`]
@@ -750,6 +791,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                     box,
                   );
                 }
+                if (harness === "commandCode" && turn.interrupted && !translation.sessionId)
+                  interruptedPrompt = {
+                    runId: request.runId,
+                    providerThreadId: providerThread.id,
+                    text: prompt,
+                  };
                 active = undefined;
                 yield* publish(
                   translation.complete(
@@ -794,7 +841,28 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             }),
           ),
         readThreadSnapshot: () => unsupported("Reading a conversation snapshot"),
-        rollbackThread: () => unsupported("Rollback"),
+        rollbackThread: Effect.fn("UpstashBox.rollbackThread")(function* (request) {
+          if (harness !== "commandCode" || (yield* environment).credentials === undefined)
+            return yield* unsupported("Rollback");
+          if (active)
+            return yield* new Adapter.ProviderAdapterProtocolError({
+              driver,
+              detail: "Cannot roll back an active Box turn.",
+            });
+          return {
+            providerThread: {
+              ...request.providerThread,
+              nativeConversationHeadRef: null,
+              contextUsage: null,
+              lastRunOrdinal: request.target.appRunOrdinal || null,
+              status: "idle",
+              updatedAt: yield* DateTime.now,
+            },
+            providerTurns: [],
+            messages: [],
+            runtimeRequests: [],
+          };
+        }),
         forkThread: () => unsupported("Fork"),
         respondToRuntimeRequest: () => unsupported("Runtime requests"),
       };

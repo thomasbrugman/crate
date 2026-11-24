@@ -1,27 +1,33 @@
-import { type CheckpointRef } from "@t3tools/contracts";
+import { VcsRepositoryDetectionError, type CheckpointRef, type ThreadId } from "@t3tools/contracts";
+import { BoxExec } from "@t3tools/provider-upstash-box/server";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import type { CheckpointStoreError } from "./Errors.ts";
+import * as BoxThreadResolver from "../vcs/BoxThreadResolver.ts";
 import type { VcsCheckpointOps } from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import * as VcsThreadTarget from "../vcs/VcsThreadTarget.ts";
 
-export interface CaptureCheckpointInput {
+interface CheckpointWorkspace {
   readonly cwd: string;
+  readonly threadId?: ThreadId;
+}
+
+export interface CaptureCheckpointInput extends CheckpointWorkspace {
   readonly checkpointRef: CheckpointRef;
   /** The checkpoint this one follows, so a turn that switched branches starts where it landed. */
   readonly previousCheckpointRef?: CheckpointRef;
 }
 
-export interface RestoreCheckpointInput {
-  readonly cwd: string;
+export interface RestoreCheckpointInput extends CheckpointWorkspace {
   readonly checkpointRef: CheckpointRef;
   readonly fallbackToHead?: boolean;
 }
 
-export interface DiffCheckpointsInput {
-  readonly cwd: string;
+export interface DiffCheckpointsInput extends CheckpointWorkspace {
   readonly fromCheckpointRef: CheckpointRef;
   readonly toCheckpointRef: CheckpointRef;
   readonly fallbackFromToHead?: boolean;
@@ -33,21 +39,22 @@ export interface DiffCheckpointsInput {
   readonly filePaths?: ReadonlyArray<string>;
 }
 
-export interface ListAuthoredPathsInput {
-  readonly cwd: string;
+export interface ListAuthoredPathsInput extends CheckpointWorkspace {
   readonly fromCheckpointRef: CheckpointRef;
   readonly toCheckpointRef: CheckpointRef;
 }
 
-export interface DeleteCheckpointRefsInput {
-  readonly cwd: string;
+export interface DeleteCheckpointRefsInput extends CheckpointWorkspace {
   readonly checkpointRefs: ReadonlyArray<CheckpointRef>;
 }
 
 export class CheckpointStore extends Context.Service<
   CheckpointStore,
   {
-    readonly isGitRepository: (cwd: string) => Effect.Effect<boolean, CheckpointStoreError>;
+    readonly isGitRepository: (
+      cwd: string,
+      threadId?: ThreadId,
+    ) => Effect.Effect<boolean, CheckpointStoreError>;
 
     readonly captureCheckpoint: (
       input: CaptureCheckpointInput,
@@ -79,6 +86,34 @@ export class CheckpointStore extends Context.Service<
 /** @public */
 export const make = Effect.gen(function* () {
   const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
+  const boxResolver = yield* Effect.serviceOption(BoxThreadResolver.BoxThreadResolver);
+  const boxExec = yield* Effect.serviceOption(BoxExec.BoxExec);
+
+  const withWorkspace = Effect.fn("CheckpointStore.withWorkspace")(function* <A, E, R>(
+    workspace: CheckpointWorkspace,
+    effect: (cwd: string) => Effect.Effect<A, E, R>,
+  ) {
+    if (workspace.threadId === undefined || Option.isNone(boxResolver))
+      return yield* effect(workspace.cwd);
+    const target = yield* boxResolver.value.resolveCheckpointTarget(workspace.threadId).pipe(
+      Effect.mapError(
+        (cause) =>
+          new VcsRepositoryDetectionError({
+            operation: "CheckpointStore.Box",
+            cwd: workspace.cwd,
+            detail: "Box unavailable for this thread.",
+            cause,
+          }),
+      ),
+    );
+    if (target === undefined) return yield* effect(workspace.cwd);
+    const operation = effect(target.checkoutRoot).pipe(
+      Effect.provideService(VcsThreadTarget.VcsThreadTarget, target),
+    );
+    return yield* Option.isSome(boxExec)
+      ? operation.pipe(Effect.provideService(BoxExec.BoxExec, boxExec.value))
+      : operation;
+  });
 
   const resolveCheckpoints = Effect.fn("CheckpointStore.resolveCheckpoints")(function* (
     cwd: string,
@@ -90,53 +125,64 @@ export const make = Effect.gen(function* () {
   // The registry reads an unreadable repository as none; ask Git again so that fails here.
   const isGitRepository: CheckpointStore["Service"]["isGitRepository"] = Effect.fn(
     "CheckpointStore.isGitRepository",
-  )(function* (cwd) {
-    if ((yield* vcsRegistry.detect({ cwd, requestedKind: "git" })) !== null) return true;
-    const git = yield* vcsRegistry.get("git");
-    return (yield* git.detectRepository(cwd)) !== null;
-  });
+  )((cwd, threadId) =>
+    withWorkspace({ cwd, ...(threadId === undefined ? {} : { threadId }) }, (cwd) =>
+      Effect.gen(function* () {
+        if ((yield* vcsRegistry.detect({ cwd, requestedKind: "git" })) !== null) return true;
+        const git = yield* vcsRegistry.get("git");
+        return (yield* git.detectRepository(cwd)) !== null;
+      }),
+    ),
+  );
+
+  const withCheckpoints = <A>(
+    input: CheckpointWorkspace,
+    operation: (
+      checkpoints: VcsCheckpointOps,
+      cwd: string,
+    ) => Effect.Effect<A, CheckpointStoreError>,
+  ) =>
+    withWorkspace(input, (cwd) =>
+      resolveCheckpoints(cwd).pipe(Effect.flatMap((checkpoints) => operation(checkpoints, cwd))),
+    );
 
   const captureCheckpoint: CheckpointStore["Service"]["captureCheckpoint"] = Effect.fn(
     "captureCheckpoint",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints(input.cwd);
-    return yield* checkpoints.captureCheckpoint(input);
-  });
+  )((input) =>
+    withCheckpoints(input, (checkpoints, cwd) => checkpoints.captureCheckpoint({ ...input, cwd })),
+  );
 
   const hasCheckpointRef: CheckpointStore["Service"]["hasCheckpointRef"] = Effect.fn(
     "hasCheckpointRef",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints(input.cwd);
-    return yield* checkpoints.hasCheckpointRef(input);
-  });
+  )((input) =>
+    withCheckpoints(input, (checkpoints, cwd) => checkpoints.hasCheckpointRef({ ...input, cwd })),
+  );
 
   const restoreCheckpoint: CheckpointStore["Service"]["restoreCheckpoint"] = Effect.fn(
     "restoreCheckpoint",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints(input.cwd);
-    return yield* checkpoints.restoreCheckpoint(input);
-  });
+  )((input) =>
+    withCheckpoints(input, (checkpoints, cwd) => checkpoints.restoreCheckpoint({ ...input, cwd })),
+  );
 
   const diffCheckpoints: CheckpointStore["Service"]["diffCheckpoints"] = Effect.fn(
     "diffCheckpoints",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints(input.cwd);
-    return yield* checkpoints.diffCheckpoints(input);
-  });
+  )((input) =>
+    withCheckpoints(input, (checkpoints, cwd) => checkpoints.diffCheckpoints({ ...input, cwd })),
+  );
 
   const listAuthoredPaths: CheckpointStore["Service"]["listAuthoredPaths"] = Effect.fn(
     "listAuthoredPaths",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints(input.cwd);
-    return yield* checkpoints.listAuthoredPaths(input);
-  });
+  )((input) =>
+    withCheckpoints(input, (checkpoints, cwd) => checkpoints.listAuthoredPaths({ ...input, cwd })),
+  );
 
   const deleteCheckpointRefs: CheckpointStore["Service"]["deleteCheckpointRefs"] = Effect.fn(
     "deleteCheckpointRefs",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints(input.cwd);
-    return yield* checkpoints.deleteCheckpointRefs(input);
-  });
+  )((input) =>
+    withCheckpoints(input, (checkpoints, cwd) =>
+      checkpoints.deleteCheckpointRefs({ ...input, cwd }),
+    ),
+  );
 
   return CheckpointStore.of({
     isGitRepository,

@@ -4644,6 +4644,8 @@
   "911464a3d04a2927": "(Gast)",
   "25af91477adfb3bf": "Wiederhole oder entferne fehlgeschlagene Uploads vor dem Speichern.",
   "5fbeffb697c7b33c": "Beaufsichtigt",
+  "3dcf6d7ca24f1959": "Command Code kann keine Genehmigung anfordern.",
+  "e99473f5a1208bed": "Command Code unterstützt den Modus {requested} nicht. Dieser Thread läuft mit {effective}.",
   "dd48edd43c854b53": "Vor Befehlen und Dateiänderungen nachfragen.",
   "cceea5cef0684b31": "Änderungen automatisch annehmen",
   "3fe210c30bf00152": "Änderungen automatisch genehmigen, vor anderen Aktionen nachfragen.",

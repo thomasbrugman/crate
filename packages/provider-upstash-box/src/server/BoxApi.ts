@@ -136,7 +136,11 @@ export interface BoxHandle {
   readonly files: {
     readonly upload?: (files: Array<{ path: string; destination: string }>) => Promise<void>;
     readonly readBase64?: (path: string, offset: number, length: number) => Promise<string>;
-    readonly write: (options: { path: string; content: string }) => Promise<unknown>;
+    readonly write: (options: {
+      path: string;
+      content: string;
+      encoding?: "base64";
+    }) => Promise<unknown>;
     readonly writeVolatile?: (path: string, content: string) => Promise<void>;
   };
   readonly delete: () => Promise<unknown>;

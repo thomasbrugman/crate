@@ -204,6 +204,7 @@ export const make = Effect.gen(function* () {
 
       const comparison = {
         cwd: toScope.cwd,
+        threadId: input.threadId,
         fromCheckpointRef,
         toCheckpointRef: toCheckpoint.ref,
         fallbackFromToHead: false,

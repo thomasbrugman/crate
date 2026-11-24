@@ -33,6 +33,7 @@ import { CheckpointRestoreError, CheckpointServiceV2 } from "./CheckpointService
 import { EventSinkV2 } from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { ProjectionStoreV2 } from "./ProjectionStore.ts";
+import { BoxThreadResolver } from "../vcs/BoxThreadResolver.ts";
 import { GIT_INDEX_LOCKED_DETAIL } from "../vcs/VcsProcess.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -128,6 +129,7 @@ export const layer: Layer.Layer<
   CheckpointRollbackServiceV2,
   Effect.gen(function* () {
     const checkpoints = yield* CheckpointServiceV2;
+    const boxResolver = yield* Effect.serviceOption(BoxThreadResolver);
     const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
     const eventSink = yield* EventSinkV2;
     const ids = yield* IdAllocator.IdAllocatorV2;
@@ -222,12 +224,18 @@ export const layer: Layer.Layer<
             });
 
       const restoreFiles = input.restoreFiles !== false;
-      const isolated = isCheckpointRestoreIsolated(context.thread, scope, {
-        fileSystem,
-        projections,
-        projects,
-        path,
-      });
+      const isolated = isCheckpointRestoreIsolated(
+        context.thread,
+        scope,
+        {
+          fileSystem,
+          projections,
+          projects,
+          path,
+          ...(Option.isSome(boxResolver) ? { boxResolver: boxResolver.value } : {}),
+        },
+        providerThread,
+      );
       const sharedWorkspace = () =>
         new CheckpointRollbackExecutionError({
           reason: "shared-workspace",
