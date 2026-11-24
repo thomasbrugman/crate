@@ -4644,6 +4644,8 @@
   "911464a3d04a2927": "(gäst)",
   "25af91477adfb3bf": "Försök igen eller ta bort misslyckade uppladdningar innan du sparar.",
   "5fbeffb697c7b33c": "Övervakat",
+  "3dcf6d7ca24f1959": "Command Code kan inte be om godkännande.",
+  "e99473f5a1208bed": "Command Code stöder inte läget {requested}. Den här tråden körs med läget {effective}.",
   "dd48edd43c854b53": "Fråga före kommandon och filändringar.",
   "cceea5cef0684b31": "Godkänn ändringar automatiskt",
   "3fe210c30bf00152": "Godkänn ändringar automatiskt, fråga före andra åtgärder.",

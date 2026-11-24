@@ -6,9 +6,8 @@ import type { ComposerAttachmentInsertion } from "../composerAttachmentInsertion
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
 import { BackgroundThreadContext, HiddenThreadContext } from "./backgroundThread";
 import {
-  resolveCompatibleRuntimeMode,
+  resolveComposerRuntimeModes,
   runtimeModeConfig,
-  resolveRuntimeModeOptions,
   runtimeModeDenial,
 } from "./runtimeModeConfig";
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
@@ -255,7 +254,7 @@ import { observeResize } from "~/lib/observeResize";
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
 import { toastManager } from "../ui/toast";
 import { m as resolveMessage } from "../../i18n/messages";
-import { BuildingIcon, PlayIcon, ReplyIcon } from "lucide-react";
+import { BuildingIcon, PlayIcon, ReplyIcon, TriangleAlertIcon } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { assistantCitationLabel } from "@t3tools/shared/assistantCitations";
 import { assistantCitationNavigation } from "../../lib/assistantCitationNavigation";
@@ -964,17 +963,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // Called before the derivation below: a hook between it and its uses stops React Compiler
   // from caching the mode options, and the footer then re-renders on every keystroke.
   const managedPolicy = useManagedPolicy(environmentId);
-  const { modes: compatibleRuntimeModes, mode: compatibleRuntimeMode } =
-    resolveCompatibleRuntimeMode(
-      runtimeMode,
-      selectedProviderEntry?.snapshot.supportedRuntimeModes,
-    );
-  // Modes above an administrator's ceiling stay listed, disabled with the reason.
-  const compatibleRuntimeModeOptions = resolveRuntimeModeOptions(
-    compatibleRuntimeModes,
-    managedPolicy,
-    m,
-  );
+  const {
+    mode: compatibleRuntimeMode,
+    modes: compatibleRuntimeModes,
+    options: compatibleRuntimeModeOptions,
+    fallbackNotice: runtimeModeFallbackNotice,
+  } = resolveComposerRuntimeModes(runtimeMode, selectedProviderEntry?.snapshot, managedPolicy, m);
   // A thread or draft already above the ceiling would be refused; offer the broadest mode left.
   const runtimeModeCeilingDenial = runtimeModeDenial(managedPolicy, compatibleRuntimeMode, m);
   const runtimeModeCeilingFallback =
@@ -2666,12 +2660,26 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 }),
           },
         ];
+  const itemsWithRuntimeModeNotice: readonly ComposerBannerStackItem[] =
+    runtimeModeFallbackNotice === undefined ||
+    runtimeModeCeilingDenial !== undefined ||
+    activePendingProgress
+      ? bannerItems
+      : [
+          ...bannerItems,
+          {
+            id: "provider-runtime-mode",
+            variant: "warning",
+            icon: <TriangleAlertIcon />,
+            title: runtimeModeFallbackNotice,
+          },
+        ];
   const shelfItems = hasBlockingComposerTopDrawer
-    ? bannerItems.filter(
+    ? itemsWithRuntimeModeNotice.filter(
         (item) =>
           item.group === "environment" && (item.variant === "error" || item.variant === "warning"),
       )
-    : bannerItems;
+    : itemsWithRuntimeModeNotice;
 
   const insertComposerText = (
     text: string,

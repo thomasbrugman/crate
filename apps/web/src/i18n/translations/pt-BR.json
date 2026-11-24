@@ -4643,6 +4643,8 @@
   "911464a3d04a2927": "(convidado)",
   "25af91477adfb3bf": "Tente novamente ou remova os uploads com falha antes de salvar.",
   "5fbeffb697c7b33c": "Supervisionado",
+  "3dcf6d7ca24f1959": "O Command Code não pode solicitar aprovação.",
+  "e99473f5a1208bed": "O Command Code não oferece suporte ao modo {requested}. Esta conversa será executada no modo {effective}.",
   "dd48edd43c854b53": "Pergunta antes de comandos e alterações de arquivos.",
   "cceea5cef0684b31": "Aceitar edições automaticamente",
   "3fe210c30bf00152": "Aprova edições automaticamente e pergunta antes de outras ações.",
