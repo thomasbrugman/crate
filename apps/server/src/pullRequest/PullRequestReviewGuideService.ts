@@ -198,12 +198,24 @@ const make = Effect.gen(function* () {
         .pipe(
           Effect.map((result) => {
             const url = result.stdout.trim();
-            return locator === null
-              ? sourceControlDefinitions.canonicalRepositoryKey(
-                  sourceControlDefinitions.repositoryKeyFromRemote(url),
-                ) ===
-                  sourceControlDefinitions.canonicalRepositoryKey(`${key.host}/${key.repository}`)
-              : url === locator.remoteUrl;
+            if (locator !== null) return url === locator.remoteUrl;
+            // Forgejo keys keep the web port in the host; remote normalization drops it, so
+            // compare the port-free key and check the remote's authority carries the port.
+            const keyPort = /:(\d+)$/u.exec(key.host)?.[1];
+            const keyWithoutPort =
+              keyPort === undefined ? key.host : key.host.slice(0, -keyPort.length - 1);
+            const canonical = sourceControlDefinitions.canonicalRepositoryKey;
+            if (
+              canonical(sourceControlDefinitions.repositoryKeyFromRemote(url)) !==
+              canonical(`${keyWithoutPort}/${key.repository}`)
+            )
+              return false;
+            if (keyPort === undefined) return true;
+            try {
+              return new URL(url).port === keyPort;
+            } catch {
+              return false;
+            }
           }),
           Effect.orElseSucceed(() => false),
         ),
