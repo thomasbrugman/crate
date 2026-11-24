@@ -94,6 +94,8 @@ done
 if test -e repo || test -L repo; then
   test ! -L repo && test -d repo/.git && clean_checkout "$home/repo" || exit 1
   stash=$(git -C repo stash list) && test -z "$stash" || exit 1
+  checkpoints=$(git -C repo for-each-ref --count=1 refs/t3/orchestration-v2/checkpoints/) &&
+    test -z "$checkpoints" || exit 1
 fi
 if test -e .t3stash-worktrees || test -L .t3stash-worktrees; then
   test ! -L .t3stash-worktrees && test -d .t3stash-worktrees || exit 1

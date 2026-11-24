@@ -372,6 +372,11 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
       }
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.equal(deleted, 2);
+      const checkpointRef = "refs/t3/orchestration-v2/checkpoints/fixture/ordinal/1";
+      yield* Effect.sync(() => git("update-ref", checkpointRef, "HEAD"));
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
+      yield* Effect.sync(() => git("update-ref", "-d", checkpointRef));
       for (const checkout of [repo, worktree]) {
         for (const file of [".env", ".commandcode/notes.md"]) {
           const path = NodePath.join(checkout, file);
