@@ -2682,7 +2682,7 @@
   "7f6d34983e89a91c": "Eliminar acción",
   "84435bd5cb8cfac0": "Editar acción",
   "2d1f6668f713dca9": "Añadir acción",
-  "73bedbce4c29257a": "Las acciones se guardan para este proyecto, pero no se ejecutan en los hilos en la nube.",
+  "adaa5145d9e1453e": "La acción de configuración se ejecuta cuando empieza un hilo en la nube. Las demás acciones se guardan, pero no se ejecutan en los hilos en la nube.",
   "da1b3bc9635dcdc8": "Las acciones son comandos del proyecto que puedes ejecutar desde la barra superior o con atajos de teclado.",
   "4614a422f1430cd7": "Nombre",
   "d3502e7db0cdb998": "Atajo de teclado",
