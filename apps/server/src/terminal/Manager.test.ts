@@ -605,6 +605,7 @@ it.layer(
         resize: ReturnType<typeof vi.fn>;
         exit: ReturnType<typeof Promise.withResolvers<number>>;
         closed: ReturnType<typeof Promise.withResolvers<void>>;
+        close: ReturnType<typeof vi.fn>;
       }> = [];
       let status = "paused";
       const resume = vi.fn(async () => {
@@ -651,7 +652,11 @@ it.layer(
                         const resize = vi.fn();
                         const exit = Promise.withResolvers<number>();
                         const closed = Promise.withResolvers<void>();
-                        sessions.push({ options, write, resize, exit, closed });
+                        const close = vi.fn(() => {
+                          exit.resolve(-1);
+                          closed.resolve();
+                        });
+                        sessions.push({ options, write, resize, exit, closed, close });
                         const prompt = Buffer.from("Box shell 🚀");
                         options.onStdout?.(prompt.subarray(0, -2));
                         options.onStdout?.(prompt.subarray(-2));
@@ -664,10 +669,7 @@ it.layer(
                           kill: () => {},
                           terminate: () => {},
                           wait: () => exit.promise,
-                          close: () => {
-                            exit.resolve(-1);
-                            closed.resolve();
-                          },
+                          close,
                         };
                       },
                     },
@@ -778,6 +780,13 @@ it.layer(
       yield* manager.close(input);
       yield* Effect.promise(() => replacement.closed.promise);
       expect(sessions).toHaveLength(4);
+
+      yield* manager.open({ ...input, terminalId: "setup-install" });
+      const setupSession = sessions[4]!;
+      yield* manager.closeIdle({ threadId: input.threadId });
+      expect(setupSession.close).not.toHaveBeenCalled();
+      yield* manager.closeIdle({ threadId: input.threadId, terminalId: "setup-install" });
+      expect(setupSession.close).toHaveBeenCalled();
     }),
   );
 

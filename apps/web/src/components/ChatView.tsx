@@ -1397,7 +1397,7 @@ export default function ChatView(props: ChatViewProps) {
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
   const cloudThread = isUpstashBoxDriver(selectedProvider);
   const supportsQuestionAttachments = attachmentEnvironmentConfig !== null && !cloudThread;
-  const supportsAttachmentUploads = attachmentEnvironmentConfig !== null && !cloudThread;
+  const supportsAttachmentUploads = attachmentEnvironmentConfig !== null;
   const conversationProviderStatus =
     providerStatuses.find((status) => status.instanceId === activeRuntime?.providerInstanceId) ??
     activeProviderStatus;

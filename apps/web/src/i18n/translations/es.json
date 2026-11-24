@@ -2682,7 +2682,7 @@
   "7f6d34983e89a91c": "Eliminar acción",
   "84435bd5cb8cfac0": "Editar acción",
   "2d1f6668f713dca9": "Añadir acción",
-  "73bedbce4c29257a": "Las acciones se guardan para este proyecto, pero no se ejecutan en los hilos en la nube.",
+  "adaa5145d9e1453e": "La acción de configuración se ejecuta cuando empieza un hilo en la nube. Las demás acciones se guardan, pero no se ejecutan en los hilos en la nube.",
   "da1b3bc9635dcdc8": "Las acciones son comandos del proyecto que puedes ejecutar desde la barra superior o con atajos de teclado.",
   "4614a422f1430cd7": "Nombre",
   "d3502e7db0cdb998": "Atajo de teclado",
@@ -3355,8 +3355,6 @@
     }
   ],
   "1b1131295f62c44c": "El proceso del proveedor ya no existe. Interrumpe o reinicia el hilo secundario para responder.",
-  "52278fd875d1a073": "Detalles del espacio de trabajo de Box",
-  "eb51025bee426871": "Los adjuntos y las vistas previas de archivos no están disponibles en los hilos en la nube. Las menciones de archivos usan la copia del servidor; solo los archivos enviados al remoto están disponibles en el Box.",
   "2cc98601912fed53": "No disponible en los hilos en la nube. Pídele al agente que use sus herramientas de Box.",
   "da66023072c473d1": [
     "No se pudo cargar la salida: ",

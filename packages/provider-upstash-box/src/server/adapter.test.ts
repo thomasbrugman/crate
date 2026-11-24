@@ -17,6 +17,7 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
+  type ChatAttachment,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { knownProviderFailureMessage } from "@t3tools/provider-core/server/failure";
@@ -36,6 +37,7 @@ import { vi } from "vite-plus/test";
 import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import {
+  BOX_ATTACHMENTS_PATH,
   BOX_WORKSPACE_PATH,
   BoxApi,
   quoteShell,
@@ -71,6 +73,10 @@ const setup = Effect.fn("test.setupBox")(function* (
   apiKey = "test-key",
   githubToken?: string,
   credentials?: { readonly commandCode: string },
+  attachmentFiles?: {
+    readonly resolve: (attachment: ChatAttachment) => string | null;
+    readonly upload: NonNullable<BoxHandle["files"]["upload"]>;
+  },
 ) {
   const commands: string[] = [];
   const prompts: string[] = [];
@@ -110,6 +116,7 @@ const setup = Effect.fn("test.setupBox")(function* (
       },
     },
     files: {
+      ...(attachmentFiles ? { upload: attachmentFiles.upload } : {}),
       write: async ({ content }) => {
         harnesses.push(content);
       },
@@ -138,6 +145,8 @@ const setup = Effect.fn("test.setupBox")(function* (
       ...(githubToken ? { githubToken } : {}),
       ...(credentials ? { credentials } : {}),
     }),
+    undefined,
+    attachmentFiles?.resolve,
   ).pipe(
     Effect.provide(IdAllocator.layer),
     Effect.provideService(BoxApi, {
@@ -377,12 +386,28 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
       assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.equal(deleted, 2);
       yield* Effect.sync(() => git("update-ref", "-d", checkpointRef));
+      const attachments = NodePath.join(home, ".t3stash-attachments");
+      const attachmentTurn = NodePath.join(attachments, "7475726e");
+      const attachment = NodePath.join(attachmentTurn, "0-notes.txt");
+      yield* Effect.promise(() => NodeFSP.mkdir(attachmentTurn, { recursive: true }));
+      yield* Effect.promise(() => NodeFSP.writeFile(attachment, "original"));
+      yield* Effect.sync(() =>
+        NodeChildProcess.execFileSync("sh", ["-c", "sha256sum ./0-notes.txt > .checksums"], {
+          cwd: attachmentTurn,
+        }),
+      );
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 3);
+      yield* Effect.promise(() => NodeFSP.writeFile(attachment, "edited"));
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 3);
+      yield* Effect.promise(() => NodeFSP.rm(attachments, { recursive: true }));
       for (const checkout of [repo, worktree]) {
         for (const file of [".env", ".commandcode/notes.md"]) {
           const path = NodePath.join(checkout, file);
           yield* Effect.promise(() => NodeFSP.writeFile(path, "fixture"));
           assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-          assert.equal(deleted, 2);
+          assert.equal(deleted, 3);
           yield* Effect.promise(() => NodeFSP.unlink(path));
         }
       }
@@ -401,13 +426,13 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
         ),
       );
       assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-      assert.equal(deleted, 2);
+      assert.equal(deleted, 3);
       yield* Effect.sync(() => git("worktree", "remove", "--force", worktree));
       yield* Effect.promise(() => NodeFSP.rm(repo, { recursive: true }));
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(home, "notes.txt"), "fixture"));
       assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-      assert.equal(deleted, 3);
+      assert.equal(deleted, 4);
     }),
   ),
 );
@@ -535,6 +560,71 @@ const collect = <E>(events: Stream.Stream<ProviderAdapterV2Event, E>) =>
     Stream.takeUntil((event) => event.type === "turn.terminal"),
     Stream.runCollect,
   );
+
+it.effect("stages image and file attachments in the Box before starting the harness", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const uploaded: Array<{ path: string; destination: string }> = [];
+      const { runtime, turn, prompts, commands } = yield* setup(
+        async () => {
+          assert.lengthOf(uploaded, 2);
+          return fakeStream([finish]);
+        },
+        undefined,
+        "commandCode",
+        undefined,
+        undefined,
+        undefined,
+        {
+          resolve: (attachment) => `/server/attachments/${attachment.id}`,
+          upload: async (files) => {
+            uploaded.push(...files);
+          },
+        },
+      );
+      yield* runtime.startTurn({
+        ...turn,
+        appContext: [{ key: "handoff", text: "Earlier conversation" }],
+        message: {
+          ...turn.message,
+          text: "/review focused changes",
+          attachments: [
+            {
+              type: "image",
+              id: "image-id",
+              name: "diagram.png",
+              mimeType: "image/png",
+              sizeBytes: 20,
+            },
+            {
+              type: "file",
+              id: "file-id",
+              name: "../notes.txt",
+              mimeType: "text/plain",
+              sizeBytes: 12,
+            },
+          ],
+        },
+      });
+      yield* collect(runtime.events);
+      const destination = `${BOX_ATTACHMENTS_PATH}/${Buffer.from(turn.attemptId).toString("hex")}`;
+      assert.deepEqual(uploaded, [
+        { path: "/server/attachments/image-id", destination: `${destination}/0-diagram.png` },
+        { path: "/server/attachments/file-id", destination: `${destination}/1-.._notes.txt` },
+      ]);
+      assert.include(commands.join("\n"), `umask 077; mkdir -p -- '${destination}'`);
+      assert.include(
+        commands.join("\n"),
+        `checksum_attachments '${destination}' > '${destination}/.checksums'`,
+      );
+      assert.include(prompts[0], uploaded[0]!.destination);
+      assert.include(prompts[0], uploaded[1]!.destination);
+      assert.match(prompts[0]!, /^t3stash-run:[a-f0-9]+\n\/review focused changes/u);
+      assert.include(prompts[0], "Earlier conversation");
+      assert.notInclude(prompts[0], "/server/attachments");
+    }),
+  ),
+);
 
 it.effect("projects native subagent results into separate linked conversations", () =>
   Effect.scoped(

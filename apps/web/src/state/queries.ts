@@ -306,6 +306,7 @@ function areProjectPathSearchTargetsEqual(
   return (
     left.environmentId === right.environmentId &&
     left.cwd === right.cwd &&
+    left.boxThreadId === right.boxThreadId &&
     left.query === right.query &&
     left.kind === right.kind &&
     left.imageOnly === right.imageOnly
@@ -322,6 +323,7 @@ export function useProjectPathSearch(
   const normalizedTarget = {
     environmentId: target.environmentId,
     cwd: target.cwd,
+    boxThreadId: target.boxThreadId,
     query: target.query == null ? null : target.query.trim(),
     kind: target.kind,
     imageOnly: target.imageOnly,
@@ -331,13 +333,16 @@ export function useProjectPathSearch(
   const { canReadFiles } = fileAccess;
   const searchTarget =
     debouncedTarget.environmentId !== null &&
-    debouncedTarget.cwd !== null &&
+    (debouncedTarget.cwd !== null || debouncedTarget.boxThreadId !== undefined) &&
     debouncedTarget.query !== null &&
     (allowEmptyQuery || debouncedTarget.query.length > 0)
       ? {
           environmentId: debouncedTarget.environmentId,
           input: {
-            cwd: debouncedTarget.cwd,
+            cwd: debouncedTarget.cwd ?? ".",
+            ...(debouncedTarget.boxThreadId === undefined
+              ? {}
+              : { boxThreadId: debouncedTarget.boxThreadId }),
             query: debouncedTarget.query.slice(0, 256).replace(/[\uD800-\uDBFF]$/, ""),
             limit,
             ...(debouncedTarget.kind ? { kind: debouncedTarget.kind } : {}),
@@ -352,7 +357,10 @@ export function useProjectPathSearch(
   const hasTarget = searchTarget !== null;
 
   return {
-    entries: result.data?.entries ?? EMPTY_PROJECT_ENTRIES,
+    entries:
+      normalizedTarget.boxThreadId === debouncedTarget.boxThreadId
+        ? (result.data?.entries ?? EMPTY_PROJECT_ENTRIES)
+        : EMPTY_PROJECT_ENTRIES,
     error:
       !hasTarget || fileAccess.isPending
         ? null

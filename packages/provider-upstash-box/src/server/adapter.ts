@@ -1,5 +1,6 @@
 import {
   ProviderSetupError,
+  type ChatAttachment,
   type OrchestrationV2ProviderSession,
   type OrchestrationV2ProviderThread,
   type ProviderDriverKind,
@@ -7,6 +8,8 @@ import {
   type ProviderThreadId,
   type RunId,
 } from "@t3tools/contracts";
+import { providerMessageTextWithAttachmentPaths } from "@t3tools/provider-core/server/attachmentPrompt";
+import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import type { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -18,13 +21,13 @@ import * as Stream from "effect/Stream";
 
 import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
 import {
+  BOX_ATTACHMENTS_PATH,
   BOX_HOME,
   BOX_REPOSITORY_PATH,
   BOX_WORKSPACE_PATH,
-  BOX_WORKTREES_PATH,
-  boxWorktreePath,
   BoxApi,
   BoxRuntimeError,
+  ensureBoxWorktree,
   isMissingBox,
   quoteShell,
   requireCommand,
@@ -69,11 +72,24 @@ interface ActiveTurn {
   interrupted: boolean;
 }
 
+const CHECKSUM_ATTACHMENTS = String.raw`
+checksum_attachments() (
+  cd -- "$1" || exit 1
+  export LC_ALL=C
+  for path in ./* ./.[!.]* ./..?*; do
+    test -e "$path" || test -L "$path" || continue
+    test "$path" != ./.checksums || continue
+    test -f "$path" && test ! -L "$path" && sha256sum -- "$path" || exit 1
+  done
+)
+`;
+
 // Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
 // untracked or ignored files, stashes, commits missing from the remote, or files beside the repository.
 // Every Box starts with the agent configuration directories below in its workspace, and
-// untracked Command Code taste files are harness state rather than work.
+// unmodified staged attachments and untracked Command Code taste files are not work.
 const SAVED_WORK_CHECK = String.raw`
+${CHECKSUM_ATTACHMENTS}
 cd /workspace/home || exit 1
 home=$(pwd -P) || exit 1
 clean_checkout() (
@@ -88,7 +104,7 @@ clean_checkout() (
 for path in ./* ./.[!.]* ./..?*; do
   test -e "$path" || test -L "$path" || continue
   case "$path" in
-    ./repo|./.t3stash-worktrees|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
+    ./repo|./.t3stash-worktrees|./.t3stash-attachments|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
     *) exit 1 ;;
   esac
 done
@@ -105,6 +121,16 @@ if test -e .t3stash-worktrees || test -L .t3stash-worktrees; then
     test ! -L "$path" && test -f "$path/.git" && clean_checkout "$path" || exit 1
   done
 fi
+if test -e .t3stash-attachments || test -L .t3stash-attachments; then
+  test ! -L .t3stash-attachments && test -d .t3stash-attachments || exit 1
+  for path in .t3stash-attachments/* .t3stash-attachments/.[!.]* .t3stash-attachments/..?*; do
+    test -e "$path" || test -L "$path" || continue
+    test -d "$path" && test ! -L "$path" || exit 1
+    test -s "$path/.checksums" && test -f "$path/.checksums" && test ! -L "$path/.checksums" || exit 1
+    expected=$(cat -- "$path/.checksums") && actual=$(checksum_attachments "$path") &&
+      test "$actual" = "$expected" || exit 1
+  done
+fi
 `;
 
 const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
@@ -119,24 +145,12 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
 
 const boxStoppedMessage = "This thread's Box stopped mid-turn. Send a message to start a new one.";
 
-async function ensureWorktree(
-  box: BoxHandle,
-  threadId: string,
-  baseCommit = "HEAD",
-): Promise<string> {
-  const path = boxWorktreePath(threadId);
-  const { exitCode } = await box.exec.command(
-    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} ${quoteShell(baseCommit)}; }`,
-  );
-  if (exitCode !== 0) throw new Error("The Box worktree could not be prepared.");
-  return path;
-}
-
 export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(function* (
   instanceId: ProviderInstanceId,
   agent: BoxAgentConfig,
   environment: Effect.Effect<BoxEnvironmentConfig>,
   mcpSessions?: McpProviderSessions["Service"],
+  resolveAttachmentPath?: (attachment: ChatAttachment) => string | null,
 ) {
   const { driver, harness } = agent;
   const capabilities = {
@@ -492,8 +506,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               detail: "A Box turn is already active",
               reason: "previous_turn_active",
             });
-          if (request.message.attachments.length || request.resume)
-            return yield* unsupported("Attachments and native turn resume");
+          if (request.resume) return yield* unsupported("Native turn resume");
           if (request.runtimePolicy.runtimeMode !== "full-access")
             return yield* unsupported("Restricted runtime policies");
           const providerThread = request.providerThread;
@@ -519,15 +532,47 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               ? interruptedPrompt.text
               : undefined;
           interruptedPrompt = undefined;
+          const attachmentDirectory = `${BOX_ATTACHMENTS_PATH}/${Buffer.from(request.attemptId).toString("hex")}`;
+          const attachments: Array<{ path: string; destination: string }> = [];
+          const attachmentDestinations = new Map<string, string>();
+          const upload = box.files.upload;
+          for (const [index, attachment] of request.message.attachments.entries()) {
+            const path = resolveAttachmentPath?.(attachment);
+            if (!path || !upload)
+              return yield* new Adapter.ProviderAdapterProtocolError({
+                driver,
+                detail: "Could not access the saved attachments for this Box turn.",
+              });
+            const filename = attachment.name.replace(/[^a-zA-Z0-9._ -]/gu, "_").slice(-120);
+            const destination = `${attachmentDirectory}/${index}-${filename}`;
+            attachments.push({ path, destination });
+            attachmentDestinations.set(attachment.id, destination);
+          }
+          const messageText = yield* providerMessageTextWithAttachmentPaths({
+            text: request.message.text,
+            attachments: request.message.attachments,
+            resolveAttachmentPath: (attachment) =>
+              attachmentDestinations.get(attachment.id) ?? null,
+          });
           // Managed agents start in the Box workspace, so they are told where the clone is.
-          const prompt = [
+          const messageContext = [
             ...(previousPrompt === undefined ? [] : [previousPrompt]),
             ...(request.appContext ?? []).map(({ text }) => text),
             ...(!credentials && harness !== "commandCode" && request.runtimePolicy.repositoryUrl
               ? [`The repository is checked out at ${BOX_REPOSITORY_PATH}.`]
               : []),
-            request.message.text,
-          ].join("\n\n");
+            ...([...request.message.text.matchAll(SKILL_MENTION_PATTERN)].length > 0
+              ? [
+                  "When the user mentions an installed skill with $name, follow that skill’s instructions from this Box.",
+                ]
+              : []),
+          ];
+          // These harnesses recognize native commands only at the start of the prompt.
+          const nativeSlash =
+            harness !== "codex" && /^\/[a-zA-Z0-9_:.-]+(?:\s|$)/u.test(messageText);
+          const prompt = (
+            nativeSlash ? [messageText, ...messageContext] : [...messageContext, messageText]
+          ).join("\n\n");
           const runMarker = `t3stash-run:${Buffer.from(request.attemptId).toString("hex")}\n`;
           const streamPrompt = harness === "commandCode" ? runMarker + prompt : prompt;
           const translation = new BoxTurnTranslation(
@@ -595,10 +640,34 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               try: async () => {
                 let stream: BoxStream;
                 const start = async () => {
+                  if (upload && attachments.length > 0) {
+                    try {
+                      await requireCommand(
+                        box,
+                        `umask 077; mkdir -p -- ${quoteShell(attachmentDirectory)}`,
+                      );
+                      for (const { path, destination } of attachments) {
+                        await upload([{ path, destination }]);
+                      }
+                      await requireCommand(
+                        box,
+                        `${CHECKSUM_ATTACHMENTS}\nchecksum_attachments ${quoteShell(attachmentDirectory)} > ${quoteShell(`${attachmentDirectory}/.checksums`)}`,
+                      );
+                    } catch (error) {
+                      if (
+                        isMissingBox(error) ||
+                        (error instanceof BoxError && error.statusCode === 409)
+                      )
+                        throw error;
+                      failureMessage =
+                        "Could not copy an attachment into this Box. Send the message again to retry.";
+                      throw new BoxRuntimeError({ operation: "attachments" });
+                    }
+                  }
                   if (!credentials) return box.agent.stream({ prompt: streamPrompt });
                   const cwd = request.runtimePolicy.repositoryUrl
                     ? providerThread.nativeMetadata?.boxOwnerThreadId
-                      ? await ensureWorktree(
+                      ? await ensureBoxWorktree(
                           box,
                           request.threadId,
                           request.appThread.lineage.boxBaseCommit,

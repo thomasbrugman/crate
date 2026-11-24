@@ -40,6 +40,7 @@ import {
 } from "./Adapters/ClaudeAdapterV2.ts";
 import { withTurnStartReservation, withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
+import * as BoxSetupScript from "../project/BoxSetupScript.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -288,6 +289,9 @@ export const layer: Layer.Layer<
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
     const restoreMissingWorktree = yield* makeRestoreMissingWorktree;
     const turnItemPositions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
+    const boxSetupScript = Option.getOrUndefined(
+      yield* Effect.serviceOption(BoxSetupScript.BoxSetupScript),
+    );
 
     // Build draining callbacks outside startup scope so they cannot retain full thread history.
     const makeRunControls = (input: {
@@ -416,6 +420,21 @@ export const layer: Layer.Layer<
             }),
       };
     };
+
+    // The project's setup script runs in the Box before the agent's first turn there.
+    const withBoxSetupScript = (
+      session: ProviderAdapter.ProviderAdapterV2SessionRuntime,
+      runSetup: Effect.Effect<void, ProviderAdapter.ProviderAdapterProtocolError>,
+    ): ProviderAdapter.ProviderAdapterV2SessionRuntime => ({
+      ...session,
+      startTurn: (input) => runSetup.pipe(Effect.andThen(session.startTurn(input))),
+      ...(session.resumeTurn === undefined
+        ? {}
+        : {
+            resumeTurn: (input: ProviderAdapter.ProviderAdapterV2ResumeTurnInput) =>
+              runSetup.pipe(Effect.andThen(session.resumeTurn!(input))),
+          }),
+    });
 
     const settleRunBeforeStart = Effect.fn("orchestrationV2.providerTurnStart.settleBeforeStart")(
       function* (input: {
@@ -2215,11 +2234,33 @@ export const layer: Layer.Layer<
         !noteContinuation
           ? session
           : makeDeliverySession(session, startWithHandoffs);
+      const startSession =
+        cloud && boxSetupScript !== undefined
+          ? withBoxSetupScript(
+              deliverySession,
+              boxSetupScript
+                .runOnce({
+                  threadId: projection.thread.id,
+                  projectId: projection.thread.projectId,
+                  baseCommit: projection.thread.lineage.boxBaseCommit,
+                })
+                .pipe(
+                  Effect.mapError(
+                    (error) =>
+                      new ProviderAdapter.ProviderAdapterProtocolError({
+                        driver: session.driver,
+                        detail: error.message,
+                        cause: error,
+                      }),
+                  ),
+                ),
+            )
+          : deliverySession;
       return runExecution.startRootRun({
         commandId: CommandId.make(`command:effect:provider-turn.start:${run.id}`),
         appThread: projection.thread,
         providerSessionId,
-        session: deliverySession,
+        session: startSession,
         run: runningRun,
         rootNode: runningRootNode,
         checkpointScope,

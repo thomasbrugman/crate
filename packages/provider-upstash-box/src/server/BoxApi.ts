@@ -26,6 +26,7 @@ export const BOX_HOME = "/home/boxuser";
 export const BOX_WORKSPACE_PATH = "/workspace/home";
 export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
 export const BOX_WORKTREES_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-worktrees`;
+export const BOX_ATTACHMENTS_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-attachments`;
 
 export const boxWorktreePath = (threadId: string) =>
   `${BOX_WORKTREES_PATH}/${Buffer.from(threadId).toString("hex")}`;
@@ -115,6 +116,7 @@ export interface BoxHandle {
     >;
   };
   readonly files: {
+    readonly upload?: (files: Array<{ path: string; destination: string }>) => Promise<void>;
     readonly readBase64?: (path: string, offset: number, length: number) => Promise<string>;
     readonly write: (options: {
       path: string;
@@ -151,6 +153,20 @@ export const quoteShell = (value: string) => `'${value.replaceAll("'", "'\\''")}
 export async function requireCommand(box: Pick<BoxHandle, "exec">, command: string): Promise<void> {
   if ((await box.exec.command(command)).exitCode !== 0)
     throw new Error("Box setup command failed.");
+}
+
+/** A subagent's own checkout in its parent's Box, created from the parent's base commit. */
+export async function ensureBoxWorktree(
+  box: Pick<BoxHandle, "exec">,
+  threadId: string,
+  baseCommit = "HEAD",
+): Promise<string> {
+  const path = boxWorktreePath(threadId);
+  const { exitCode } = await box.exec.command(
+    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} ${quoteShell(baseCommit)}; }`,
+  );
+  if (exitCode !== 0) throw new Error("The Box worktree could not be prepared.");
+  return path;
 }
 
 export class BoxApi extends Context.Service<
@@ -231,6 +247,7 @@ function projectBox(box: Box): BoxHandle {
       },
     },
     files: {
+      upload: (files) => box.files.upload(files),
       readBase64: (path, offset, length) =>
         box.files.read(path, { encoding: "base64", offset, length }),
       write: async (options) => {

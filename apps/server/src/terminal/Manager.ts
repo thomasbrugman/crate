@@ -3968,7 +3968,17 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     withThreadLock(
       input.threadId,
       Effect.gen(function* () {
-        if (options.boxPty) return;
+        if (options.boxPty) {
+          // A Box shell has no local process table; only a caller that saw its prompt return
+          // (such as a finished setup script) may name a Box terminal as idle.
+          if (input.terminalId === undefined) return;
+          const session = (yield* sessionsForThread(input.threadId)).find(
+            (candidate) =>
+              candidate.terminalId === input.terminalId && candidate.status === "running",
+          );
+          if (session) yield* closeSession(input.threadId, session.terminalId, false);
+          return;
+        }
         const running = (yield* sessionsForThread(input.threadId)).filter(
           (session): session is TerminalSessionState & { pid: number } =>
             session.status === "running" &&
