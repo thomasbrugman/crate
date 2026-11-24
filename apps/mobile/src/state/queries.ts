@@ -12,6 +12,7 @@ import { environmentSession } from "./session";
 import { useEnvironmentPresentation } from "./presentation";
 import type { VcsRefTarget } from "@t3tools/client-runtime/state/vcs";
 import type {
+  BoxComposerCapabilitiesInput,
   EnvironmentId,
   OrchestrationV2ProjectedTurnItem,
   ProjectId,
@@ -484,6 +485,15 @@ export function useComposerPathSearch(target: ComposerPathSearchTarget) {
       (hasTarget && (fileAccess.isPending || result.isPending)),
     refresh: result.refresh,
   };
+}
+
+export function useBoxComposerCapabilities(
+  environmentId: EnvironmentId,
+  input: BoxComposerCapabilitiesInput | null,
+) {
+  return useEnvironmentQuery(
+    input === null ? null : projectEnvironment.boxComposerCapabilities({ environmentId, input }),
+  );
 }
 
 export function useCheckpointDiff(target: CheckpointDiffTarget) {

@@ -1,4 +1,4 @@
-import { isUpstashBoxDriver } from "@t3tools/client-runtime/provider-clients";
+import { getUpstashBoxHarness } from "@t3tools/client-runtime/provider-clients";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
@@ -55,6 +55,7 @@ import type { ComposerDocumentAttachment } from "../../lib/composerContext";
 import { useProject, useVisibleThreadShells } from "../../state/entities";
 import { useMentionableEnvironments } from "../../state/environments";
 import { useLinkedEnvironments } from "../../state/peerLinks";
+import { useBoxComposerCapabilities } from "../../state/queries";
 import { useEnvironmentScopeDenied } from "../../state/session";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 
@@ -354,7 +355,14 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       ) ?? null
     );
   })();
-  const cloudThread = isUpstashBoxDriver(selectedProviderStatus?.driver);
+  const boxHarness = getUpstashBoxHarness(selectedProviderStatus?.driver);
+  const cloudThread = boxHarness !== undefined;
+  const boxComposerCapabilities = useBoxComposerCapabilities(
+    props.environmentId,
+    !props.isDraft && boxHarness
+      ? { threadId: props.selectedThread.id, harness: boxHarness }
+      : null,
+  );
   const openDraftDocument = (attachment: ComposerDocumentAttachment) => {
     Keyboard.dismiss();
     navigation.navigate("ThreadAttachment", {
@@ -434,6 +442,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     currentThreadId: props.selectedThread.id,
     projectCwd: props.projectCwd,
     cloudThread,
+    boxHarness,
+    boxComposerCapabilities: boxComposerCapabilities.data ?? null,
     pullRequestProjectId: props.serverConfig ? (project?.id ?? null) : null,
     pullRequestRepository: project?.repositoryIdentity?.displayName ?? null,
     threadPullRequests: props.selectedThread.pullRequests,

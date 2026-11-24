@@ -1,9 +1,8 @@
 import { threadPullRequestKeyOf } from "@t3tools/client-runtime/thread-pull-requests";
-import { getUpstashBoxHarness } from "@t3tools/client-runtime/provider-clients";
-import { projectEnvironment } from "../../state/projects";
-import { useEnvironmentQuery } from "../../state/query";
 import * as Dialog from "../../components/ui/Dialog";
 import type {
+  BoxComposerCapabilities,
+  BoxComposerCapabilitiesInput,
   EnvironmentId,
   ProjectId,
   ServerProvider,
@@ -262,6 +261,8 @@ export function useComposerCommandMenu({
   currentThreadId = null,
   projectCwd,
   cloudThread,
+  boxComposerCapabilities,
+  boxHarness,
   pullRequestProjectId = null,
   pullRequestRepository = null,
   threadPullRequests,
@@ -288,6 +289,8 @@ export function useComposerCommandMenu({
   readonly currentThreadId?: ThreadId | null;
   readonly projectCwd: string | null;
   readonly cloudThread?: boolean;
+  readonly boxComposerCapabilities?: BoxComposerCapabilities | null;
+  readonly boxHarness?: BoxComposerCapabilitiesInput["harness"] | undefined;
   readonly pullRequestProjectId?: ProjectId | null;
   readonly pullRequestRepository?: string | null;
   readonly threadPullRequests?: ReadonlyArray<ThreadPullRequestLink>;
@@ -324,17 +327,8 @@ export function useComposerCommandMenu({
   const setSelection = (next: ComposerEditorSelection) =>
     setLocalSelection({ ownerKey, start: next.start, end: next.end });
 
-  const boxHarness = getUpstashBoxHarness(selectedProviderStatus?.driver);
-  const boxComposerCapabilities = useEnvironmentQuery(
-    environmentId && hasThread && currentThreadId && boxHarness
-      ? projectEnvironment.boxComposerCapabilities({
-          environmentId,
-          input: { threadId: currentThreadId, harness: boxHarness },
-        })
-      : null,
-  );
   const skills = boxHarness
-    ? (boxComposerCapabilities.data?.skills ?? [])
+    ? (boxComposerCapabilities?.skills ?? [])
     : selectedProviderStatus
       ? resolveProviderSkillsForCwd(selectedProviderStatus, projectCwd)
       : [];
@@ -431,7 +425,7 @@ export function useComposerCommandMenu({
                 ...selectedProviderStatus,
                 slashCommands: getProviderSlashCommandsForSlashMenu(
                   boxHarness
-                    ? (boxComposerCapabilities.data?.slashCommands ?? [])
+                    ? (boxComposerCapabilities?.slashCommands ?? [])
                     : resolveProviderSlashCommandsForCwd(selectedProviderStatus, projectCwd),
                   visibleSkills,
                 ),
