@@ -36,7 +36,7 @@ export function boxHarnessModels(harness: BoxHarness): ReadonlyArray<ServerProvi
     name: slug === COMMAND_CODE_TEMPLATE_MODEL ? "Template default" : boxModelName(slug),
     isCustom: false,
     isDefault: slug === DEFAULT_MODELS[harness],
-    supportsTextGeneration: false,
+    supportsTextGeneration: true,
     capabilities: null,
   }));
 }
