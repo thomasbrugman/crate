@@ -219,7 +219,7 @@ export const cliPackages = {
   commandCode: { bin: "command-code", package: "command-code@1.91.1" },
   claudeCode: { bin: "claude", package: "@anthropic-ai/claude-code@2.1.80" },
   codex: { bin: "codex", package: "@openai/codex@0.115.0" },
-  opencode: { bin: "opencode", package: "opencode-ai@1.18.32" },
+  opencode: { bin: "opencode", package: "opencode-ai@1.19.6" },
 } as const;
 
 function credentialSelection(config: BoxRuntimeConfig): BoxHarnessCredentials {
