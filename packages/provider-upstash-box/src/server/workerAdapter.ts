@@ -1,4 +1,8 @@
-import { ServerProviderModel, type ProviderInstanceId } from "@t3tools/contracts";
+import {
+  ServerProviderModel,
+  type ChatAttachment,
+  type ProviderInstanceId,
+} from "@t3tools/contracts";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -7,10 +11,13 @@ import * as Stream from "effect/Stream";
 import { BOX_HARNESS_DRIVER_KINDS, boxNameForThread, type WorkerBoxHarness } from "../harnesses.ts";
 import type { BoxEnvironmentConfig } from "./adapter.ts";
 import {
+  BOX_ATTACHMENTS_PATH,
   BOX_HOME,
   BOX_REPOSITORY_PATH,
   BoxApi,
   BoxRuntimeError,
+  ensureBoxWorktree,
+  quoteShell,
   requireCommand,
 } from "./BoxApi.ts";
 import { BOX_PROVIDER_WORKER_PATH, ensureBox, installConnectedHarnesses } from "./bootstrap.ts";
@@ -22,6 +29,7 @@ const decodeModels = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Array(ServerProviderModel)),
 );
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+const isProtocolError = Schema.is(Adapter.ProviderAdapterProtocolError);
 
 export const readBoxWorkerModels = Effect.fn("UpstashBox.readWorkerModels")(function* (
   harness: Exclude<WorkerBoxHarness, "antigravity">,
@@ -77,6 +85,7 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
   environment: Effect.Effect<BoxEnvironmentConfig>,
   config: object,
   workerArtifact: () => Promise<string>,
+  resolveAttachmentPath?: (attachment: ChatAttachment) => string | null,
 ) {
   const api = yield* BoxApi;
   const driver = BOX_HARNESS_DRIVER_KINDS[harness];
@@ -109,8 +118,15 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
         Effect.provideService(BoxApi, api),
         Effect.mapError(() => failure("Could not prepare the provider's Upstash Box.")),
       );
-      yield* Effect.tryPromise({
-        try: () => requireCommand(box, `mkdir -p ${BOX_REPOSITORY_PATH}`),
+      const boxCwd = yield* Effect.tryPromise({
+        try: async () => {
+          await requireCommand(box, `mkdir -p ${BOX_REPOSITORY_PATH}`);
+          // A delegated session runs in its parent's Box: give it its own
+          // worktree at the delegation's base commit, like the legacy adapter.
+          return policy.repositoryUrl !== undefined && policy.boxOwnerThreadId !== undefined
+            ? await ensureBoxWorktree(box, input.threadId, policy.boxBaseCommit)
+            : BOX_REPOSITORY_PATH;
+        },
         catch: () => failure("Could not open the Box workspace."),
       });
       const safeInput = {
@@ -118,7 +134,7 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
         promptSuggestions: undefined,
         instanceId,
         config,
-        runtimePolicy: { ...policy, cwd: BOX_REPOSITORY_PATH },
+        runtimePolicy: { ...policy, cwd: boxCwd },
       };
       const launch = yield* Effect.try({
         try: () => encodeJson(sessionPayload("openSession", safeInput, "encode")),
@@ -128,7 +144,7 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
         box,
         {
           argv: ["node", BOX_PROVIDER_WORKER_PATH, harness],
-          cwd: BOX_REPOSITORY_PATH,
+          cwd: boxCwd,
           env: [`PATH=${BOX_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin`],
         },
         launch,
@@ -144,6 +160,39 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
       if (!worker.providerSession)
         return yield* failure("The worker did not return a provider session.");
       const has = (method: string) => worker.methods.has(method);
+      const stageAttachments = (input: unknown) =>
+        Effect.tryPromise({
+          try: async () => {
+            const message =
+              typeof input === "object" && input !== null && "message" in input
+                ? (input as { message?: { attachments?: ReadonlyArray<ChatAttachment> } }).message
+                : undefined;
+            if (message?.attachments === undefined || message.attachments.length === 0)
+              return input;
+            const upload = box.files.upload;
+            if (upload === undefined || resolveAttachmentPath === undefined)
+              throw new Error("Could not access the saved attachments for this Box turn.");
+            const directory = `${BOX_ATTACHMENTS_PATH}/worker`;
+            const uploads = message.attachments.map((attachment) => {
+              const path = resolveAttachmentPath(attachment);
+              if (path === null)
+                throw new Error("Could not access the saved attachments for this Box turn.");
+              const filename = attachment.name.replace(/[^a-zA-Z0-9._ -]/gu, "_").slice(-120);
+              return { path, destination: `${directory}/${attachment.id}-${filename}` };
+            });
+            await requireCommand(box, `umask 077; mkdir -p -- ${quoteShell(directory)}`);
+            for (const entry of uploads) {
+              await upload([entry]);
+            }
+            return input;
+          },
+          catch: (error) =>
+            isProtocolError(error)
+              ? error
+              : failure(
+                  "Could not copy an attachment into this Box. Send the message again to retry.",
+                ),
+        });
       const call =
         <K extends keyof Adapter.ProviderAdapterV2SessionRuntime>(method: K) =>
         (
@@ -151,10 +200,13 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
             Extract<Adapter.ProviderAdapterV2SessionRuntime[K], (input: never) => unknown>
           >[0],
         ) =>
-          Effect.try({
-            try: () => sessionPayload(method, boxWorkspace(input), "encode"),
-            catch: () => failure(`Could not encode ${method} for the Box worker.`),
-          }).pipe(
+          stageAttachments(input).pipe(
+            Effect.flatMap((staged) =>
+              Effect.try({
+                try: () => sessionPayload(method, boxWorkspace(staged, boxCwd), "encode"),
+                catch: () => failure(`Could not encode ${method} for the Box worker.`),
+              }),
+            ),
             Effect.flatMap((payload) =>
               worker
                 .call(method, payload)
@@ -212,7 +264,7 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
   });
 });
 
-function boxWorkspace(input: unknown) {
+function boxWorkspace(input: unknown, cwd: string) {
   if (
     typeof input !== "object" ||
     input === null ||
@@ -221,5 +273,5 @@ function boxWorkspace(input: unknown) {
     input.runtimePolicy === null
   )
     return input;
-  return { ...input, runtimePolicy: { ...input.runtimePolicy, cwd: BOX_REPOSITORY_PATH } };
+  return { ...input, runtimePolicy: { ...input.runtimePolicy, cwd } };
 }

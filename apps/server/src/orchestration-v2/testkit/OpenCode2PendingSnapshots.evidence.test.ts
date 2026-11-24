@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import type { ProviderInstanceId } from "@t3tools/contracts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { isBoxWorkerDriver } from "@t3tools/provider-upstash-box/harnesses";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
@@ -22,10 +23,21 @@ type Row = {
   readonly fixture: string;
   /** True when every native thread must end on a `pendingBackgroundWork: false` snapshot. */
   readonly requireSettledSnapshots: boolean;
+  /**
+   * Worker drivers run a child's turn inside the parent's Box, so a replayed
+   * transcript cannot settle its threads: require settled finals only when the
+   * driver is not Box-backed. The `everPending` evidence still holds either way.
+   */
+  readonly localSettleOnly?: boolean;
 };
 
 const ROWS: ReadonlyArray<Row> = [
-  { id: "R1", fixture: "opencode2_nested_background", requireSettledSnapshots: true },
+  {
+    id: "R1",
+    fixture: "opencode2_nested_background",
+    requireSettledSnapshots: true,
+    localSettleOnly: true,
+  },
   { id: "R1-compat", fixture: "opencode2_background", requireSettledSnapshots: true },
   { id: "R2c-compat", fixture: "opencode2_resume_after_restart", requireSettledSnapshots: false },
   { id: "R2c-compat", fixture: "opencode2_interrupt", requireSettledSnapshots: false },
@@ -132,8 +144,10 @@ const runRow = (row: Row) =>
     if (exit._tag === "Failure") failures.push("fixture output assertions failed");
     if (row.requireSettledSnapshots) {
       if (!everPending) failures.push("no pendingBackgroundWork=true snapshot was published");
-      for (const [id, flag] of lastSnapshot) {
-        if (flag !== false) failures.push(`${id} ended on pendingBackgroundWork=${String(flag)}`);
+      if (!(row.localSettleOnly && isBoxWorkerDriver(driver.driver))) {
+        for (const [id, flag] of lastSnapshot) {
+          if (flag !== false) failures.push(`${id} ended on pendingBackgroundWork=${String(flag)}`);
+        }
       }
     } else if ([...lastSnapshot.values()].includes(true)) {
       failures.push("a native thread ended with pending work");

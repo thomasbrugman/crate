@@ -232,6 +232,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
                 environment,
                 worker.settings(config),
                 worker.artifact,
+                host.resolveAttachmentPath,
               )
             : Effect.die("Missing Box provider worker artifact.")
           : makeUpstashBoxAdapter(

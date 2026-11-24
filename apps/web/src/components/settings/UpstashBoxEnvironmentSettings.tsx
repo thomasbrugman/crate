@@ -1,4 +1,10 @@
-import { AuthProvidersManageScope, type EnvironmentId, UpstashBoxSize } from "@t3tools/contracts";
+import {
+  AuthProvidersManageScope,
+  defaultInstanceIdForDriver,
+  resolveProviderInstanceEnabled,
+  type EnvironmentId,
+  UpstashBoxSize,
+} from "@t3tools/contracts";
 import {
   BOX_HARNESS_DRIVER_KINDS,
   BOX_HARNESS_LABELS,
@@ -17,6 +23,7 @@ import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { SetupSection } from "../onboarding/SetupSection";
 import { DraftInput } from "../ui/draft-input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { turnedOnInstance } from "../../onboarding/welcomePage.logic";
 import { SecretInput } from "./SecretInput";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
@@ -79,11 +86,36 @@ export function UpstashBoxEnvironmentSettings({
   const gt = useGT();
   const m = useMessages();
   const box = useEnvironmentSettings(environmentId, (settings) => settings.upstashBox);
+  const providerInstances = useEnvironmentSettings(
+    environmentId,
+    (settings) => settings.providerInstances,
+  );
   const providers = useAtomValue(providersIgnoringCheckedAtAtom(environmentId));
   const canSignIn = useEnvironmentScope(environmentId, AuthProvidersManageScope);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const keyConfigured = typeof box.apiKey !== "string" || box.apiKey !== "";
   const update = (patch: Partial<typeof box>) => updateSettings({ upstashBox: patch });
+  const saveCredential = (
+    harness: (typeof harnessCredentials)[number]["harness"],
+    field: (typeof harnessCredentials)[number]["field"],
+    credential: string,
+  ) => {
+    // The worker harnesses are disabled by default: a saved credential is the
+    // user's connect action, so enable their default instance or onboarding
+    // never counts the provider as ready.
+    const driver = BOX_HARNESS_DRIVER_KINDS[harness];
+    const instanceId = defaultInstanceIdForDriver(driver);
+    const existing = providerInstances?.[instanceId] ?? { driver };
+    const enablePatch = resolveProviderInstanceEnabled(existing)
+      ? {}
+      : {
+          providerInstances: {
+            ...providerInstances,
+            [instanceId]: turnedOnInstance(existing),
+          },
+        };
+    updateSettings({ upstashBox: { [field]: credential }, ...enablePatch });
+  };
   const [selectedHarness, setSelectedHarness] = useState<
     (typeof harnessCredentials)[number]["harness"] | null
   >(null);
@@ -101,7 +133,7 @@ export function UpstashBoxEnvironmentSettings({
             label={label}
             configured={connected}
             disabled={readOnly}
-            onSave={(credential) => update({ [field]: credential })}
+            onSave={(credential) => saveCredential(harness, field, credential)}
           />
         ) : (
           <SecretInput
@@ -109,7 +141,7 @@ export function UpstashBoxEnvironmentSettings({
             configured={connected}
             disabled={readOnly}
             value=""
-            onCommit={(credential) => update({ [field]: credential.trim() })}
+            onCommit={(credential) => saveCredential(harness, field, credential.trim())}
           />
         )}
         {connected &&

@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off -- The worker's stdio is the Box session wire.
+import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeReadline from "node:readline";
@@ -48,6 +49,8 @@ import { isAntigravitySignInRequiredError } from "./antigravityAuthSupport.ts";
 const stateDir = "/home/boxuser/.local/share/crate-provider-worker";
 const credentialsDir = "/dev/shm/crate-auth";
 const profileStateDir = `${credentialsDir}/worker-state`;
+// Host-side turns stage each attachment here as `<id>-<name>` before dispatch.
+const attachmentsDir = "/workspace/home/.crate-attachments/worker";
 const harnessSchema = Schema.Literals(["opencode", "cursor", "antigravity"]);
 type Harness = typeof harnessSchema.Type;
 const parseHarness = Schema.decodeUnknownSync(harnessSchema);
@@ -110,7 +113,16 @@ function hostLayer(cwd: string) {
       shouldRunBackgroundWork: Effect.fn("BoxProviderWorker.shouldRunBackgroundWork")(() =>
         Effect.succeed(false),
       ),
-      resolveAttachmentPath: () => null,
+      resolveAttachmentPath: (attachment) => {
+        try {
+          const match = NodeFS.readdirSync(attachmentsDir).find((name) =>
+            name.startsWith(`${attachment.id}-`),
+          );
+          return match === undefined ? null : NodePath.join(attachmentsDir, match);
+        } catch {
+          return null;
+        }
+      },
       credentials: Effect.fn("BoxProviderWorker.credentials")((namespace, key) =>
         Effect.succeed({
           binding: { owner: "t3", key: `${namespace}:${key}` },
