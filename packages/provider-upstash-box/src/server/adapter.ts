@@ -147,6 +147,11 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   environment: Effect.Effect<BoxEnvironmentConfig>,
   mcpSessions?: McpProviderSessions["Service"],
   resolveAttachmentPath?: (attachment: ChatAttachment) => string | null,
+  /** Copies the Box's transcripts to the host for usage history; never fails. */
+  mirrorTranscripts: (
+    box: BoxHandle,
+    options?: { readonly everyHarness?: boolean },
+  ) => Effect.Effect<void> = () => Effect.void,
 ) {
   const { driver, harness } = agent;
   const capabilities = {
@@ -186,25 +191,42 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
     const nativeId =
       thread.nativeThreadRef?.nativeId ??
       (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
+    const failed = () =>
+      new Adapter.ProviderAdapterProtocolError({
+        driver,
+        detail: "Could not delete the thread Box.",
+      });
     return Effect.flatMap(environment, ({ apiKey }) =>
-      Effect.tryPromise({
-        try: async () => {
-          if (!nativeId) return true;
-          try {
-            const box = await api.get(nativeId, apiKey);
-            if (keepUnsavedWork && (await box.exec.command(SAVED_WORK_CHECK)).exitCode !== 0)
-              return false;
-            await box.delete();
-          } catch (error) {
-            if (!isMissingBox(error)) throw error;
-          }
-          return true;
-        },
-        catch: () =>
-          new Adapter.ProviderAdapterProtocolError({
-            driver,
-            detail: "Could not delete the thread Box.",
-          }),
+      Effect.gen(function* () {
+        if (!nativeId) return true;
+        const box = yield* Effect.tryPromise({
+          try: async () => {
+            try {
+              const box = await api.get(nativeId, apiKey);
+              if (keepUnsavedWork && (await box.exec.command(SAVED_WORK_CHECK)).exitCode !== 0)
+                return "unsaved" as const;
+              return box;
+            } catch (error) {
+              if (!isMissingBox(error)) throw error;
+              return "missing" as const;
+            }
+          },
+          catch: failed,
+        });
+        if (box === "unsaved") return false;
+        if (box === "missing") return true;
+        yield* mirrorTranscripts(box, { everyHarness: true });
+        yield* Effect.tryPromise({
+          try: async () => {
+            try {
+              await box.delete();
+            } catch (error) {
+              if (!isMissingBox(error)) throw error;
+            }
+          },
+          catch: failed,
+        });
+        return true;
       }),
     );
   };
@@ -737,6 +759,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                     failureMessage,
                   ),
                 );
+                yield* mirrorTranscripts(box).pipe(Effect.forkIn(scope));
               }),
             ),
             Effect.ensuring(
