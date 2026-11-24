@@ -21,6 +21,9 @@ import * as Config from "effect/Config";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
@@ -28,6 +31,8 @@ import { BOX_HARNESS_DRIVER_KINDS, BOX_HARNESS_LABELS, type BoxHarness } from ".
 import { BoxCommandCodeSettings, BoxManagedAgentSettings } from "../settings.ts";
 import { makeUpstashBoxAdapter, type BoxEnvironmentConfig } from "./adapter.ts";
 import { makeBoxHarnessAuth } from "./auth.ts";
+import { readCommandCodeUsageLimits } from "./commandCodeUsage.ts";
+import { boxTranscriptMirrorDir, mirrorBoxTranscripts } from "./transcriptMirror.ts";
 import {
   BoxApi,
   BoxRuntimeError,
@@ -128,7 +133,13 @@ export const probe = Effect.fn("UpstashBox.probe")(function* (
   return yield* probeModelKey(agent.harness, agent.agentApiKey);
 });
 
-export type UpstashBoxDriverEnv = IdAllocatorV2 | McpProviderSessions | ProviderHost;
+export type UpstashBoxDriverEnv =
+  | FileSystem.FileSystem
+  | HttpClient.HttpClient
+  | IdAllocatorV2
+  | McpProviderSessions
+  | Path.Path
+  | ProviderHost;
 
 type HarnessSettings = BoxCommandCodeSettings | BoxManagedAgentSettings;
 
@@ -179,6 +190,10 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         Effect.orElseSucceed(() => DEFAULT_SERVER_SETTINGS),
         Effect.flatMap(boxEnvironment),
       );
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const httpClient = yield* HttpClient.HttpClient;
+      const transcriptMirrorDir = boxTranscriptMirrorDir(path, host.paths.stateDir, harness);
       const continuationIdentity = defaultProviderContinuationIdentity({ driverKind, instanceId });
       const agent = {
         driver: driverKind,
@@ -190,6 +205,12 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         agent,
         environment,
         yield* McpProviderSessions,
+        (box) =>
+          mirrorBoxTranscripts(box, harness, transcriptMirrorDir).pipe(
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+            Effect.ignore,
+          ),
       ).pipe(Effect.provide(boxApiLayer));
       const auth = host.settings.update
         ? yield* makeBoxHarnessAuth(instanceId, harness, environment, host.settings.update).pipe(
@@ -224,6 +245,13 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         apiKey,
         agentApiKey: credentials?.[harness] || agent.agentApiKey,
       });
+      // Claude Code and Codex in a Box have no plan-usage endpoint that their stored sign-in reaches.
+      const readUsageLimits = (credential: string) =>
+        harness === "commandCode"
+          ? readCommandCodeUsageLimits(credential).pipe(
+              Effect.provideService(HttpClient.HttpClient, httpClient),
+            )
+          : Effect.undefined;
       const snapshot = yield* makeManagedServerProvider({
         getSettings: environment.pipe(Effect.map(toProbeSettings)),
         streamSettings: host.settings.changes.pipe(
@@ -237,11 +265,23 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
           const initial = yield* base;
           if (!enabled) return initial;
           const settings = toProbeSettings(yield* environment);
-          return {
-            ...initial,
-            ...(yield* probe(settings.apiKey, { harness, agentApiKey: settings.agentApiKey })),
-          };
+          const probed = yield* probe(settings.apiKey, {
+            harness,
+            agentApiKey: settings.agentApiKey,
+          });
+          const usageLimits =
+            probed.status === "ready" ? yield* readUsageLimits(settings.agentApiKey) : undefined;
+          return { ...initial, ...probed, ...(usageLimits ? { usageLimits } : {}) };
         }).pipe(Effect.provide(boxApiLayer)),
+        ...(harness === "commandCode"
+          ? {
+              checkUsageLimits: environment.pipe(
+                Effect.flatMap((settings) =>
+                  readUsageLimits(toProbeSettings(settings).agentApiKey),
+                ),
+              ),
+            }
+          : {}),
         resolveMaintenance: () =>
           Effect.succeed({ provider: driverKind, packageName: null, update: null }),
       }).pipe(
