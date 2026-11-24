@@ -15,6 +15,8 @@ import { harnessCredentialKind } from "./credentials.ts";
 import { execHarness } from "./execHarness.ts";
 
 const TEXT_GENERATION_TIMEOUT_MS = 180_000;
+// The prompt travels as one shell argument, which Linux caps at 128 KiB.
+const MAX_PROMPT_BYTES = 96_000;
 
 /** One small Box per harness answers every auxiliary prompt; it sleeps between requests. */
 export const textGenerationBoxName = (harness: BoxHarness) =>
@@ -41,8 +43,17 @@ export function textGenerationCommand(input: {
   return `cd ${cwd} && PATH=${BOX_HOME}/.local/bin:$PATH BOXJOB_CC_CWD=${cwd} exec node ${args.map(quoteShell).join(" ")}`;
 }
 
+function limitBytes(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text);
+  if (bytes.length <= maxBytes) return text;
+  return `${bytes
+    .subarray(0, maxBytes)
+    .toString()
+    .replace(/\uFFFD$/u, "")}\n[truncated]`;
+}
+
 export function structuredPrompt(prompt: string, schema: unknown): string {
-  return `${prompt}\n\nDo not use any tools. Reply with only a JSON object that matches this JSON Schema, with no other text:\n${JSON.stringify(schema)}`;
+  return `${limitBytes(prompt, MAX_PROMPT_BYTES)}\n\nDo not use any tools. Reply with only a JSON object that matches this JSON Schema, with no other text:\n${JSON.stringify(schema)}`;
 }
 
 async function collectReply(
@@ -99,7 +110,13 @@ export const makeBoxTextGeneration = Effect.fn("UpstashBox.makeTextGeneration")(
     if (config.credentials && !credentialKind)
       return yield* fail("Connect this harness in Settings → Providers.");
     const box = yield* ensureBox(
-      { ...config, size: "small", harness, model: request.modelSelection.model, agentApiKey },
+      {
+        ...config,
+        size: "small",
+        harness,
+        model: request.modelSelection.model,
+        agentApiKey,
+      },
       textGenerationBoxName(harness),
     ).pipe(
       Effect.provideService(BoxApi, api),

@@ -4,7 +4,11 @@ import type { Chunk } from "@upstash/box";
 import * as Effect from "effect/Effect";
 
 import { BoxApi, type BoxHandle } from "./BoxApi.ts";
-import { makeBoxTextGeneration, textGenerationBoxName } from "./textGeneration.ts";
+import {
+  makeBoxTextGeneration,
+  structuredPrompt,
+  textGenerationBoxName,
+} from "./textGeneration.ts";
 
 function fakeBox(chunks: ReadonlyArray<Chunk>) {
   const prompts: string[] = [];
@@ -83,3 +87,10 @@ it.effect("falls back to the finish output and rejects replies without JSON", ()
     assert.instanceOf(invalid.result, TextGenerationError);
   }),
 );
+
+it("keeps structured prompts under the shell argument limit", () => {
+  const prompt = structuredPrompt("é".repeat(100_000), { type: "object" });
+  assert.isBelow(Buffer.byteLength(prompt), 128 * 1024);
+  assert.notInclude(prompt, "\uFFFD");
+  assert.isTrue(prompt.endsWith('{"type":"object"}'));
+});
