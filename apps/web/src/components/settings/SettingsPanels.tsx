@@ -509,8 +509,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.panelAnimationDurationMs !== DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs
       ? [gt("Panel animations")]
       : []),
-    ...(settings.environmentIdentificationMode !==
-    DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode
+    ...(settings.environmentIdentificationMode === "pill"
       ? [gt("Environment identification")]
       : []),
     ...(settings.language !== DEFAULT_UNIFIED_SETTINGS.language ? [gt("Language")] : []),
