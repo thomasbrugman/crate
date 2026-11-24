@@ -26,7 +26,6 @@ import {
 } from "@t3tools/contracts";
 import type { ReviewGuideStackLayer } from "@t3tools/provider-core/server/textGeneration";
 import { BoxExec, BoxInvestigationTarget } from "@t3tools/provider-upstash-box/server";
-import { repositoryPathFromRemoteUrl } from "@t3tools/source-control-core/server/SourceControlProvider";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 
@@ -200,7 +199,10 @@ const make = Effect.gen(function* () {
           Effect.map((result) => {
             const url = result.stdout.trim();
             return locator === null
-              ? repositoryPathFromRemoteUrl(url)?.toLowerCase() === key.repository.toLowerCase()
+              ? sourceControlDefinitions.canonicalRepositoryKey(
+                  sourceControlDefinitions.repositoryKeyFromRemote(url),
+                ) ===
+                  sourceControlDefinitions.canonicalRepositoryKey(`${key.host}/${key.repository}`)
               : url === locator.remoteUrl;
           }),
           Effect.orElseSucceed(() => false),
