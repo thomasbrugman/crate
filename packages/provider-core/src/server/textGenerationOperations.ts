@@ -36,6 +36,20 @@ export interface Request<S extends Schema.Top> {
 
 const INVESTIGATION_TIMEOUT_MS = 15 * 60_000;
 
+/** Claude's read-only investigation tools; `--tools` takes bare names, patterns go in the allow list. */
+export const CLAUDE_INVESTIGATION_TOOLS = "Read,Grep,Glob,Bash";
+/** In dontAsk mode every call outside this list, Bash included, is refused. */
+export const CLAUDE_INVESTIGATION_ALLOWED = [
+  "Read",
+  "Grep",
+  "Glob",
+  "Bash(git diff:*)",
+  "Bash(git log:*)",
+  "Bash(git show:*)",
+].join(",");
+// Denies override allows; block git --output/-o because allowed trailing args can otherwise write anywhere.
+export const CLAUDE_INVESTIGATION_DENIED = ["Bash(git * --output*)", "Bash(git * -o *)"].join(",");
+
 export const investigationUnsupported = (operation: Operation, provider: string) =>
   new TextGenerationError({
     operation,

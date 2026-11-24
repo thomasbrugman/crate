@@ -208,3 +208,15 @@ it("turns a Codex plan-mode reply into a proposed plan and forwards its todo lis
     ],
   );
 });
+
+it("runs review guide investigations with read-only harness permissions", async () => {
+  const argsFor = (harness: string) =>
+    runManaged([harness, "guide", "model", "", "key", "investigate"], []).then(({ args }) => args);
+  const claude = await argsFor("claudeCode");
+  assert.include(claude.join(" "), "--permission-mode dontAsk");
+  assert.notInclude(claude, "bypassPermissions");
+  assert.equal(claude[claude.indexOf("--tools") + 1], "Read,Grep,Glob,Bash");
+  const codex = await argsFor("codex");
+  assert.include(codex.join(" "), "--sandbox read-only");
+  assert.notInclude(codex, "--dangerously-bypass-approvals-and-sandbox");
+});
