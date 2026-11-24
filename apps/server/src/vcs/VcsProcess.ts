@@ -498,7 +498,7 @@ export const runInBox = Effect.fn("VcsProcess.runInBox")(function* (input: VcsPr
       input.notFoundDetail === undefined ? {} : { notFoundDetail: input.notFoundDetail },
     );
   input.onSpawn?.();
-  input.onStdoutChunk?.(Buffer.from(stdout.text));
+  input.onStdoutChunk?.(Buffer.from(result.stdout));
   return {
     exitCode: result.exitCode as ChildProcessSpawner.ExitCode,
     stdout: stdout.text,

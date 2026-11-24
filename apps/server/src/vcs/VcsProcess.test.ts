@@ -79,9 +79,17 @@ describe("VcsProcess.run", () => {
           );
       const args = ["commit", "-F", "-", "quotes' ; $(false)\n"];
       const stdin = "message ' \n$(touch not-run)\nEOF\n";
-      const root = yield* execute({ ...baseInput, args, stdin, maxOutputBytes: 3 });
+      const chunks: Uint8Array[] = [];
+      const root = yield* execute({
+        ...baseInput,
+        args,
+        stdin,
+        maxOutputBytes: 3,
+        onStdoutChunk: (chunk) => chunks.push(chunk),
+      });
       assert.equal(root.stdout, "abc");
       assert.isTrue(root.stdoutTruncated);
+      assert.equal(Buffer.concat(chunks).toString(), "abcdef");
       assert.deepEqual(calls[0]?.args, args);
       assert.isUndefined(calls[0]?.cwd);
       assert.include(calls[0]!.command, Buffer.from(stdin).toString("base64"));
