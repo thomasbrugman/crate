@@ -213,7 +213,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
           supportsConversationRollback: false,
           supportsTextGeneration: false,
           supportedRuntimeModes: ["full-access"],
-          showInteractionModeToggle: false,
+          showInteractionModeToggle: true,
           setup: { canAuthenticate: auth !== undefined, canInstall: false },
           models: providerModelsFromSettings(boxHarnessModels(harness), config.customModels, null),
           slashCommands: [],
