@@ -2,6 +2,7 @@
 import argparse
 import io
 import json
+import struct
 from pathlib import Path
 
 import cairosvg
@@ -26,12 +27,25 @@ def centered(image, size, background=None):
     return canvas
 
 
+def render_ico(svg):
+    output = io.BytesIO()
+    render(svg, 256).save(output, format="ICO", sizes=ICO_SIZES)
+    ico = bytearray(output.getvalue())
+    (count,) = struct.unpack_from("<H", ico, 4)
+    for index in range(count):
+        struct.pack_into("<H", ico, 6 + 16 * index + 4, 1)
+    return ico
+
+
 def write_icons(svg):
+    ico = render_ico(svg)
     for channel, (desktop, web) in VARIANTS.items():
         assets = ROOT / "assets" / channel
         composer = assets / "app-icon.icon"
         (composer / "Assets/box-buddy.svg").write_bytes(svg)
-        config = json.loads((composer / "icon.json").read_text())
+        config_path = composer / "icon.json"
+        original_config = json.loads(config_path.read_text())
+        config = original_config.copy()
         config["fill"] = {"solid": "display-p3:0.78824,0.55686,0.33333,1.00000"}
         config["groups"] = [{"layers": [{
             "glass": False,
@@ -39,15 +53,15 @@ def write_icons(svg):
             "name": "Box Buddy",
             "position": {"scale": 2, "translation-in-points": [0, 0]},
         }]}]
-        (composer / "icon.json").write_text(json.dumps(config, indent=2) + "\n")
+        if config != original_config:
+            config_path.write_text(json.dumps(config, indent=2) + "\n")
 
         for platform in ("ios", "macos", "universal"):
             icon = centered(render(svg, 879), 1024) if platform == "macos" else render(svg, 1024)
             icon.save(assets / f"{desktop}-{platform}-1024.png")
 
-        ico = render(svg, 256)
-        ico.save(assets / f"{web}-windows.ico", sizes=ICO_SIZES)
-        ico.save(assets / f"{web}-web-favicon.ico", sizes=ICO_SIZES)
+        (assets / f"{web}-windows.ico").write_bytes(ico)
+        (assets / f"{web}-web-favicon.ico").write_bytes(ico)
         icons = {
             "favicon-16x16.png": ("favicon-16x16.png", 16),
             "favicon-32x32.png": ("favicon-32x32.png", 32),
@@ -61,7 +75,7 @@ def write_icons(svg):
             if channel == "dev":
                 icon.save(ROOT / "apps/web/public" / public_name)
         if channel == "dev":
-            ico.save(ROOT / "apps/web/public/favicon.ico", sizes=ICO_SIZES)
+            (ROOT / "apps/web/public/favicon.ico").write_bytes(ico)
 
 
 def write_wordmarks(svg, font_path):
