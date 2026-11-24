@@ -278,7 +278,8 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
       );
       const repo = NodePath.join(home, "repo");
       yield* Effect.promise(() => NodeFSP.mkdir(repo));
-      for (const name of [".claude", ".codex", ".cursor", ".local"]) {
+      // Upstash creates .box-internal with every browser Box and .box once an init command is set.
+      for (const name of [".box", ".box-internal", ".claude", ".codex", ".cursor", ".local"]) {
         const path = NodePath.join(home, name);
         yield* Effect.promise(() => NodeFSP.mkdir(path));
         yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(path, "config.json"), "{}"));
