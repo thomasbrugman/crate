@@ -273,6 +273,7 @@ export const layer: Layer.Layer<
   | RunExecutionService.RunExecutionServiceV2
   | RuntimePolicy.RuntimePolicyV2
   | TurnItemPositionStore.TurnItemPositionStoreV2
+  | EffectOutbox.EffectOutboxV2
 > = Layer.effect(
   ProviderTurnStartServiceV2,
   Effect.gen(function* () {
@@ -287,6 +288,7 @@ export const layer: Layer.Layer<
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
+    const effectOutbox = yield* EffectOutbox.EffectOutboxV2;
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
     const restoreMissingWorktree = yield* makeRestoreMissingWorktree;
     const turnItemPositions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
@@ -1627,20 +1629,15 @@ export const layer: Layer.Layer<
             // while it is pending would clone the remote and drop unpushed work. Wait
             // only for a scheduled capture — cancelled queued runs never get one and
             // a failed capture leaves the run waiting without a checkpoint forever.
-            const outbox = Option.getOrUndefined(
-              yield* Effect.serviceOption(EffectOutbox.EffectOutboxV2),
-            );
             const captureEffectId = `effect:checkpoint.capture:${source.runId}`;
-            const captureEffect =
-              outbox === undefined ? Option.none() : yield* outbox.get(captureEffectId);
+            const captureEffect = yield* effectOutbox.get(captureEffectId);
             if (
               Option.exists(
                 captureEffect,
                 ({ status }) => status === "pending" || status === "running",
-              ) &&
-              outbox !== undefined
+              )
             ) {
-              const settled = yield* outbox
+              const settled = yield* effectOutbox
                 .awaitSettled(captureEffectId)
                 .pipe(Effect.timeout("60 seconds"), Effect.result);
               if (settled._tag === "Failure" && settled.failure._tag === "TimeoutError") {
@@ -1653,8 +1650,7 @@ export const layer: Layer.Layer<
               parent = yield* loadParent();
               parentRun = parent.runs.find((candidate) => candidate.id === source.runId);
             }
-            const captureOutcome =
-              outbox === undefined ? captureEffect : yield* outbox.get(captureEffectId);
+            const captureOutcome = yield* effectOutbox.get(captureEffectId);
             const checkpoint = parent.checkpoints.find(
               (candidate) =>
                 candidate.id === parentRun?.checkpointId && candidate.status === "ready",
