@@ -46,6 +46,7 @@ import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { makeRestoreMissingWorktree } from "../workspace/restoreMissingWorktree.ts";
 import * as EventSink from "./EventSink.ts";
+import * as EffectOutbox from "./EffectOutbox.ts";
 import * as ProviderUsageAnalytics from "../telemetry/ProviderUsageAnalytics.ts";
 import * as ContextHandoffService from "./ContextHandoffService.ts";
 import { canForkBusySourceNatively, isActiveRun } from "./CommandPolicy.ts";
@@ -1623,31 +1624,37 @@ export const layer: Layer.Layer<
             let parent = yield* loadParent();
             let parentRun = parent.runs.find((candidate) => candidate.id === source.runId);
             // Capture settles on the parent's effect lane after the run ends; forking
-            // while it is pending would clone the remote and drop unpushed work, so
-            // wait for the source run to gain or settle without a checkpoint.
-            const captureWaitStart = yield* DateTime.now;
-            while (
-              parentRun !== undefined &&
-              parentRun.checkpointId === null &&
-              (parentRun.status === "waiting" ||
-                parentRun.status === "interrupted" ||
-                parentRun.status === "cancelled")
+            // while it is pending would clone the remote and drop unpushed work. Wait
+            // only for a scheduled capture — cancelled queued runs never get one and
+            // a failed capture leaves the run waiting without a checkpoint forever.
+            const outbox = Option.getOrUndefined(
+              yield* Effect.serviceOption(EffectOutbox.EffectOutboxV2),
+            );
+            const captureEffectId = `effect:checkpoint.capture:${source.runId}`;
+            const captureEffect =
+              outbox === undefined ? Option.none() : yield* outbox.get(captureEffectId);
+            if (
+              Option.exists(
+                captureEffect,
+                ({ status }) => status === "pending" || status === "running",
+              ) &&
+              outbox !== undefined
             ) {
-              if (
-                DateTime.toEpochMillis(yield* DateTime.now) -
-                  DateTime.toEpochMillis(captureWaitStart) >
-                60_000
-              ) {
+              const settled = yield* outbox
+                .awaitSettled(captureEffectId)
+                .pipe(Effect.timeout("60 seconds"), Effect.result);
+              if (settled._tag === "Failure" && settled.failure._tag === "TimeoutError") {
                 return yield* new ProviderTurnStartError({
                   runId,
                   cause:
                     "The workspace snapshot this fork was created from is still being captured. Try again in a moment.",
                 });
               }
-              yield* Effect.sleep("250 millis");
               parent = yield* loadParent();
               parentRun = parent.runs.find((candidate) => candidate.id === source.runId);
             }
+            const captureOutcome =
+              outbox === undefined ? captureEffect : yield* outbox.get(captureEffectId);
             const checkpoint = parent.checkpoints.find(
               (candidate) =>
                 candidate.id === parentRun?.checkpointId && candidate.status === "ready",
@@ -1659,8 +1666,12 @@ export const layer: Layer.Layer<
             if (
               parentProvider?.providerInstanceId === providerThread.providerInstanceId &&
               sourceBoxId != null &&
-              parentRun?.checkpointId != null &&
-              checkpoint === undefined
+              checkpoint === undefined &&
+              (parentRun?.checkpointId != null ||
+                Option.exists(
+                  captureOutcome,
+                  ({ status }) => status === "failed" || status === "cancelled",
+                ))
             ) {
               return yield* new ProviderTurnStartError({
                 runId,
