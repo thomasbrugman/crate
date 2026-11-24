@@ -51,7 +51,7 @@ function fakeBox(chunks: ReadonlyArray<Chunk>) {
   return { api, prompts, names, commands };
 }
 
-const generate = (chunks: ReadonlyArray<Chunk>, githubToken?: string) =>
+const generate = (chunks: ReadonlyArray<Chunk>) =>
   Effect.gen(function* () {
     const fake = fakeBox(chunks);
     const textGeneration = yield* makeBoxTextGeneration(
@@ -61,7 +61,7 @@ const generate = (chunks: ReadonlyArray<Chunk>, githubToken?: string) =>
         apiKey: "test-key",
         templateBoxName: "cc-harness",
         size: "medium",
-        githubToken,
+        githubToken: "ghp_test",
       }),
     ).pipe(Effect.provideService(BoxApi, fake.api));
     const result = yield* textGeneration
@@ -76,14 +76,11 @@ const generate = (chunks: ReadonlyArray<Chunk>, githubToken?: string) =>
 
 it.effect("generates a thread title from the harness reply in the shared text Box", () =>
   Effect.gen(function* () {
-    const { result, prompts, names, commands } = yield* generate(
-      [
-        { type: "text-delta", text: 'Sure: {"title": ' } as Chunk,
-        { type: "text-delta", text: '"Fix mobile login button"}' } as Chunk,
-        { type: "finish", output: "ignored", sessionId: "s" } as Chunk,
-      ],
-      "ghp_test",
-    );
+    const { result, prompts, names, commands } = yield* generate([
+      { type: "text-delta", text: 'Sure: {"title": ' } as Chunk,
+      { type: "text-delta", text: '"Fix mobile login button"}' } as Chunk,
+      { type: "finish", output: "ignored", sessionId: "s" } as Chunk,
+    ]);
     assert.deepEqual(result, { title: "Fix mobile login button" });
     assert.deepEqual(names, [textGenerationBoxName("commandCode")]);
     assert.include(prompts[0], "the login button does nothing on mobile");

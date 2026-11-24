@@ -117,7 +117,7 @@ export const makeBoxTextGeneration = Effect.fn("UpstashBox.makeTextGeneration")(
         model: request.modelSelection.model,
         agentApiKey,
         // Prompts carry untrusted issue and PR text, so this Box never holds GitHub credentials.
-        githubToken: undefined,
+        githubToken: "",
       },
       textGenerationBoxName(harness),
     ).pipe(
