@@ -44,12 +44,14 @@ it.effect("copies new transcript bytes and recopies replaced files", () =>
     const files = new Map([
       ["workspace-home/a.jsonl", '{"type":"session"}\n'],
       ["../escape.jsonl", "nope\n"],
+      ["workspace-home\\..\\win-escape.jsonl", "nope\n"],
     ]);
     const { box, reads } = fakeBox(files);
 
     yield* mirrorBoxTranscripts(box, "commandCode", mirrorDir);
     assert.strictEqual(yield* copy("a.jsonl"), '{"type":"session"}\n');
     assert.isFalse(yield* fileSystem.exists(path.join(mirrorDir, "escape.jsonl")));
+    assert.isFalse(yield* fileSystem.exists(path.join(mirrorDir, "win-escape.jsonl")));
 
     files.set("workspace-home/a.jsonl", '{"type":"session"}\n{"usage":{}}\n');
     reads.length = 0;

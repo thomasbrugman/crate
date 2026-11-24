@@ -47,7 +47,11 @@ export const mirrorBoxTranscripts = Effect.fn("UpstashBox.mirrorBoxTranscripts")
     const size = Number(sizeText);
     if (!relative || rest.length > 0 || !Number.isSafeInteger(size) || size < 0) continue;
     const segments = relative.split("/");
-    if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) continue;
+    if (
+      relative.includes("\\") ||
+      segments.some((segment) => segment === "" || segment === "." || segment === "..")
+    )
+      continue;
     const destination = path.join(target, ...segments);
     const copied = yield* fileSystem.stat(destination).pipe(
       Effect.map((info) => Number(info.size)),
