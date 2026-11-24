@@ -41,6 +41,7 @@ import {
   type ManagedAgentHarness,
 } from "./BoxApi.ts";
 import { boxHarnessModels } from "./models.ts";
+import { makeBoxTextGeneration } from "./textGeneration.ts";
 import { makeBoxWorkerAdapter, readBoxWorkerModels } from "./workerAdapter.ts";
 import {
   harnessCredentialKind,
@@ -240,7 +241,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
           status: enabled ? "warning" : "disabled",
           auth: { status: "unknown" },
           supportsConversationRollback: false,
-          supportsTextGeneration: false,
+          supportsTextGeneration: !isWorkerBoxHarness(harness),
           supportedRuntimeModes: ["full-access"],
           showInteractionModeToggle: false,
           setup: { canAuthenticate: auth !== undefined, canInstall: false },
@@ -315,6 +316,19 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
             detail: `${label} in Upstash Box does not provide auxiliary text generation.`,
           }),
         );
+      const textGeneration = isWorkerBoxHarness(harness)
+        ? {
+            generateCommitMessage: () => unsupported("generateCommitMessage"),
+            generatePrContent: () => unsupported("generatePrContent"),
+            generateBranchName: () => unsupported("generateBranchName"),
+            generateThreadTitle: () => unsupported("generateThreadTitle"),
+            generateReviewGuide: () => unsupported("generateReviewGuide"),
+            generateTranscriptionPostProcessing: () =>
+              unsupported("generateTranscriptionPostProcessing"),
+          }
+        : yield* makeBoxTextGeneration(harness, agentApiKey, environment).pipe(
+            Effect.provide(boxApiLayer),
+          );
       return {
         instanceId,
         driverKind,
@@ -325,15 +339,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         snapshot,
         orchestrationAdapter,
         ...(auth ? { auth } : {}),
-        textGeneration: {
-          generateCommitMessage: () => unsupported("generateCommitMessage"),
-          generatePrContent: () => unsupported("generatePrContent"),
-          generateBranchName: () => unsupported("generateBranchName"),
-          generateThreadTitle: () => unsupported("generateThreadTitle"),
-          generateReviewGuide: () => unsupported("generateReviewGuide"),
-          generateTranscriptionPostProcessing: () =>
-            unsupported("generateTranscriptionPostProcessing"),
-        },
+        textGeneration,
       } satisfies ProviderInstance;
     }),
   };

@@ -1,4 +1,3 @@
-import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { isAttachmentOnlyBootstrapPrompt } from "@t3tools/shared/composerContextReferences";
 import {
@@ -163,9 +162,6 @@ const make = Effect.gen(function* () {
       );
       if (projection.thread.titleRegeneration?.requestId !== input.requestId) {
         return { status: "stale" as const };
-      }
-      if (projection.providerThreads.some((thread) => isUpstashBoxDriver(thread.driver))) {
-        return { status: "unchanged" as const };
       }
 
       const project = yield* projects.get(projection.thread.projectId);
