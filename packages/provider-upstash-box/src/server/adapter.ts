@@ -9,6 +9,7 @@ import {
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import type { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { BoxError } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -571,7 +572,9 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   );
                   const session = providerThread.nativeConversationHeadRef?.nativeId ?? "";
                   const markedPrompt = runMarker + prompt;
-                  const planMode = request.runtimePolicy.interactionMode === "plan";
+                  const planMode =
+                    request.runtimePolicy.interactionMode === "plan" ||
+                    getModelSelectionStringOptionValue(request.modelSelection, "agent") === "plan";
                   const args =
                     harness === "commandCode"
                       ? [

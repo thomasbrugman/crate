@@ -1,4 +1,5 @@
 import type { ServerProviderModel } from "@t3tools/contracts";
+import { createModelCapabilities } from "@t3tools/shared/model";
 import { ClaudeCode, OpenAICodex } from "@upstash/box";
 
 import type { BoxHarness } from "../harnesses.ts";
@@ -10,6 +11,21 @@ const DEFAULT_MODELS = {
   claudeCode: ClaudeCode.Opus_5,
   codex: OpenAICodex.GPT_5_5,
 } as const satisfies Record<BoxHarness, string>;
+
+const BOX_MODEL_CAPABILITIES = createModelCapabilities({
+  optionDescriptors: [
+    {
+      id: "agent",
+      label: "Agent",
+      type: "select",
+      options: [
+        { id: "build", label: "Build", isDefault: true },
+        { id: "plan", label: "Plan" },
+      ],
+      currentValue: "build",
+    },
+  ],
+});
 
 const words = (value: string) =>
   value
@@ -37,6 +53,6 @@ export function boxHarnessModels(harness: BoxHarness): ReadonlyArray<ServerProvi
     isCustom: false,
     isDefault: slug === DEFAULT_MODELS[harness],
     supportsTextGeneration: false,
-    capabilities: null,
+    capabilities: BOX_MODEL_CAPABILITIES,
   }));
 }
