@@ -133,6 +133,8 @@ let finalText = '';
 let usage = {};
 let sessionId = session;
 let finished = false;
+// The handoff mod ends the run at a question or plan approval; that ending is a completed turn.
+let handedOff = false;
 const announcedTools = new Set();
 const handoffTools = new Set(['todo_write', 'task_create', 'task_update', 'ask_user_question', 'exit_plan_mode']);
 const taskInputs = new Map();
@@ -202,10 +204,14 @@ function handleTool(e) {
 				.map((todo) => ({ text: todo.content, status: todoStatus[todo.status] || 'pending' })),
 		});
 	} else if (e.toolName === 'ask_user_question') {
+		handedOff = true;
 		emit('question', { tool_call_id: e.toolCallId, questions: Array.isArray(input.questions) ? input.questions : [] });
 	} else if (e.toolName === 'exit_plan_mode') {
 		const markdown = newestPlan() || (typeof input.plan === 'string' ? input.plan : '');
-		if (markdown.trim()) emit('plan', { markdown });
+		if (markdown.trim()) {
+			handedOff = true;
+			emit('plan', { markdown });
+		}
 	}
 }
 
@@ -222,7 +228,7 @@ function handleFrame(frame) {
 		if (!sawText && text) emit('text', { text });
 		usage = o.usage || usage;
 		sessionId = o.sessionId || sessionId;
-		if (o.subtype === 'error') {
+		if (o.subtype === 'error' && !handedOff) {
 			finish('error', { error: 'Command Code run failed', session_id: sessionId || '' });
 			return;
 		}
@@ -301,7 +307,7 @@ child.on('error', () => {
 child.on('close', (code) => {
 	if (buffer.trim()) handleFrame(buffer.trim());
 	if (!finished) {
-		if (code === 0) {
+		if (code === 0 || handedOff) {
 			if (!sawText && finalText) emit('text', { text: finalText });
 			finish('done', {
 				output: finalText,
@@ -317,6 +323,6 @@ child.on('close', (code) => {
 			});
 		}
 	}
-	exitAfterFlush(code === 0 ? 0 : 1);
+	exitAfterFlush(code === 0 || handedOff ? 0 : 1);
 });
 `;

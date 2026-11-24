@@ -189,7 +189,7 @@ it("starts plan mode read-only and ends the run at questions and plan approval",
 });
 
 it("forwards reasoning, todo lists, task ledgers, questions and plans", async () => {
-  const { frame, events } = await setup();
+  const { child, frame, events } = await setup();
   frame({ type: "thinking_delta", delta: "hmm" });
   const todos = [
     { content: "Plan", status: "in_progress" },
@@ -246,6 +246,12 @@ it("forwards reasoning, todo lists, task ledgers, questions and plans", async ()
     { event: "question", data: { tool_call_id: "ask", questions } },
     { event: "plan", data: { markdown: "# Plan" } },
   ]);
+  child.stdout.write(JSON.stringify({ type: "result", subtype: "error", sessionId: "s1" }) + "\n");
+  child.emit("close", 1);
+  assert.deepEqual(events().at(-1), {
+    event: "done",
+    data: { output: "", input_tokens: 0, output_tokens: 0, session_id: "s1" },
+  });
 });
 
 it("ignores malformed frames, preserves empty results and reports process errors", async () => {
