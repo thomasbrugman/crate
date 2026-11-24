@@ -165,6 +165,19 @@ it("forwards Claude reasoning and todos and ends the run at a question", async (
   assert.isUndefined(exitCode);
 });
 
+it("runs a resumed Codex plan turn read-only with the sandbox flag ahead of resume", async () => {
+  const { args } = await runManaged(
+    ["codex", "Refine it", "model", "sess-1", "token", "plan"],
+    [{ type: "turn.completed", usage: { input_tokens: 0, output_tokens: 0 } }],
+  );
+  const sandbox = args.indexOf("--sandbox");
+  assert.isAtLeast(sandbox, args.indexOf("exec"));
+  assert.isBelow(sandbox, args.indexOf("resume"));
+  assert.equal(args[sandbox + 1], "read-only");
+  assert.equal(args[args.indexOf("--") + 1], "sess-1");
+  assert.notInclude(args, "--dangerously-bypass-approvals-and-sandbox");
+});
+
 it("turns a Codex plan-mode reply into a proposed plan and forwards its todo list", async () => {
   const { args, events } = await runManaged(
     ["codex", "Add hello", "model", "", "token", "plan"],

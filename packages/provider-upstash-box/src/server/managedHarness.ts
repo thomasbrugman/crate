@@ -37,8 +37,9 @@ const args = harness === 'claudeCode'
   ? ['--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages',
      '--permission-mode', planMode ? 'plan' : 'bypassPermissions', ...claudeSettings, ...mcpArgs, '--model', model,
      ...(session ? ['--resume', session] : []), '--', prompt]
-  : [...mcpArgs, 'exec', ...(session ? ['resume'] : []), '--json',
-     ...(planMode ? ['--sandbox', 'read-only'] : ['--dangerously-bypass-approvals-and-sandbox']),
+  : [...mcpArgs, 'exec', ...(planMode ? ['--sandbox', 'read-only'] : []),
+     ...(session ? ['resume'] : []), '--json',
+     ...(planMode ? [] : ['--dangerously-bypass-approvals-and-sandbox']),
      '--skip-git-repo-check', '--model', model,
      '--', ...(session ? [session] : []), prompt];
 const env = { ...process.env };
