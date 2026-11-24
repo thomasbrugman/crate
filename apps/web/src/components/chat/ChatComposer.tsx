@@ -994,6 +994,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isSendDisabled = sendDisabledReason !== null;
   const selectedProviderStatus = selectedProviderEntry?.snapshot ?? null;
   const boxHarness = getUpstashBoxHarness(selectedProviderStatus?.driver);
+  const boxComposerThreadId =
+    props.cloudThread && routeKind === "server" ? activeThread?.id : undefined;
   const { refresh: refreshWorkspaceSnapshotOnTyping, scanning: localWorkspaceSkillsScanning } =
     useProviderWorkspaceSnapshotRefresh({
       environmentId,
@@ -1043,12 +1045,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const boxComposerCapabilities = useEnvironmentQuery(
     environmentId &&
-      activeThread &&
+      boxComposerThreadId &&
       boxHarness &&
       (composerTrigger?.kind === "slash-command" || composerTrigger?.kind === "skill")
       ? projectEnvironment.boxComposerCapabilities({
           environmentId,
-          input: { threadId: activeThread.id, harness: boxHarness },
+          input: { threadId: boxComposerThreadId, harness: boxHarness },
         })
       : null,
   );
@@ -1188,7 +1190,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerPreviewAnnotations.length === 0 &&
     composerReviewComments.length === 0;
   const linkedEnvironments = useLinkedEnvironments(environmentId);
-  const boxComposerThreadId = props.cloudThread ? activeThread?.id : undefined;
   const {
     items: composerMenuItems,
     isLoading: isComposerMenuLoading,
