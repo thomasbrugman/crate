@@ -873,7 +873,7 @@ it.effect(
   () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const { runtime, turn, prompts, harnesses } = yield* setup(
+        const { runtime, turn, prompts, harnesses, commands } = yield* setup(
           fakeStream([
             { type: "start", runId: "native-run" },
             { type: "tool-result", output: "orphan" },
@@ -899,7 +899,9 @@ it.effect(
           ]),
         );
         const text = "Earlier context\n\nhello";
+        commands.length = 0;
         yield* runtime.resumeThread({ providerThread: turn.providerThread });
+        assert.include(commands, EXCLUDE_HARNESS_FILES_COMMAND);
         assert.deepEqual(harnesses, [commandCodeHarness, commandCodeHarness]);
         yield* runtime.startTurn({
           ...turn,

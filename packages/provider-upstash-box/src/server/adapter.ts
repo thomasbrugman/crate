@@ -26,6 +26,7 @@ import {
   BoxRuntimeError,
   isMissingBox,
   quoteShell,
+  requireCommand,
   type BoxHandle,
   type BoxStream,
 } from "./BoxApi.ts";
@@ -40,7 +41,7 @@ import {
 import { capabilities as baseCapabilities } from "./capabilities.ts";
 import { harnessCredentialKind } from "./credentials.ts";
 import { execHarness } from "./execHarness.ts";
-import { makeBoxGitSetup } from "./git.ts";
+import { EXCLUDE_HARNESS_FILES_COMMAND, makeBoxGitSetup } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 import { cancelBoxRun } from "./stop.ts";
 import { BoxTurnTranslation } from "./translation.ts";
@@ -365,6 +366,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 // Lookup by ID also returns deleted Box tombstones; status does not.
                 await existing.getStatus();
                 await configureBoxGit(existing, config.githubToken);
+                await requireCommand(existing, EXCLUDE_HARNESS_FILES_COMMAND);
                 if (config.credentials) {
                   await installConnectedHarnesses(existing, config, () => {});
                 } else if (harness === "commandCode") {
