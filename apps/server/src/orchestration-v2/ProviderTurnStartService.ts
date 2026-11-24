@@ -2190,6 +2190,7 @@ export const layer: Layer.Layer<
                       new ProviderAdapter.ProviderAdapterProtocolError({
                         driver: session.driver,
                         detail: error.message,
+                        cause: error,
                       }),
                   ),
                 ),
