@@ -3355,8 +3355,6 @@
     }
   ],
   "1b1131295f62c44c": "El proceso del proveedor ya no existe. Interrumpe o reinicia el hilo secundario para responder.",
-  "52278fd875d1a073": "Detalles del espacio de trabajo de Box",
-  "eb51025bee426871": "Los adjuntos y las vistas previas de archivos no están disponibles en los hilos en la nube. Las menciones de archivos usan la copia del servidor; solo los archivos enviados al remoto están disponibles en el Box.",
   "2cc98601912fed53": "No disponible en los hilos en la nube. Pídele al agente que use sus herramientas de Box.",
   "da66023072c473d1": [
     "No se pudo cargar la salida: ",

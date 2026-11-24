@@ -3355,8 +3355,6 @@
     }
   ],
   "1b1131295f62c44c": "Leverantörsprocessen finns inte längre. Avbryt eller starta om undertråden för att svara.",
-  "52278fd875d1a073": "Information om Box-arbetsytan",
-  "eb51025bee426871": "Bilagor och filförhandsvisningar är inte tillgängliga i molntrådar. Filomnämnanden använder serverns arbetskopia; endast pushade filer är tillgängliga i Box.",
   "2cc98601912fed53": "Inte tillgängligt i molntrådar. Be agenten att använda sina Box-verktyg.",
   "da66023072c473d1": [
     "Kunde inte läsa in utdata: ",

@@ -3356,8 +3356,6 @@
     }
   ],
   "1b1131295f62c44c": "Der Anbieterprozess ist beendet. Unterbrich den untergeordneten Thread oder starte ihn neu, um zu antworten.",
-  "52278fd875d1a073": "Details zum Box-Arbeitsbereich",
-  "eb51025bee426871": "Anhänge und Dateivorschauen sind in Cloud-Threads nicht verfügbar. Dateiverweise nutzen den Server-Checkout; nur gepushte Dateien sind in der Box verfügbar.",
   "2cc98601912fed53": "In Cloud-Threads nicht verfügbar. Bitte den Agenten, seine Box-Werkzeuge zu verwenden.",
   "da66023072c473d1": [
     "Ausgabe konnte nicht geladen werden: ",

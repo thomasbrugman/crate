@@ -190,6 +190,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         agent,
         environment,
         yield* McpProviderSessions,
+        host.resolveAttachmentPath,
       ).pipe(Effect.provide(boxApiLayer));
       const auth = host.settings.update
         ? yield* makeBoxHarnessAuth(instanceId, harness, environment, host.settings.update).pipe(
