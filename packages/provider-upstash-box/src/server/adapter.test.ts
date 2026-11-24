@@ -376,19 +376,27 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.equal(deleted, 2);
       const attachments = NodePath.join(home, ".t3stash-attachments");
-      yield* Effect.promise(() => NodeFSP.mkdir(attachments));
-      yield* Effect.promise(() =>
-        NodeFSP.writeFile(NodePath.join(attachments, "notes.txt"), "edited"),
+      const attachmentTurn = NodePath.join(attachments, "7475726e");
+      const attachment = NodePath.join(attachmentTurn, "0-notes.txt");
+      yield* Effect.promise(() => NodeFSP.mkdir(attachmentTurn, { recursive: true }));
+      yield* Effect.promise(() => NodeFSP.writeFile(attachment, "original"));
+      yield* Effect.sync(() =>
+        NodeChildProcess.execFileSync("sh", ["-c", "sha256sum ./0-notes.txt > .checksums"], {
+          cwd: attachmentTurn,
+        }),
       );
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 3);
+      yield* Effect.promise(() => NodeFSP.writeFile(attachment, "edited"));
       assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-      assert.equal(deleted, 2);
+      assert.equal(deleted, 3);
       yield* Effect.promise(() => NodeFSP.rm(attachments, { recursive: true }));
       for (const checkout of [repo, worktree]) {
         for (const file of [".env", ".commandcode/notes.md"]) {
           const path = NodePath.join(checkout, file);
           yield* Effect.promise(() => NodeFSP.writeFile(path, "fixture"));
           assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-          assert.equal(deleted, 2);
+          assert.equal(deleted, 3);
           yield* Effect.promise(() => NodeFSP.unlink(path));
         }
       }
@@ -407,13 +415,13 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
         ),
       );
       assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-      assert.equal(deleted, 2);
+      assert.equal(deleted, 3);
       yield* Effect.sync(() => git("worktree", "remove", "--force", worktree));
       yield* Effect.promise(() => NodeFSP.rm(repo, { recursive: true }));
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(home, "notes.txt"), "fixture"));
       assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-      assert.equal(deleted, 3);
+      assert.equal(deleted, 4);
     }),
   ),
 );
@@ -594,6 +602,10 @@ it.effect("stages image and file attachments in the Box before starting the harn
         { path: "/server/attachments/file-id", destination: `${destination}/1-.._notes.txt` },
       ]);
       assert.include(commands.join("\n"), `umask 077; mkdir -p -- '${destination}'`);
+      assert.include(
+        commands.join("\n"),
+        `checksum_attachments '${destination}' > '${destination}/.checksums'`,
+      );
       assert.include(prompts[0], uploaded[0]!.destination);
       assert.include(prompts[0], uploaded[1]!.destination);
       assert.match(prompts[0]!, /^t3stash-run:[a-f0-9]+\n\/review focused changes/u);

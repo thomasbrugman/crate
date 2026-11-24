@@ -71,11 +71,24 @@ interface ActiveTurn {
   interrupted: boolean;
 }
 
+const CHECKSUM_ATTACHMENTS = String.raw`
+checksum_attachments() (
+  cd -- "$1" || exit 1
+  export LC_ALL=C
+  for path in ./* ./.[!.]* ./..?*; do
+    test -e "$path" || test -L "$path" || continue
+    test "$path" != ./.checksums || continue
+    test -f "$path" && test ! -L "$path" && sha256sum -- "$path" || exit 1
+  done
+)
+`;
+
 // Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
 // untracked or ignored files, stashes, commits missing from the remote, or files beside the repository.
 // Every Box starts with the agent configuration directories below in its workspace, and
-// untracked Command Code taste files are harness state rather than work.
+// unmodified staged attachments and untracked Command Code taste files are not work.
 const SAVED_WORK_CHECK = String.raw`
+${CHECKSUM_ATTACHMENTS}
 cd /workspace/home || exit 1
 home=$(pwd -P) || exit 1
 clean_checkout() (
@@ -90,7 +103,7 @@ clean_checkout() (
 for path in ./* ./.[!.]* ./..?*; do
   test -e "$path" || test -L "$path" || continue
   case "$path" in
-    ./repo|./.t3stash-worktrees|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
+    ./repo|./.t3stash-worktrees|./.t3stash-attachments|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
     *) exit 1 ;;
   esac
 done
@@ -103,6 +116,16 @@ if test -e .t3stash-worktrees || test -L .t3stash-worktrees; then
   for path in "$home"/.t3stash-worktrees/* "$home"/.t3stash-worktrees/.[!.]* "$home"/.t3stash-worktrees/..?*; do
     test -e "$path" || test -L "$path" || continue
     test ! -L "$path" && test -f "$path/.git" && clean_checkout "$path" || exit 1
+  done
+fi
+if test -e .t3stash-attachments || test -L .t3stash-attachments; then
+  test ! -L .t3stash-attachments && test -d .t3stash-attachments || exit 1
+  for path in .t3stash-attachments/* .t3stash-attachments/.[!.]* .t3stash-attachments/..?*; do
+    test -e "$path" || test -L "$path" || continue
+    test -d "$path" && test ! -L "$path" || exit 1
+    test -s "$path/.checksums" && test -f "$path/.checksums" && test ! -L "$path/.checksums" || exit 1
+    expected=$(cat -- "$path/.checksums") && actual=$(checksum_attachments "$path") &&
+      test "$actual" = "$expected" || exit 1
   done
 fi
 `;
@@ -599,6 +622,10 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                       for (const { path, destination } of attachments) {
                         await upload([{ path, destination }]);
                       }
+                      await requireCommand(
+                        box,
+                        `${CHECKSUM_ATTACHMENTS}\nchecksum_attachments ${quoteShell(attachmentDirectory)} > ${quoteShell(`${attachmentDirectory}/.checksums`)}`,
+                      );
                     } catch (error) {
                       if (
                         isMissingBox(error) ||
