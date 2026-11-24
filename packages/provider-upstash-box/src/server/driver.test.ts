@@ -7,6 +7,52 @@ import type { BoxHarness } from "../harnesses.ts";
 import { BoxApi } from "./BoxApi.ts";
 import { readGitHubToken, readHarnessCredentials } from "./credentials.ts";
 import { probe } from "./driver.ts";
+import { readBoxWorkerModels } from "./workerAdapter.ts";
+
+it.effect("loads OpenCode models from a small Box with valid Upstash labels", () =>
+  Effect.gen(function* () {
+    const models = [{ slug: "opencode/model", name: "Model", isCustom: false, capabilities: null }];
+    let deleted = false;
+    const result = yield* readBoxWorkerModels("opencode", "box-key", "", async () => "worker").pipe(
+      Effect.provideService(BoxApi, {
+        get: async () => {
+          throw new Error("Unexpected get");
+        },
+        create: async ({ labels, size }) => {
+          assert.equal(size, "small");
+          assert.isNotEmpty(labels ?? []);
+          if (labels?.some((label) => !/^[A-Za-z0-9._:-]{1,20}$/u.test(label))) {
+            throw new BoxError("Invalid Box label", 400);
+          }
+          return {
+            id: "catalog-box",
+            agent: {
+              stream: async () => {
+                throw new Error("Unexpected agent stream");
+              },
+            },
+            exec: {
+              command: async (command) => ({
+                exitCode: 0,
+                stdout: command.endsWith(" opencode catalog") ? JSON.stringify(models) : "",
+              }),
+            },
+            files: { write: async () => {}, writeVolatile: async () => {} },
+            delete: async () => {
+              deleted = true;
+            },
+            resume: async () => {},
+            getStatus: async () => ({ status: "idle" }),
+          };
+        },
+        list: async () => [],
+        checkModelKey: async () => 200,
+      }),
+    );
+    assert.deepEqual(result, models);
+    assert.isTrue(deleted);
+  }),
+);
 
 it.effect("resolves vault-backed harness credentials alongside pasted ones", () =>
   Effect.gen(function* () {
