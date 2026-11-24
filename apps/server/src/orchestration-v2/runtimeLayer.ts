@@ -16,6 +16,7 @@ import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as ProviderInstallationGate from "../provider/ProviderInstallationGate.ts";
 import * as AgentSessionImporter from "../project/AgentSessionImporter.ts";
 import * as AgentSessionScanner from "../project/AgentSessionScanner.ts";
+import * as BoxSetupScript from "../project/BoxSetupScript.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
@@ -172,6 +173,17 @@ const layerRunExecutionServiceProvided = RunExecutionService.layer.pipe(
   ),
 );
 
+export const layerProjectSetupScriptRunner = ProjectSetupScriptRunner.layer.pipe(
+  Layer.provide(layerProjectService),
+  // Whether a thread came from a linked environment, which skips setup.
+  Layer.provide(ProjectionStore.layer),
+);
+
+const layerBoxSetupScript = BoxSetupScript.layer.pipe(
+  Layer.provide(layerProjectSetupScriptRunner),
+  Layer.provide(BoxApi.layer),
+);
+
 const layerProviderTurnStartServiceProvided = ProviderTurnStartService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -282,11 +294,6 @@ const layerThreadManagementProvided = ThreadManagementService.layerWithLegacyImp
       layerThreadWorktreeRestore,
     ),
   ),
-);
-export const layerProjectSetupScriptRunner = ProjectSetupScriptRunner.layer.pipe(
-  Layer.provide(layerProjectService),
-  // Whether a thread came from a linked environment, which skips setup.
-  Layer.provide(ProjectionStore.layer),
 );
 const layerManagedProjectFoldersProvided = ManagedProjectFolders.layer.pipe(
   Layer.provide(layerProjectService),
@@ -440,6 +447,8 @@ export const layerProduction = Layer.mergeAll(
       ),
     ),
   ),
+  // Production only: Box threads run the project's setup script in their Box terminal.
+  Layer.provide(layerBoxSetupScript),
   Layer.provideMerge(layerProjectService),
   Layer.provide(Scheduler.layer),
   Layer.provideMerge(layerEventInfrastructure),
