@@ -61,6 +61,12 @@ export function assertOpenCode2BackgroundOutput(
   const wakeStarted = indexOf(
     (event) => event.type === "run.updated" && event.payload.id === wakeRun?.id,
   );
+  console.log(
+    result.domainEvents
+      .slice(60, 85)
+      .map((event, i) => `${60 + i} ${event.type} ${JSON.stringify(event.payload).slice(0, 140)}`)
+      .join("\n"),
+  );
   assert.isAtLeast(rootWaiting, 0);
   assert.isAbove(subagentDone, rootWaiting, "run 1 ends its turn before its subagent ends");
   assert.isAbove(wakeStarted, subagentDone, "the wake follows the subagent's end");
