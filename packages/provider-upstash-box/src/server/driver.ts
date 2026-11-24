@@ -25,6 +25,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { BOX_HARNESS_DRIVER_KINDS, BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
@@ -193,6 +194,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const httpClient = yield* HttpClient.HttpClient;
+      const mirrorLock = yield* Semaphore.make(1);
       const transcriptMirrorDir = boxTranscriptMirrorDir(path, host.paths.stateDir, harness);
       const continuationIdentity = defaultProviderContinuationIdentity({ driverKind, instanceId });
       const agent = {
@@ -210,6 +212,8 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
             Effect.provideService(FileSystem.FileSystem, fileSystem),
             Effect.provideService(Path.Path, path),
             Effect.ignore,
+            // Copies append from the mirrored size, so two at once would duplicate bytes.
+            mirrorLock.withPermits(1),
           ),
       ).pipe(Effect.provide(boxApiLayer));
       const auth = host.settings.update
