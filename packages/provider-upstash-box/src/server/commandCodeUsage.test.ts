@@ -59,6 +59,7 @@ describe("commandCodeUsageLimits", () => {
   it("maps the plan's 5-hour, weekly, and monthly credit limits", () => {
     const limits = commandCodeUsageLimits({
       checkedAt: "2026-11-24T17:00:00.000Z",
+      account: "user-1",
       credits: {
         credits: { monthlyCredits: 39.07, purchasedCredits: 0, freeCredits: 0 },
         windowLimits: {
@@ -71,6 +72,7 @@ describe("commandCodeUsageLimits", () => {
       summary: { totalMonthlyCredits: 30.93 },
     });
     expect(limits.unavailable).toBeUndefined();
+    expect(limits.credentialFingerprint).toBe("commandCode:user-1");
     expect(limits.windows).toEqual([
       {
         id: "five_hour",

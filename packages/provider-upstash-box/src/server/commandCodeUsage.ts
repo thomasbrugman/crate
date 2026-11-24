@@ -130,6 +130,8 @@ function capWindow(
 /** Maps Command Code's `/alpha/billing/*` and `/alpha/usage/summary` replies to usage windows. */
 export function commandCodeUsageLimits(input: {
   readonly checkedAt: string;
+  /** The Command Code org or user the sign-in belongs to, so shared sign-ins pool once. */
+  readonly account?: string | undefined;
   readonly credits: unknown;
   readonly subscription: unknown;
   readonly summary: unknown;
@@ -156,7 +158,10 @@ export function commandCodeUsageLimits(input: {
     });
   }
   return windows.length > 0
-    ? makeUsageLimits({ checkedAt: input.checkedAt, windows })
+    ? {
+        ...makeUsageLimits({ checkedAt: input.checkedAt, windows }),
+        ...(input.account ? { credentialFingerprint: `commandCode:${input.account}` } : {}),
+      }
     : makeUnavailableUsageLimits({
         checkedAt: input.checkedAt,
         reason: "probeFailed",
@@ -196,6 +201,7 @@ const fetchCommandCodeUsage = Effect.fn("UpstashBox.fetchCommandCodeUsage")(func
       );
   const whoami = yield* get("/alpha/whoami", { limits: "1" });
   const orgId = record(record(whoami)?.["org"])?.["id"];
+  const userId = record(record(whoami)?.["user"])?.["id"];
   const org = { orgId: typeof orgId === "string" ? orgId : null };
   const [credits, subscription] = yield* Effect.all(
     [get("/alpha/billing/credits", org), get("/alpha/billing/subscriptions", org)],
@@ -206,7 +212,8 @@ const fetchCommandCodeUsage = Effect.fn("UpstashBox.fetchCommandCodeUsage")(func
     ...org,
     since: typeof since === "string" ? since : null,
   });
-  return { credits, subscription, summary };
+  const account = org.orgId ?? (typeof userId === "string" ? userId : undefined);
+  return { account, credits, subscription, summary };
 });
 
 export const readCommandCodeUsageLimits = Effect.fn("UpstashBox.readCommandCodeUsageLimits")(
