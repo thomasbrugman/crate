@@ -15,13 +15,11 @@ import {
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { cn } from "../../lib/utils";
 import { useIssuesSupported, usePullRequestsSupported } from "../../state/environments";
-import { T3Wordmark } from "../T3Wordmark";
+import { T3AppIcon } from "../T3AppIcon";
 import {
   resolveEnvironmentIdentificationPillLabel,
-  resolveSidebarStageBackdropVariant,
-  SidebarStageBackdrop,
   useEnvironmentStageLabel,
-} from "../SidebarStageBackdrop";
+} from "../sidebarEnvironmentIdentification";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -42,6 +40,7 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
+import { APP_BASE_NAME } from "~/branding";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -51,10 +50,6 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const gt = useGT();
-  const backdropVariant = resolveSidebarStageBackdropVariant(
-    stageLabel,
-    environmentIdentificationMode,
-  );
   const pillLabel =
     environmentIdentificationMode === "pill"
       ? resolveEnvironmentIdentificationPillLabel(stageLabel)
@@ -67,21 +62,20 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         isElectron && "drag-region",
       )}
     >
-      {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
       <div className="relative top-[calc(var(--workspace-controls-top)-env(safe-area-inset-top))] z-10 ml-[calc(var(--workspace-controls-left)+1px-env(safe-area-inset-left))] flex shrink-0 items-center md:hidden">
         <SidebarTrigger
-          variant={backdropVariant ? "media-navigation" : "ghost"}
+          variant="ghost"
           className="relative top-auto translate-y-0"
           aria-label={gt("Toggle main sidebar")}
         />
       </div>
       <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5">
         <div className="flex shrink-0 items-center gap-1">
-          <SidebarBrand onBackdrop={backdropVariant !== null} />
+          <SidebarBrand />
           {isElectron ? (
             <div className="hidden items-center md:flex">
-              <HistoryNavigationButton direction="back" onBackdrop={backdropVariant !== null} />
-              <HistoryNavigationButton direction="forward" onBackdrop={backdropVariant !== null} />
+              <HistoryNavigationButton direction="back" />
+              <HistoryNavigationButton direction="forward" />
             </div>
           ) : null}
         </div>
@@ -117,20 +111,14 @@ export function SidebarBrandWidthProbe({
       ref={observeWidth}
     >
       <div className="ml-[var(--workspace-titlebar-content-left)] flex gap-1">
-        <SidebarBrandMark onBackdrop={false} />
+        <SidebarBrandMark />
         {isElectron ? <div className="w-[calc(2*var(--workspace-titlebar-control-size))]" /> : null}
       </div>
     </div>
   );
 }
 
-function HistoryNavigationButton({
-  direction,
-  onBackdrop,
-}: {
-  direction: HistoryDirection;
-  onBackdrop: boolean;
-}) {
+function HistoryNavigationButton({ direction }: { direction: HistoryDirection }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const enabled = useCanNavigateHistory(direction);
   const gt = useGT();
@@ -146,14 +134,11 @@ function HistoryNavigationButton({
         render={
           <Button
             aria-label={label}
-            className={cn(
-              "[-webkit-app-region:no-drag]",
-              onBackdrop && "relative top-auto translate-y-0",
-            )}
+            className="[-webkit-app-region:no-drag]"
             disabled={!enabled}
             onClick={() => navigateHistory(direction)}
             size="icon-sm"
-            variant={onBackdrop ? "media-navigation" : "ghost"}
+            variant="ghost"
           />
         }
       >
@@ -167,34 +152,24 @@ function HistoryNavigationButton({
   );
 }
 
-function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
+function SidebarBrand() {
   const gt = useGT();
   return (
     <Link
-      aria-label={gt("t3stash home")}
-      className={cn(
-        "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 focus-visible:ring-inset md:flex",
-        onBackdrop ? "text-white" : "text-foreground",
-      )}
+      aria-label={gt("Crate home")}
+      className="relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md text-foreground outline-hidden ring-ring focus-visible:ring-2 focus-visible:ring-inset md:flex"
       to="/"
     >
-      <SidebarBrandMark onBackdrop={onBackdrop} />
+      <SidebarBrandMark />
     </Link>
   );
 }
 
-function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
+function SidebarBrandMark() {
   return (
-    <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-      <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
-      <span
-        className={cn(
-          "truncate [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:py-1",
-          onBackdrop ? "text-white/70" : "text-muted-foreground",
-        )}
-      >
-        {"stash"}
-      </span>
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-medium tracking-tight">
+      <T3AppIcon className="size-4 shrink-0" />
+      <span className="truncate">{APP_BASE_NAME}</span>
     </span>
   );
 }

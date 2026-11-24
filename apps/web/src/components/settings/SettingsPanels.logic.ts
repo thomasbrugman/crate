@@ -176,7 +176,7 @@ export function getChangedBrowserSettingLabels(
       ? [resolve(msg("Floating preview"))]
       : []),
     ...(settings.pullRequestLinksOpenInApp !== DEFAULT_UNIFIED_SETTINGS.pullRequestLinksOpenInApp
-      ? [resolve(msg("Open pull requests in t3stash"))]
+      ? [resolve(msg("Open pull requests in Crate"))]
       : []),
   ];
 }

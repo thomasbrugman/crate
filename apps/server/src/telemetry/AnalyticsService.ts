@@ -65,7 +65,7 @@ function retryDelayMs(failures: number, random: number): number {
 }
 
 const TelemetryEnvConfig = Config.all({
-  // No default project: t3stash must never report to T3 Code's upstream PostHog.
+  // No default project: Crate must never report to T3 Code's upstream PostHog.
   posthogKey: Config.String("T3CODE_POSTHOG_KEY").pipe(Config.option),
   posthogHost: Config.String("T3CODE_POSTHOG_HOST").pipe(Config.option),
   enabled: Config.Boolean("T3CODE_TELEMETRY_ENABLED").pipe(Config.withDefault(true)),

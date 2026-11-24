@@ -134,7 +134,7 @@ repeating the call's outcome and duration, so event counts are not call counts.
 
 ## Delivery
 
-t3stash has no default analytics destination: the server sends nothing unless
+Crate has no default analytics destination: the server sends nothing unless
 `T3CODE_POSTHOG_KEY` and `T3CODE_POSTHOG_HOST` name a PostHog project, and it must
 never fall back to T3 Code's upstream project or `ingest.t3.codes`. When configured,
 the server sends batches to `<host>/batch/`. A send can fail after the endpoint has

@@ -1,5 +1,5 @@
-export const MAC_APP_NAME = "t3stash";
-export const MAC_APP_ID = "com.thomasbrugman.t3stash";
+export const MAC_APP_NAME = "Crate";
+export const MAC_APP_ID = "com.thomasbrugman.crate";
 
 export const isPackagedMacApp = (input: {
   readonly platform: NodeJS.Platform;

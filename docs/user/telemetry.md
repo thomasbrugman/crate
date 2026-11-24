@@ -1,6 +1,6 @@
 # Product usage data
 
-t3stash does not send product usage events anywhere by default. The server's analytics are off
+Crate does not send product usage events anywhere by default. The server's analytics are off
 unless whoever runs it points them at their own PostHog project with `T3CODE_POSTHOG_KEY` and
 `T3CODE_POSTHOG_HOST`. Without both, no event leaves the server, and nothing is ever sent to T3
 Code's PostHog project or its `ingest.t3.codes` endpoint.

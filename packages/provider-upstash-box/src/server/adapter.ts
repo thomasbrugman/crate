@@ -104,7 +104,7 @@ clean_checkout() (
 for path in ./* ./.[!.]* ./..?*; do
   test -e "$path" || test -L "$path" || continue
   case "$path" in
-    ./repo|./.t3stash-worktrees|./.t3stash-attachments|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
+    ./repo|./.crate-worktrees|./.crate-attachments|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
     *) exit 1 ;;
   esac
 done
@@ -114,16 +114,16 @@ if test -e repo || test -L repo; then
   checkpoints=$(git -C repo for-each-ref --count=1 refs/t3/orchestration-v2/checkpoints/) &&
     test -z "$checkpoints" || exit 1
 fi
-if test -e .t3stash-worktrees || test -L .t3stash-worktrees; then
-  test ! -L .t3stash-worktrees && test -d .t3stash-worktrees || exit 1
-  for path in "$home"/.t3stash-worktrees/* "$home"/.t3stash-worktrees/.[!.]* "$home"/.t3stash-worktrees/..?*; do
+if test -e .crate-worktrees || test -L .crate-worktrees; then
+  test ! -L .crate-worktrees && test -d .crate-worktrees || exit 1
+  for path in "$home"/.crate-worktrees/* "$home"/.crate-worktrees/.[!.]* "$home"/.crate-worktrees/..?*; do
     test -e "$path" || test -L "$path" || continue
     test ! -L "$path" && test -f "$path/.git" && clean_checkout "$path" || exit 1
   done
 fi
-if test -e .t3stash-attachments || test -L .t3stash-attachments; then
-  test ! -L .t3stash-attachments && test -d .t3stash-attachments || exit 1
-  for path in .t3stash-attachments/* .t3stash-attachments/.[!.]* .t3stash-attachments/..?*; do
+if test -e .crate-attachments || test -L .crate-attachments; then
+  test ! -L .crate-attachments && test -d .crate-attachments || exit 1
+  for path in .crate-attachments/* .crate-attachments/.[!.]* .crate-attachments/..?*; do
     test -e "$path" || test -L "$path" || continue
     test -d "$path" && test ! -L "$path" || exit 1
     test -s "$path/.checksums" && test -f "$path/.checksums" && test ! -L "$path/.checksums" || exit 1
@@ -440,7 +440,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   await installConnectedHarnesses(existing, config, () => {});
                 } else if (harness === "commandCode") {
                   await existing.files.write({
-                    path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
+                    path: "/home/boxuser/.local/bin/crate-harness.mjs",
                     content: commandCodeHarness,
                   });
                 }
@@ -595,7 +595,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
           const prompt = (
             nativeSlash ? [messageText, ...messageContext] : [...messageContext, messageText]
           ).join("\n\n");
-          const runMarker = `t3stash-run:${Buffer.from(request.attemptId).toString("hex")}\n`;
+          const runMarker = `crate-run:${Buffer.from(request.attemptId).toString("hex")}\n`;
           const streamPrompt = harness === "commandCode" ? runMarker + prompt : prompt;
           const translation = new BoxTurnTranslation(
             { ...request, providerThread },

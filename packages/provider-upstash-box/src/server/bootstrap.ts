@@ -52,7 +52,7 @@ export interface BoxRuntimeConfig {
   readonly snapshotId?: string;
 }
 
-const BOOTSTRAPPED_MARKER = "/home/boxuser/.t3stash-bootstrapped";
+const BOOTSTRAPPED_MARKER = "/home/boxuser/.crate-bootstrapped";
 const pendingSetups = new Map<string, Promise<BoxHandle>>();
 
 function shareSetup(key: string, setup: () => Promise<BoxHandle>): Promise<BoxHandle> {
@@ -109,7 +109,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
                   size: config.size,
                   runtime: "node",
                   keepAlive: false,
-                  labels: ["t3stash"],
+                  labels: ["crate"],
                   networkPolicy: { mode: "allow-all" },
                 }
               : boxConfig({ ...config, name, ...(repositoryUrl ? { repositoryUrl } : {}) });
@@ -148,7 +148,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
             }
             const installHarness = () =>
               box.files.write({
-                path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
+                path: "/home/boxuser/.local/bin/crate-harness.mjs",
                 content: commandCodeHarness,
               });
             onProgress("check");
@@ -157,7 +157,7 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
               `test -f ${BOOTSTRAPPED_MARKER}`,
               ...(commandCode
                 ? [
-                    "test -f /home/boxuser/.local/bin/t3stash-harness.mjs",
+                    "test -f /home/boxuser/.local/bin/crate-harness.mjs",
                     "test -x /home/boxuser/.local/bin/command-code",
                     "test -f /home/boxuser/.commandcode/auth.json",
                     `test -L ${BOX_HOME}/.commandcode/auth.json`,
@@ -211,8 +211,8 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
   });
 });
 
-export const BOX_HARNESS_PATH = `${BOX_HOME}/.local/bin/t3stash-harness.mjs`;
-export const BOX_MANAGED_HARNESS_PATH = `${BOX_HOME}/.local/bin/t3stash-managed.mjs`;
+export const BOX_HARNESS_PATH = `${BOX_HOME}/.local/bin/crate-harness.mjs`;
+export const BOX_MANAGED_HARNESS_PATH = `${BOX_HOME}/.local/bin/crate-managed.mjs`;
 export const cliPackages = {
   commandCode: { bin: "command-code", package: "command-code@1.91.1" },
   claudeCode: { bin: "claude", package: "@anthropic-ai/claude-code@2.1.80" },

@@ -33,6 +33,6 @@ export function hostFreezeNotice(
               cpuCount,
             }),
           )
-        : resolve(msg("t3stash on {host} was too busy to answer.", { host: hostLabel })),
+        : resolve(msg("Crate on {host} was too busy to answer.", { host: hostLabel })),
   };
 }

@@ -10,7 +10,7 @@ import * as Effect from "effect/Effect";
 import type { BoxHarness } from "../harnesses.ts";
 
 export type BoxHarnessCredentials = Readonly<Partial<Record<BoxHarness, string>>>;
-export const BOX_CREDENTIALS_DIR = "/dev/shm/t3stash-auth";
+export const BOX_CREDENTIALS_DIR = "/dev/shm/crate-auth";
 export const BOX_COMMAND_CODE_HOME = `${BOX_CREDENTIALS_DIR}/command-home`;
 export const BOX_HARNESS_AUTH_FIELDS = {
   commandCode: "commandCodeAuth",

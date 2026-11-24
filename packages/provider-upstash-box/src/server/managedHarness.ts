@@ -18,7 +18,7 @@ const planMode = flags.includes('plan');
 const readOnly = flags.includes('investigate');
 const codexPlanInstructions = 'You are in plan mode. Do not edit files or run commands that change state. ' +
   'Explore as needed, then reply with your complete plan inside <proposed_plan></proposed_plan> tags.';
-const userPrompt = markedPrompt.replace(/^t3stash-run:[0-9a-f]+\n/, '');
+const userPrompt = markedPrompt.replace(/^crate-run:[0-9a-f]+\n/, '');
 const prompt = planMode && harness === 'codex' ? codexPlanInstructions + '\n\n' + userPrompt : userPrompt;
 const emit = (type, data) => process.stdout.write('event: ' + type + '\ndata: ' + JSON.stringify(data) + '\n\n');
 const bridge = flags.includes('relay') ? await startBoxMcp(emit) : null;

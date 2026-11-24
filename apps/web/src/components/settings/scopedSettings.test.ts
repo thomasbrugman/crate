@@ -283,7 +283,7 @@ describe("scoped settings writes", () => {
     const unsupported = [
       {
         label: server.label,
-        message: "This environment does not support this setting. Update t3stash on it.",
+        message: "This environment does not support this setting. Update Crate on it.",
       },
     ];
 

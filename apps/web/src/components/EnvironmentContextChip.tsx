@@ -36,7 +36,7 @@ export function EnvironmentContextChip(props: {
         }
       />
       <TooltipPopup side="top">
-        {environment ? gt("t3stash environment") : gt("Machine not in this app")}
+        {environment ? gt("Crate environment") : gt("Machine not in this app")}
       </TooltipPopup>
     </Tooltip>
   );

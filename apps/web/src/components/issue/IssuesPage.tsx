@@ -506,7 +506,7 @@ export function IssuesPage() {
   const listBody: ReactNode = !issuesSupported ? (
     <PullRequestsUnavailableState
       title={gt("Issues unavailable")}
-      error={gt("Update this environment's t3stash server to browse issues.")}
+      error={gt("Update this environment's Crate server to browse issues.")}
     />
   ) : noneAnswered && list.isPending ? (
     <PullRequestListGhost />

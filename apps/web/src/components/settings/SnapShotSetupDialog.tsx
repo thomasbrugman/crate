@@ -31,7 +31,7 @@ const GNOME_ACCESS_COPY = {
   "not-installed": {
     title: msg("Install the extension"),
     description: msg(
-      "The T3 Code GNOME extension lets you capture other windows and bring them into your draft. Sign out once after installing.",
+      "The Crate GNOME extension lets you capture other windows and bring them into your draft. Sign out once after installing.",
     ),
   },
   "restart-required": {
@@ -48,7 +48,7 @@ const GNOME_ACCESS_COPY = {
   },
   disabled: {
     title: msg("Enable the extension"),
-    description: msg("Enable T3 Code SnapShots to start capturing windows."),
+    description: msg("Enable Crate SnapShots to start capturing windows."),
   },
   enabled: {
     title: msg("Capture is ready"),
@@ -60,7 +60,7 @@ const GNOME_ACCESS_COPY = {
   },
   error: {
     title: msg("Couldn't set up the extension"),
-    description: msg("Check T3 Code SnapShots in GNOME Extensions, then try again."),
+    description: msg("Check Crate SnapShots in GNOME Extensions, then try again."),
   },
 };
 
@@ -178,7 +178,7 @@ export function SnapShotSetupDialog({
                       ? gt("Update the capture helper")
                       : gt("Allow snapshots"),
                   description: gt(
-                    "t3stash's capture helper lets you capture other apps and return to your draft. It's included with t3stash.",
+                    "Crate's capture helper lets you capture other apps and return to your draft. It's included with Crate.",
                   ),
                 }
           : backend === "niri"
@@ -370,7 +370,7 @@ export function SnapShotSetupDialog({
                   ))}
                   {step === "access" && (backend === "gnome" || helperBackend) ? (
                     <p>
-                      <T>Included with t3stash. No download needed.</T>
+                      <T>Included with Crate. No download needed.</T>
                     </p>
                   ) : null}
                   {step === "access" && backend === "gnome" && extension?.status === "enabled" ? (

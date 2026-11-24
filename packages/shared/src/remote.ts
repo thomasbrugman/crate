@@ -6,9 +6,9 @@ const PAIRING_TOKEN_PARAM = "token";
 const HOSTED_PAIRING_HOST_PARAM = "host";
 const HOSTED_PAIRING_LABEL_PARAM = "label";
 const PAIRING_APP_LINK_PARAM = "pairingUrl";
-export const T3STASH_APP_SCHEME = "t3stash";
+export const CRATE_APP_SCHEME = "crate";
 export const isAppLinkProtocol = (protocol: string): boolean =>
-  protocol === `${T3STASH_APP_SCHEME}:` || /^t3code(?:-[a-z]+)?:$/.test(protocol);
+  protocol === `${CRATE_APP_SCHEME}:` || /^t3code(?:-[a-z]+)?:$/.test(protocol);
 const SUPPORTED_REMOTE_BACKEND_PROTOCOLS = new Set(["http:", "https:", "ws:", "wss:"]);
 
 export const readHashParams = (url: URL): URLSearchParams =>

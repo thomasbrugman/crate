@@ -54,7 +54,7 @@ function makeWorkspace() {
       ["-C", local, "rev-parse", "--absolute-git-dir"],
       { encoding: "utf8" },
     ).trim();
-    return NodePath.join(gitDir, "t3stash-setup-script");
+    return NodePath.join(gitDir, "crate-setup-script");
   };
   return { run, markerDir, remove: () => NodeFS.rmSync(root, { recursive: true, force: true }) };
 }

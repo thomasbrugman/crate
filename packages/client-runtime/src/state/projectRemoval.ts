@@ -71,15 +71,11 @@ export function planProjectRemoval<
       ? [
           resolve(
             msg(
-              "Those threads and any archived threads are deleted from t3stash. Provider sessions are kept.",
+              "Those threads and any archived threads are deleted from Crate. Provider sessions are kept.",
             ),
           ),
         ]
-      : [
-          resolve(
-            msg("Any archived threads are deleted from t3stash. Provider sessions are kept."),
-          ),
-        ]),
+      : [resolve(msg("Any archived threads are deleted from Crate. Provider sessions are kept."))]),
     isWholeGroup && !hasOtherMembers
       ? resolve(msg("This removes only the project entries, not the files on disk."))
       : resolve(msg("Other entries in this grouped project are unaffected.")),

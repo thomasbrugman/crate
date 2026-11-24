@@ -18,7 +18,7 @@ import {
 import { fromYaml } from "@t3tools/shared/schemaYaml";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
-import { T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
+import { CRATE_APP_SCHEME } from "@t3tools/shared/remote";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import rootPackageJson from "../package.json" with { type: "json" };
 import desktopPackageJson from "../apps/desktop/package.json" with { type: "json" };
@@ -2769,8 +2769,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    ? "Crate (Nightly)"
+    : (desktopPackageJson.productName ?? "Crate");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2803,9 +2803,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     appId: platform === "mac" ? MAC_APP_ID : DESKTOP_APP_ID,
     productName: platform === "mac" ? MAC_APP_NAME : resolveDesktopProductName(version),
     artifactName:
-      platform === "mac"
-        ? "t3stash-${version}-${arch}.${ext}"
-        : "T3-Code-${version}-${arch}.${ext}",
+      platform === "mac" ? "crate-${version}-${arch}.${ext}" : "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2865,19 +2863,18 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         // macOS 26 offers Messages/Mail codes in every text field unless opted out.
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
         NSLocalNetworkUsageDescription:
-          "T3 Code connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
-        NSCalendarsUsageDescription:
-          "Commands you run in T3 Code may need access to your calendars.",
+          "Crate connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
+        NSCalendarsUsageDescription: "Commands you run in Crate may need access to your calendars.",
         NSCalendarsFullAccessUsageDescription:
-          "Commands you run in T3 Code may need to read and write your calendar events.",
+          "Commands you run in Crate may need to read and write your calendar events.",
         NSCalendarsWriteOnlyAccessUsageDescription:
-          "Commands you run in T3 Code may need to add events to your calendars.",
+          "Commands you run in Crate may need to add events to your calendars.",
         NSScreenCaptureUsageDescription:
-          "T3 Code captures the active window when you use the window capture shortcut.",
+          "Crate captures the active window when you use the window capture shortcut.",
         NSCameraUsageDescription:
-          "T3 Code lets commands run by terminals and coding agents use the camera.",
+          "Crate lets commands run by terminals and coding agents use the camera.",
         NSMicrophoneUsageDescription:
-          "T3 Code lets commands run by terminals and coding agents use the microphone.",
+          "Crate lets commands run by terminals and coding agents use the microphone.",
         CFBundleDocumentTypes: [
           {
             CFBundleTypeName: "Web page",
@@ -2890,7 +2887,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: MAC_APP_NAME,
-          schemes: [T3STASH_APP_SCHEME],
+          schemes: [CRATE_APP_SCHEME],
         },
         {
           name: "Web site URL",
@@ -2942,7 +2939,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       maintainer: "T3 Tools <hello@t3.codes>",
       protocols: [
         {
-          name: "T3 Code",
+          name: "Crate",
           schemes: ["t3code", "t3code-dev"],
         },
       ],
@@ -3942,7 +3939,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     private: true,
     packageManager: rootPackageJson.packageManager,
     description:
-      "T3 Code is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.",
+      "Crate is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.",
     license: "MIT",
     homepage: "https://t3.codes",
     author: "T3 Tools",
@@ -4270,7 +4267,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for T3 Code."),
+  Command.withDescription("Build a desktop artifact for Crate."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

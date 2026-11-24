@@ -20,7 +20,7 @@ const IMAGE_SET_CONTENTS =
       info: { author: "expo", version: 1 },
       properties: {
         "preserves-vector-representation": true,
-        "template-rendering-intent": "template",
+        "template-rendering-intent": "original",
       },
     },
     null,

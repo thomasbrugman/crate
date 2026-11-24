@@ -52,7 +52,7 @@ function summarize(
           ? {
               title: resolve(msg("Open this thread")),
               description: resolve(
-                msg("It opens in t3stash if you're connected to the machine it runs on."),
+                msg("It opens in Crate if you're connected to the machine it runs on."),
               ),
               prompt: null,
               details: [],
@@ -175,7 +175,7 @@ function HostedPromptLinkLanding({
           </AlertTitle>
           <AlertDescription>
             {gt(
-              "{count, plural, one {t3stash removed {count} hidden character. Read the prompt before you send it.} other {t3stash removed {count} hidden characters. Read the prompt before you send it.}}",
+              "{count, plural, one {Crate removed {count} hidden character. Read the prompt before you send it.} other {Crate removed {count} hidden characters. Read the prompt before you send it.}}",
               { count: prompt.hiddenCharacters },
             )}
           </AlertDescription>
@@ -199,7 +199,7 @@ function HostedPromptLinkLanding({
           </Button>
         ) : null}
         <Button variant="ghost" render={<a href={handoff.macInstallUrl ?? DESKTOP_DOWNLOAD_URL} />}>
-          {handoff.macInstallUrl ? gt("Get {app}", { app: "t3stash" }) : <T>Get T3 Code</T>}
+          {handoff.macInstallUrl ? gt("Get {app}", { app: "Crate" }) : <T>Get Crate</T>}
         </Button>
       </div>
       <label className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">

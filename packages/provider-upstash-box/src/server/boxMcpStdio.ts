@@ -33,7 +33,7 @@ if (process.argv[2] === 'mcp') {
 
 async function startBoxMcp(emit) {
   // Linux abstract sockets leave no filesystem state after the session exits.
-  const address = 't3stash-' + mcpRandomId();
+  const address = 'crate-' + mcpRandomId();
   const sockets = new Map();
   let next = 0;
   const server = mcpListen(socket => {

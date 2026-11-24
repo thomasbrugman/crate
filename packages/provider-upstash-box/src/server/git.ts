@@ -23,7 +23,7 @@ export const EXCLUDE_HARNESS_FILES_COMMAND = [
   `}`,
 ].join(" ");
 
-const gitDir = "/dev/shm/t3stash-git";
+const gitDir = "/dev/shm/crate-git";
 const gitConfig = `${gitDir}/config`;
 const gitCredential = `${gitDir}/credential`;
 const gitStamp = `${gitDir}/stamp`;

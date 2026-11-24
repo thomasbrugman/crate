@@ -113,7 +113,7 @@ const make = Effect.gen(function* () {
             try: () => api.get(target.nativeId, target.apiKey),
             catch: unavailable,
           });
-          const backup = `/dev/shm/t3stash-snapshot-${Buffer.from(input.projectId).toString("hex")}`;
+          const backup = `/dev/shm/crate-snapshot-${Buffer.from(input.projectId).toString("hex")}`;
           const command = (script: string) =>
             Effect.tryPromise({
               try: () => BoxApi.requireCommand(box, script),

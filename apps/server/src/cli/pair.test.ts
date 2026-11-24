@@ -309,7 +309,7 @@ describe("t3 pair", () => {
         assert.include(output, `App link: ${buildPairingAppLink(`${origin}/pair#token=${token}`)}`);
         assert.include(
           output,
-          `macOS app link: ${buildPairingAppLink(`${origin}/pair#token=${token}`, "t3stash")}`,
+          `macOS app link: ${buildPairingAppLink(`${origin}/pair#token=${token}`, "crate")}`,
         );
 
         const listed = yield* captureStdout(

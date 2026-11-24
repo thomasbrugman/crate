@@ -9,7 +9,7 @@ import { resolveWorktreeT3Home } from "@t3tools/shared/devHome";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { formatHostForUrl, isWildcardHost } from "@t3tools/shared/hostClassification";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
-import { buildPairingAppLink, T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
+import { buildPairingAppLink, CRATE_APP_SCHEME } from "@t3tools/shared/remote";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import {
   buildTailscaleHttpsBaseUrl,
@@ -226,7 +226,7 @@ const formatPairOutput = (input: {
     "",
     `Pairing URL: ${input.pairingUrl}`,
     `App link: ${buildPairingAppLink(input.pairingUrl)}`,
-    `macOS app link: ${buildPairingAppLink(input.pairingUrl, T3STASH_APP_SCHEME)}`,
+    `macOS app link: ${buildPairingAppLink(input.pairingUrl, CRATE_APP_SCHEME)}`,
     `Token: ${input.token}`,
     `Expires: ${DateTime.formatIso(input.expiresAt)}`,
     ...input.notes.flatMap((note) => ["", `Note: ${note}`]),
