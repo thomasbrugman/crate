@@ -70,3 +70,19 @@ export const mirrorBoxTranscripts = Effect.fn("UpstashBox.mirrorBoxTranscripts")
     }
   }
 });
+
+/**
+ * Copies every harness's transcripts before a Box goes away. Delegated threads of other
+ * harnesses can share the Box, and legacy threads do not name their harness.
+ */
+export const mirrorEveryBoxTranscript = Effect.fn("UpstashBox.mirrorEveryBoxTranscript")(function* (
+  box: BoxHandle,
+  stateDir: string,
+) {
+  const path = yield* Path.Path;
+  for (const harness of Object.keys(BOX_TRANSCRIPT_ROOTS) as BoxHarness[]) {
+    yield* mirrorBoxTranscripts(box, harness, boxTranscriptMirrorDir(path, stateDir, harness)).pipe(
+      Effect.ignore,
+    );
+  }
+});

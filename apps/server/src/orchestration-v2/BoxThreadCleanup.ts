@@ -5,12 +5,7 @@ import {
   ProviderThreadId,
   type OrchestrationV2ProviderThread,
 } from "@t3tools/contracts";
-import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "@t3tools/provider-upstash-box/harnesses";
-import {
-  BoxApi,
-  boxTranscriptMirrorDir,
-  mirrorBoxTranscripts,
-} from "@t3tools/provider-upstash-box/server";
+import { BoxApi, mirrorEveryBoxTranscript } from "@t3tools/provider-upstash-box/server";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -70,22 +65,11 @@ const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   // Usage history reads host copies of the transcripts, so take the last copy before deleting.
-  const mirrorTranscripts = (box: BoxApi.BoxHandle, driver: string) => {
-    const harness = (Object.keys(BOX_HARNESS_DRIVER_KINDS) as BoxHarness[]).find(
-      (candidate) => BOX_HARNESS_DRIVER_KINDS[candidate] === driver,
+  const mirrorTranscripts = (box: BoxApi.BoxHandle) =>
+    mirrorEveryBoxTranscript(box, config.stateDir).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
     );
-    return harness === undefined
-      ? Effect.void
-      : mirrorBoxTranscripts(
-          box,
-          harness,
-          boxTranscriptMirrorDir(path, config.stateDir, harness),
-        ).pipe(
-          Effect.provideService(FileSystem.FileSystem, fileSystem),
-          Effect.provideService(Path.Path, path),
-          Effect.ignore,
-        );
-  };
   const readSecret = (value: SettingsSecretValue, threadId: ThreadId) =>
     isSecretReference(value)
       ? secrets
@@ -165,7 +149,7 @@ const make = Effect.gen(function* () {
         catch: deleteFailed,
       });
       if (box === undefined) return;
-      yield* mirrorTranscripts(box, thread.driver);
+      yield* mirrorTranscripts(box);
       yield* Effect.tryPromise({
         try: async () => {
           try {

@@ -33,7 +33,11 @@ import { BoxCommandCodeSettings, BoxManagedAgentSettings } from "../settings.ts"
 import { makeUpstashBoxAdapter, type BoxEnvironmentConfig } from "./adapter.ts";
 import { makeBoxHarnessAuth } from "./auth.ts";
 import { readCommandCodeUsageLimits } from "./commandCodeUsage.ts";
-import { boxTranscriptMirrorDir, mirrorBoxTranscripts } from "./transcriptMirror.ts";
+import {
+  boxTranscriptMirrorDir,
+  mirrorBoxTranscripts,
+  mirrorEveryBoxTranscript,
+} from "./transcriptMirror.ts";
 import {
   BoxApi,
   BoxRuntimeError,
@@ -207,8 +211,11 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         agent,
         environment,
         yield* McpProviderSessions,
-        (box) =>
-          mirrorBoxTranscripts(box, harness, transcriptMirrorDir).pipe(
+        (box, options) =>
+          (options?.everyHarness
+            ? mirrorEveryBoxTranscript(box, host.paths.stateDir)
+            : mirrorBoxTranscripts(box, harness, transcriptMirrorDir)
+          ).pipe(
             Effect.provideService(FileSystem.FileSystem, fileSystem),
             Effect.provideService(Path.Path, path),
             Effect.ignore,

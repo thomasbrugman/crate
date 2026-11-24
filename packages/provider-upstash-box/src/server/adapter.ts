@@ -134,7 +134,10 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   environment: Effect.Effect<BoxEnvironmentConfig>,
   mcpSessions?: McpProviderSessions["Service"],
   /** Copies the Box's transcripts to the host for usage history; never fails. */
-  mirrorTranscripts: (box: BoxHandle) => Effect.Effect<void> = () => Effect.void,
+  mirrorTranscripts: (
+    box: BoxHandle,
+    options?: { readonly everyHarness?: boolean },
+  ) => Effect.Effect<void> = () => Effect.void,
 ) {
   const { driver, harness } = agent;
   const capabilities = {
@@ -198,7 +201,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
         });
         if (box === "unsaved") return false;
         if (box === "missing") return true;
-        yield* mirrorTranscripts(box);
+        yield* mirrorTranscripts(box, { everyHarness: true });
         yield* Effect.tryPromise({
           try: async () => {
             try {
