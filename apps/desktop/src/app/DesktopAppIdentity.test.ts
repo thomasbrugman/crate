@@ -21,9 +21,9 @@ const defaultEnvironmentInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "1.2.3",
-  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Crate.app/Contents/Resources/app.asar",
   isPackaged: true,
-  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/Crate.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -40,7 +40,7 @@ interface ElectronAppCalls {
 const layerElectronApp = (calls: ElectronAppCalls) =>
   Layer.succeed(ElectronApp.ElectronApp, {
     metadata: Effect.die("unexpected metadata read"),
-    name: Effect.succeed("T3 Code"),
+    name: Effect.succeed("Crate"),
     systemLocale: Effect.succeed("en-US"),
     preferredSystemLanguages: Effect.succeed(["en-US"]),
     whenReady: Effect.void,
@@ -182,26 +182,26 @@ describe("DesktopAppIdentity", () => {
   it.effect.each([
     {
       stage: "Beta",
-      runtimeName: "T3 Code Beta",
-      displayName: "T3 Code (Beta)",
+      runtimeName: "Crate Beta",
+      displayName: "Crate (Beta)",
       environment: { isPackaged: false },
     },
     {
       stage: "Nightly",
-      runtimeName: "T3 Code Nightly",
-      displayName: "T3 Code (Nightly)",
+      runtimeName: "Crate Nightly",
+      displayName: "Crate (Nightly)",
       environment: { isPackaged: false, appVersion: "0.0.43-nightly.20260929.2428" },
     },
     {
       stage: "Dev",
-      runtimeName: "T3 Code Dev",
-      displayName: "T3 Code (Dev)",
+      runtimeName: "Crate Dev",
+      displayName: "Crate (Dev)",
       environment: {
         isPackaged: false,
         env: { VITE_DEV_SERVER_URL: "http://localhost:5173" },
       },
     },
-    { stage: "packaged macOS", runtimeName: "t3stash", displayName: "t3stash", environment: {} },
+    { stage: "packaged macOS", runtimeName: "Crate", displayName: "Crate", environment: {} },
   ])(
     "uses a valid native User-Agent product name for $stage",
     ({ runtimeName, displayName, environment }) => {

@@ -7,7 +7,7 @@ import { createInterface } from 'node:readline';
 ${boxMcpStdio}
 
 const [harness, markedPrompt, model, session, kind, relay] = process.argv.slice(2);
-const prompt = markedPrompt.replace(/^t3stash-run:[0-9a-f]+\n/, '');
+const prompt = markedPrompt.replace(/^crate-run:[0-9a-f]+\n/, '');
 const emit = (type, data) => process.stdout.write('event: ' + type + '\ndata: ' + JSON.stringify(data) + '\n\n');
 const bridge = relay === 'relay' ? await startBoxMcp(emit) : null;
 const binName = harness === 'claudeCode' ? 'claude' : 'codex';

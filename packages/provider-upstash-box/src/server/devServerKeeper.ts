@@ -1,4 +1,4 @@
-export const DEV_SERVER_KEEPER_PATH = `/home/boxuser/.local/bin/t3stash-dev-servers.mjs`;
+export const DEV_SERVER_KEEPER_PATH = `/home/boxuser/.local/bin/crate-dev-servers.mjs`;
 export const DEV_SERVER_KEEPER_INIT = `test ! -f ${DEV_SERVER_KEEPER_PATH} || node ${DEV_SERVER_KEEPER_PATH} boot >/dev/null 2>&1`;
 
 /**
@@ -9,7 +9,7 @@ export const devServerKeeper = String.raw`import { spawn } from 'node:child_proc
 import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, writeFileSync } from 'node:fs';
 
 const self = process.argv[1];
-const stateDir = '/home/boxuser/.local/state/t3stash';
+const stateDir = '/home/boxuser/.local/state/crate';
 const statePath = stateDir + '/dev-servers.json';
 const lockPath = stateDir + '/dev-servers.pid';
 const uid = String(process.getuid());

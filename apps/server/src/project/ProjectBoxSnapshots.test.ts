@@ -252,7 +252,7 @@ it.effect.each([
       assert.equal(after.upstashBox.snapshotNames.old, "Old");
     } else assert.deepEqual(after, before);
     if (scenario === "success" || scenario === "capture-failure")
-      assert.include(commands.at(-1)!, "rmdir /dev/shm/t3stash-snapshot-");
+      assert.include(commands.at(-1)!, "rmdir /dev/shm/crate-snapshot-");
   }).pipe(
     Effect.provide(
       Layer.mergeAll(

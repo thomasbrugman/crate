@@ -1,10 +1,10 @@
 import type { ClientOs } from "@t3tools/contracts";
-import { T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
+import { CRATE_APP_SCHEME } from "@t3tools/shared/remote";
 
 export function resolveDesktopAppHandoff(os: ClientOs, development = false) {
   if (os === "macOS" && !development) {
     return {
-      scheme: T3STASH_APP_SCHEME,
+      scheme: CRATE_APP_SCHEME,
       macInstallUrl: "https://github.com/thomasbrugman/t3stash#mac",
     };
   }

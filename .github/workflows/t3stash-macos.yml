@@ -1,4 +1,4 @@
-name: t3stash macOS
+name: Crate macOS
 
 on:
   workflow_dispatch:
@@ -47,13 +47,13 @@ jobs:
 
       - name: Check packaged app
         run: |
-          archives=(release/t3stash-*-universal.zip)
-          ditto -x -k "${archives[0]}" "$RUNNER_TEMP/t3stash"
-          app="$RUNNER_TEMP/t3stash/t3stash.app"
+          archives=(release/crate-*-universal.zip)
+          ditto -x -k "${archives[0]}" "$RUNNER_TEMP/crate"
+          app="$RUNNER_TEMP/crate/Crate.app"
           plist="$app/Contents/Info.plist"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = com.thomasbrugman.t3stash
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = com.thomasbrugman.crate
           plutil -extract CFBundleURLTypes json -o - "$plist" |
-            node -e 'const types = JSON.parse(require("node:fs").readFileSync(0, "utf8")); require("node:assert/strict").deepEqual(types.flatMap(type => type.CFBundleURLSchemes).sort(), ["http", "https", "t3stash"])'
+            node -e 'const types = JSON.parse(require("node:fs").readFileSync(0, "utf8")); require("node:assert/strict").deepEqual(types.flatMap(type => type.CFBundleURLSchemes).sort(), ["crate", "http", "https"])'
           executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")"
           binary="$app/Contents/MacOS/$executable"
           lipo -info "$binary"
@@ -63,6 +63,6 @@ jobs:
       - name: Upload universal ZIP
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: release/t3stash-*-universal.zip
+          path: release/crate-*-universal.zip
           archive: false
           if-no-files-found: error

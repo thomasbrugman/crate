@@ -65,7 +65,7 @@ import {
 } from "@t3tools/client-runtime/work-log/command-label";
 
 import { AppText as Text } from "../../components/ui/AppText";
-import { T3Wordmark } from "../../components/T3Wordmark";
+import { CrateMark } from "../../components/CrateMark";
 import { BrowserAppIcon } from "./BrowserAppIcon";
 import { useAppActive, useReduceMotionEnabled } from "../../lib/appState";
 import { cn } from "../../lib/cn";
@@ -134,9 +134,7 @@ function WorkLogIcon(props: {
 }) {
   const colorClassName = props.highlighted ? "accent-foreground" : props.colorClassName;
   if (props.icon === "t3-code") {
-    return (
-      <T3Wordmark height={10} {...(colorClassName ? { colorClassName } : { color: props.color })} />
-    );
+    return <CrateMark size={14} />;
   }
   if (props.icon === "computer") {
     return (

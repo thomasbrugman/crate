@@ -1,5 +1,5 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import { T3STASH_APP_SCHEME } from "@t3tools/shared/remote";
+import { CRATE_APP_SCHEME } from "@t3tools/shared/remote";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -23,7 +23,7 @@ export function getDesktopScheme(
   isDevelopment: boolean,
   identity?: Parameters<typeof isPackagedMacApp>[0],
 ): string {
-  if (identity && isPackagedMacApp(identity)) return T3STASH_APP_SCHEME;
+  if (identity && isPackagedMacApp(identity)) return CRATE_APP_SCHEME;
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
 }
 

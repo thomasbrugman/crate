@@ -123,7 +123,7 @@ describe("DesktopClerk", () => {
       name: "packaged macOS",
       isDevelopment: false,
       platform: "darwin" as const,
-      userData: "/tmp/app-data/t3stash",
+      userData: "/tmp/app-data/Crate",
     },
     {
       name: "packaged Linux",
@@ -285,7 +285,7 @@ describe("DesktopClerk", () => {
 
         assert.isTrue(Exit.hasInterrupts(exit));
         assert.deepEqual(events, [
-          `setPath:userData:/tmp/app-data/${platform === "darwin" ? "t3stash" : "t3code-v2"}`,
+          `setPath:userData:/tmp/app-data/${platform === "darwin" ? "Crate" : "t3code-v2"}`,
           "requestSingleInstanceLock",
           "quit",
         ]);
@@ -430,7 +430,7 @@ it.effect.each(["startup", "open-url", "early-second-instance"] as const)(
 
 it.effect.each([
   { isDevelopment: true, scheme: "t3code" },
-  { isDevelopment: false, scheme: "t3stash" },
+  { isDevelopment: false, scheme: "crate" },
 ])(
   "hands web and $scheme app links to the renderer and leaves other links alone",
   ({ isDevelopment, scheme }) =>

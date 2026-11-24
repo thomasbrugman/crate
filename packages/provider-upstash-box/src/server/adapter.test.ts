@@ -90,7 +90,7 @@ const setup = Effect.fn("test.setupBox")(function* (
     exec: {
       command: async (text) => {
         commands.push(text);
-        if (githubToken && lookup.resumes && text.startsWith("test -s /dev/shm/t3stash-git/"))
+        if (githubToken && lookup.resumes && text.startsWith("test -s /dev/shm/crate-git/"))
           return { stdout: "", exitCode: 1 };
         return lookup.exec
           ? lookup.exec(text)
@@ -104,7 +104,7 @@ const setup = Effect.fn("test.setupBox")(function* (
         harnesses.push(content);
       },
       writeVolatile: async (path) => {
-        if (path === "/dev/shm/t3stash-git/credential") lookup.gitCredentialWrites++;
+        if (path === "/dev/shm/crate-git/credential") lookup.gitCredentialWrites++;
       },
     },
     delete: deleteBox ?? (async () => undefined),
@@ -288,7 +288,7 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
       yield* Effect.promise(() =>
         NodeFSP.writeFile(NodePath.join(repo, ".gitignore"), ".env\n*.sqlite\n"),
       );
-      const worktree = NodePath.join(home, ".t3stash-worktrees", "6368696c64");
+      const worktree = NodePath.join(home, ".crate-worktrees", "6368696c64");
       const git = (...args: string[]) =>
         NodeChildProcess.execFileSync("git", args, { cwd: repo, stdio: "pipe" });
       yield* Effect.sync(() => {
@@ -701,7 +701,7 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
       }
       assert.include(streams[0], "cd /workspace/home/repo");
       assert.include(streams[0], "Earlier conversation");
-      const worktree = `/workspace/home/.t3stash-worktrees/${Buffer.from(child).toString("hex")}`;
+      const worktree = `/workspace/home/.crate-worktrees/${Buffer.from(child).toString("hex")}`;
       assert.include(streams[1], `cd ${worktree}`);
       assert.isTrue(
         commands.some((command) =>
@@ -914,7 +914,7 @@ it.effect(
         });
         const events = yield* collect(runtime.events);
         assert.deepEqual(prompts, [
-          `t3stash-run:${Buffer.from(turn.attemptId).toString("hex")}\n${text}`,
+          `crate-run:${Buffer.from(turn.attemptId).toString("hex")}\n${text}`,
         ]);
         for (const event of events) yield* decodeEvent(event);
         const messages = events
@@ -994,7 +994,7 @@ it.effect(
         assert.equal(saved?.lastRunOrdinal, current.lastRunOrdinal);
         assert.deepEqual(saved?.handoffIds, current.handoffIds);
         assert.equal(saved?.nativeConversationHeadRef?.nativeId, "cc-session");
-        assert.equal(prompts[1], `t3stash-run:${Buffer.from(attemptId).toString("hex")}\nhello`);
+        assert.equal(prompts[1], `crate-run:${Buffer.from(attemptId).toString("hex")}\nhello`);
       }),
     ),
 );
@@ -1243,7 +1243,7 @@ it.effect.each(["ok", "throw", "exit", "hang"] as const)(
           },
         });
         lookup.exec = async (command) => {
-          assert.include(command, "t3stash-harness.mjs");
+          assert.include(command, "crate-harness.mjs");
           order.push("kill");
           if (cleanup === "throw") throw new Error("private cleanup failure");
           if (cleanup === "hang") return releaseCleanup.promise;

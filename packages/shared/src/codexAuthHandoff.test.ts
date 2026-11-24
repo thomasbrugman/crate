@@ -31,7 +31,7 @@ const input = {
 const callbackUrl = `http://127.0.0.1:54213/auth/callback?state=${"a".repeat(43)}&code=one-time-code&client_id=oaiapp_test`;
 
 describe("Codex desktop handoff", () => {
-  it.each(["t3code", "t3stash"])(
+  it.each(["t3code", "crate"])(
     "keeps the hosted return route, account, and environment with the code in a fragment for %s",
     (scheme) => {
       expect(readCodexAuthHandoff(codexAuthHandoffUrl(input, scheme), scheme)).toEqual(input);
@@ -50,7 +50,7 @@ describe("Codex desktop handoff", () => {
   it("rejects other handlers, schemes, arbitrary return sites, and non-OpenAI authorization", () => {
     const link = codexAuthHandoffUrl(input);
     expect(readCodexAuthHandoff(link, "t3code-dev")).toBeUndefined();
-    expect(readCodexAuthHandoff(link, "t3stash")).toBeUndefined();
+    expect(readCodexAuthHandoff(link, "crate")).toBeUndefined();
     expect(
       readCodexAuthHandoff(link.replace("auth/codex", "auth/other"), "t3code"),
     ).toBeUndefined();

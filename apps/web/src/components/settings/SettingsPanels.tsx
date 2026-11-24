@@ -2518,7 +2518,7 @@ export function AboutSettingsPanel() {
         />
         <SettingsRow
           {...setting("open-source-licenses")}
-          description={gt("Notices for dependencies, assets, and optional tools used by t3stash.")}
+          description={gt("Notices for dependencies, assets, and optional tools used by Crate.")}
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

@@ -98,7 +98,7 @@ it("resumes the newest matching Command Code transcript only when no session was
   };
   const normal = await setup({ files });
   assert.include(normal.args.join(" "), "--resume newer");
-  assert.equal(normal.env.HOME, "/dev/shm/t3stash-auth/command-home");
+  assert.equal(normal.env.HOME, "/dev/shm/crate-auth/command-home");
   assert.include((await setup({ files, session: "explicit" })).args.join(" "), "--resume explicit");
   assert.notInclude((await setup({ files, explicitSession: true })).args, "--resume");
   assert.notInclude((await setup()).args, "--resume");
@@ -106,13 +106,13 @@ it("resumes the newest matching Command Code transcript only when no session was
 });
 
 it("strips only the outer run marker before invoking Command Code", async () => {
-  for (const prompt of ["hello", "t3stash-run:abcd\nliteral user text"]) {
-    const { args } = await setup({ prompt: `t3stash-run:6162\n${prompt}` });
+  for (const prompt of ["hello", "crate-run:abcd\nliteral user text"]) {
+    const { args } = await setup({ prompt: `crate-run:6162\n${prompt}` });
     assert.equal(args[1], prompt);
   }
-  const malformed = "t3stash-run:not-hex\nhello";
+  const malformed = "crate-run:not-hex\nhello";
   assert.equal((await setup({ prompt: malformed })).args[1], malformed);
-  assert.deepEqual((await setup({ prompt: "t3stash-run:6162\n" })).events(), [
+  assert.deepEqual((await setup({ prompt: "crate-run:6162\n" })).events(), [
     { event: "error", data: { error: "no prompt received from the box" } },
   ]);
 });

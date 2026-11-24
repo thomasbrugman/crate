@@ -112,7 +112,7 @@ export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutd
       return yield* new OutdatedHostUpdateError({
         environmentId,
         ...translatableMessage(
-          msg("Update t3stash on {host} manually; it cannot update itself.", {
+          msg("Update Crate on {host} manually; it cannot update itself.", {
             host: descriptor.label,
           }),
         ),
@@ -237,7 +237,7 @@ export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutd
       return yield* new OutdatedHostUpdateError({
         environmentId,
         ...translatableMessage(
-          msg("{host} did not come back on a compatible t3stash version.", {
+          msg("{host} did not come back on a compatible Crate version.", {
             host: descriptor.label,
           }),
         ),

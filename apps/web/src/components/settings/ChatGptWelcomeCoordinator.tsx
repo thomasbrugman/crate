@@ -70,7 +70,7 @@ export function ChatGptWelcomeCoordinator() {
           </DialogTitle>
           <DialogDescription>
             <T>
-              Eligible usage in t3stash uses your ChatGPT plan. Manage your shared usage and any
+              Eligible usage in Crate uses your ChatGPT plan. Manage your shared usage and any
               credit settings in ChatGPT.
             </T>
           </DialogDescription>

@@ -46,7 +46,7 @@ export function HostedEmptyState() {
               ) : cloudEnabled ? (
                 <T>Your agents run on your computer.</T>
               ) : (
-                <T>Your agents run on your computer. Start t3stash there first.</T>
+                <T>Your agents run on your computer. Start Crate there first.</T>
               )}
             </EmptyDescription>
           </EmptyHeader>

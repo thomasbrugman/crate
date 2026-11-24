@@ -79,11 +79,8 @@ it.effect.each(["success", "empty", "read-failure", "storage-failure"] as const)
       assert.isTrue(deleted);
       assert.notInclude(commands.join("\n"), credential);
       if (scenario !== "storage-failure") {
-        assert.include(sessionHome, "HOME=/dev/shm/t3stash-login");
-        assert.include(
-          commands.join("\n"),
-          "head -c 16384 /dev/shm/t3stash-login/.codex/auth.json",
-        );
+        assert.include(sessionHome, "HOME=/dev/shm/crate-login");
+        assert.include(commands.join("\n"), "head -c 16384 /dev/shm/crate-login/.codex/auth.json");
       }
     }).pipe(Effect.provide(Layer.mock(SecureRandom.SecureRandom)({}))),
 );

@@ -87,11 +87,16 @@ const renderForeground = Effect.fn("androidIcons.renderForeground")(function* (
   repositoryRoot: string,
   size: number,
 ) {
-  const text = yield* readLayerSource(repositoryRoot, "prod", "text.svg");
-  const paths = text.match(/<path[^>]*\/>/g) ?? [];
+  const mascot = yield* readLayerSource(repositoryRoot, "prod", "box-buddy.svg");
+  const content = mascot.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+  const width = (size * 250) / ADAPTIVE_CANVAS;
+  const offset = (size - width) / 2;
   return yield* rasterize(
     "foreground",
-    canvasSvg(size, `<g transform="${wordmarkTransform(size)}">${paths.join("")}</g>`),
+    canvasSvg(
+      size,
+      `<g transform="translate(${offset} ${offset}) scale(${width / 512})">${content}</g>`,
+    ),
     size,
   );
 });

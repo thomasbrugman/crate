@@ -2,9 +2,9 @@ import { expect, it } from "vite-plus/test";
 
 import { resolveDesktopAppHandoff } from "./branding.logic";
 
-it("matches the macOS handoff scheme to the t3stash install guide", () => {
+it("matches the macOS handoff scheme to the Crate install guide", () => {
   expect(resolveDesktopAppHandoff("macOS")).toEqual({
-    scheme: "t3stash",
+    scheme: "crate",
     macInstallUrl: "https://github.com/thomasbrugman/t3stash#mac",
   });
   expect(resolveDesktopAppHandoff("macOS", true)).toEqual({

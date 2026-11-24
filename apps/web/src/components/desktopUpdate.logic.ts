@@ -88,20 +88,20 @@ export function getArm64IntelBuildWarningDescription(
   if (action === "download") {
     return resolve(
       msg(
-        "This Mac has Apple Silicon, but t3stash is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.",
+        "This Mac has Apple Silicon, but Crate is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.",
       ),
     );
   }
   if (action === "install") {
     return resolve(
       msg(
-        "This Mac has Apple Silicon, but t3stash is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.",
+        "This Mac has Apple Silicon, but Crate is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.",
       ),
     );
   }
   return resolve(
     msg(
-      "This Mac has Apple Silicon, but t3stash is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.",
+      "This Mac has Apple Silicon, but Crate is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.",
     ),
   );
 }
@@ -185,13 +185,13 @@ export function getDesktopUpdateInstallConfirmationMessage(
   return version
     ? resolve(
         msg(
-          "Install update {version} and restart t3stash?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
+          "Install update {version} and restart Crate?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
           { version },
         ),
       )
     : resolve(
         msg(
-          "Install update and restart t3stash?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
+          "Install update and restart Crate?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
         ),
       );
 }

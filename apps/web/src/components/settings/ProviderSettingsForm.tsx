@@ -214,8 +214,8 @@ const PACKAGE_FIELD_TEXT: ReadonlyMap<string, string> = new Map([
   ],
   ["Path to the OpenCode binary.", msg("Path to the OpenCode binary.")],
   [
-    "Leave blank to let t3stash spawn the server when needed.",
-    msg("Leave blank to let t3stash spawn the server when needed."),
+    "Leave blank to let Crate spawn the server when needed.",
+    msg("Leave blank to let Crate spawn the server when needed."),
   ],
   ["Stored separately on the host.", msg("Stored separately on the host.")],
   ["Path to the Pi coding agent binary.", msg("Path to the Pi coding agent binary.")],

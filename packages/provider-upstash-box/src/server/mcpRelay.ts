@@ -166,7 +166,7 @@ export function makeMcpRelay(
               id,
               Predicate.isReadonlyObject(params)
                 ? params.clientInfo
-                : { name: "t3stash-box", version: "1" },
+                : { name: "crate-box", version: "1" },
             )
           : await client.request(id, method, params, notify);
       } catch {

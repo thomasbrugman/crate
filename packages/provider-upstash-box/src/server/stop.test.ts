@@ -35,7 +35,7 @@ function executeCleanup(
 
 it("kills harness descendants child-first without killing exec roots, PID 1 or reused PIDs", () => {
   for (const root of [true, false]) {
-    const marker = "t3stash-run:6f6c64\n";
+    const marker = "crate-run:6f6c64\n";
     const command = killHarnessTrees(marker);
     const rows = new Map([
       [1, { parent: 0, argv: ["init"] }],
@@ -45,7 +45,7 @@ it("kills harness descendants child-first without killing exec roots, PID 1 or r
           parent: 0,
           argv: [
             "node",
-            root ? "/bin/t3stash-harness.mjs" : "/bin/other.mjs",
+            root ? "/bin/crate-harness.mjs" : "/bin/other.mjs",
             "-p",
             marker + "same prompt",
           ],
@@ -55,7 +55,7 @@ it("kills harness descendants child-first without killing exec roots, PID 1 or r
       [4, { parent: 3, argv: ["sh", "-c", "sleep 90"] }],
       [5, { parent: 4, argv: ["sleep", "90"] }],
       [6, { parent: 0, argv: ["sh", "-c", command] }],
-      [7, { parent: 0, argv: ["node", "/bin/t3stash-harness.mjs", "-p", "unmarked prompt"] }],
+      [7, { parent: 0, argv: ["node", "/bin/crate-harness.mjs", "-p", "unmarked prompt"] }],
     ]);
     const killed = executeCleanup(command, rows);
     assert.deepEqual(killed, root ? [4, 3, 2] : []);
@@ -67,9 +67,9 @@ it.effect("does not kill a follow-up harness when remote cleanup executes after 
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const executed = Promise.withResolvers<void>();
-    const marker = "t3stash-run:6f6c64\n";
+    const marker = "crate-run:6f6c64\n";
     const rows = new Map([
-      [2, { parent: 0, argv: ["node", "/bin/t3stash-harness.mjs", "-p", marker + "same prompt"] }],
+      [2, { parent: 0, argv: ["node", "/bin/crate-harness.mjs", "-p", marker + "same prompt"] }],
       [3, { parent: 2, argv: ["command-code"] }],
     ]);
     const killed: number[] = [];
@@ -106,7 +106,7 @@ it.effect("does not kill a follow-up harness when remote cleanup executes after 
     yield* Fiber.join(cancelling);
     rows.set(7, {
       parent: 0,
-      argv: ["node", "/bin/t3stash-harness.mjs", "-p", "t3stash-run:6e6577\nsame prompt"],
+      argv: ["node", "/bin/crate-harness.mjs", "-p", "crate-run:6e6577\nsame prompt"],
     });
     rows.set(8, { parent: 7, argv: ["command-code"] });
     release.resolve();

@@ -1,19 +1,19 @@
 <h1 align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/t3stash/wordmark-white.png" />
-    <source media="(prefers-color-scheme: light)" srcset="assets/t3stash/wordmark-black.png" />
-    <img src="assets/t3stash/wordmark-black.png" alt="t3stash" width="360" />
+    <source media="(prefers-color-scheme: dark)" srcset="assets/crate/wordmark-white.png" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/crate/wordmark-black.png" />
+    <img src="assets/crate/wordmark-black.png" alt="Crate" width="360" />
   </picture>
 </h1>
 
-[T3 Code](https://github.com/pingdotgg/t3code), except your coding agents run in the cloud.
+Crate runs your coding agents in the cloud.
 
 Every thread gets its own [Upstash Box](https://upstash.com/box): a small Linux machine with your
 repository cloned into it and your agent (Command Code, Claude Code or Codex) installed. The agent
 works there, not on your laptop. Your Mac runs the app and keeps track of the threads. You can check
 in from your phone.
 
-This is a fork of T3 Code v0.1.11. It's experimental, and it is not affiliated with T3 Code or Upstash.
+Crate is an independent, experimental fork of [T3 Code v0.1.11](https://github.com/pingdotgg/t3code), not affiliated with T3, Theo, or Upstash.
 
 ## Why
 
@@ -31,12 +31,12 @@ work lives in Git, where it would have ended up anyway.
 
 1. Download the universal ZIP only from a successful [build pushed to `main`](https://github.com/thomasbrugman/t3stash/actions/workflows/t3stash-macos.yml?query=branch%3Amain+event%3Apush).
    Do not install artifacts from pull request builds. The same ZIP works on Apple Silicon and Intel Macs.
-2. Unzip it and drag **t3stash.app** to Applications.
+2. Unzip it and drag **Crate.app** to Applications.
 3. The app isn't Developer ID-signed or notarized. To open this trusted copy, remove quarantine
    from just the installed app in Terminal, then open it:
 
    ```sh
-   xattr -dr com.apple.quarantine "/Applications/t3stash.app"
+   xattr -dr com.apple.quarantine "/Applications/Crate.app"
    ```
 
    Alternatively, try opening it once, then choose **Open Anyway** in **System Settings → Privacy
@@ -51,8 +51,8 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin
 T3CODE_DESKTOP_SIGNED=false vp run dist:desktop:artifact --platform mac --target zip --arch universal
 ```
 
-The `t3stash-*-universal.zip` is written to `release/`. The app stores its server state in
-`~/.t3stash` and its Electron profile in `~/Library/Application Support/t3stash`, separate from T3 Code.
+The `crate-*-universal.zip` is written to `release/`. The app stores its server state in
+`~/.crate` and its Electron profile in `~/Library/Application Support/Crate`, separate from T3 Code.
 
 ### Phone (iPhone and Android)
 
@@ -78,7 +78,7 @@ phone loses the connection, even though the Boxes themselves are in the cloud.
    - **Codex:** an OpenAI API key, or the contents of `~/.codex/auth.json`
 3. To clone private GitHub repositories or push from a Box, save your github.com token in
    **Settings → Source control & issues**.
-4. Add a project. t3stash reads the project's Git remote and clones it into each new Box.
+4. Add a project. Crate reads the project's Git remote and clones it into each new Box.
    Uncommitted changes on your Mac are not uploaded, so push first.
 
 Agent credentials are encrypted on your Mac and injected into each Box when it starts. They never

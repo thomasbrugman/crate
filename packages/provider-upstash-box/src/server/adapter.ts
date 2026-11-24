@@ -86,7 +86,7 @@ clean_checkout() (
 for path in ./* ./.[!.]* ./..?*; do
   test -e "$path" || test -L "$path" || continue
   case "$path" in
-    ./repo|./.t3stash-worktrees|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
+    ./repo|./.crate-worktrees|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
     *) exit 1 ;;
   esac
 done
@@ -94,9 +94,9 @@ if test -e repo || test -L repo; then
   test ! -L repo && test -d repo/.git && clean_checkout "$home/repo" || exit 1
   stash=$(git -C repo stash list) && test -z "$stash" || exit 1
 fi
-if test -e .t3stash-worktrees || test -L .t3stash-worktrees; then
-  test ! -L .t3stash-worktrees && test -d .t3stash-worktrees || exit 1
-  for path in "$home"/.t3stash-worktrees/* "$home"/.t3stash-worktrees/.[!.]* "$home"/.t3stash-worktrees/..?*; do
+if test -e .crate-worktrees || test -L .crate-worktrees; then
+  test ! -L .crate-worktrees && test -d .crate-worktrees || exit 1
+  for path in "$home"/.crate-worktrees/* "$home"/.crate-worktrees/.[!.]* "$home"/.crate-worktrees/..?*; do
     test -e "$path" || test -L "$path" || continue
     test ! -L "$path" && test -f "$path/.git" && clean_checkout "$path" || exit 1
   done
@@ -371,7 +371,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   await installConnectedHarnesses(existing, config, () => {});
                 } else if (harness === "commandCode") {
                   await existing.files.write({
-                    path: "/home/boxuser/.local/bin/t3stash-harness.mjs",
+                    path: "/home/boxuser/.local/bin/crate-harness.mjs",
                     content: commandCodeHarness,
                   });
                 }
@@ -488,7 +488,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               : []),
             request.message.text,
           ].join("\n\n");
-          const runMarker = `t3stash-run:${Buffer.from(request.attemptId).toString("hex")}\n`;
+          const runMarker = `crate-run:${Buffer.from(request.attemptId).toString("hex")}\n`;
           const streamPrompt = harness === "commandCode" ? runMarker + prompt : prompt;
           const translation = new BoxTurnTranslation(
             { ...request, providerThread },
