@@ -6,6 +6,7 @@ import {
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -21,7 +22,8 @@ export const SHARED_WORKSPACE_RESTORE_MESSAGE =
 // Check isolation at admission and rollback; checkpoints restore whole checkouts, which may become shared.
 export const isCheckpointRestoreIsolated = Effect.fn("orchestrationV2.isCheckpointRestoreIsolated")(
   function* (
-    thread: Pick<OrchestrationV2AppThread, "id" | "worktreePath">,
+    thread: Pick<OrchestrationV2AppThread, "id" | "worktreePath"> &
+      Partial<Pick<OrchestrationV2AppThread, "lineage">>,
     scope: Pick<OrchestrationV2CheckpointScope, "cwd">,
     dependencies: {
       readonly fileSystem: FileSystem.FileSystem;
@@ -29,7 +31,17 @@ export const isCheckpointRestoreIsolated = Effect.fn("orchestrationV2.isCheckpoi
       readonly projects: ProjectStore.ProjectStoreV2["Service"];
       readonly path: Path.Path;
     },
+    providerThread?: OrchestrationV2ProviderThread,
   ) {
+    if (providerThread && isUpstashBoxDriver(providerThread.driver)) {
+      return (
+        providerThread.nativeThreadRef !== null &&
+        providerThread.nativeMetadata?.boxOwnerThreadId === undefined &&
+        thread.lineage !== undefined &&
+        thread.lineage.sideChat !== true &&
+        thread.lineage.relationshipToParent !== "subagent"
+      );
+    }
     const { fileSystem, projections, projects, path } = dependencies;
     const contains = (parent: string, child: string) => {
       const relative = path.relative(parent, child);

@@ -210,7 +210,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
           checkedAt,
           status: enabled ? "warning" : "disabled",
           auth: { status: "unknown" },
-          supportsConversationRollback: false,
+          supportsConversationRollback: harness === "commandCode",
           supportsTextGeneration: false,
           supportedRuntimeModes: ["full-access"],
           showInteractionModeToggle: false,

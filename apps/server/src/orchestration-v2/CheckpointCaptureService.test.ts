@@ -935,11 +935,11 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
     }),
   );
 
-  it.effect.each(["side-chat", "cloud"] as const)(
-    "completes a %s run with a missing checkpoint and never touches git",
+  it.effect.each(["side-chat", "cloud", "cloud-child"] as const)(
+    "captures checkpoints for isolated workspaces only (%s)",
     (mode) =>
       Effect.gen(function* () {
-        const driver = ProviderDriverKind.make(mode === "cloud" ? "boxCommandCode" : "codex");
+        const driver = ProviderDriverKind.make(mode === "side-chat" ? "codex" : "boxCommandCode");
         const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
         const now = yield* DateTime.now;
         const sideChatThreadId = ThreadId.make("thread:checkpoint-capture-side-chat");
@@ -970,7 +970,7 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
               activeProviderThreadId: null,
               lineage: {
                 parentThreadId: threadId,
-                relationshipToParent: "fork",
+                relationshipToParent: mode === "cloud-child" ? "subagent" : "fork",
                 rootThreadId: threadId,
                 sideChat: mode === "side-chat",
               },
@@ -1004,6 +1004,7 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
               lastRunOrdinal: 1,
               handoffIds: [],
               forkedFrom: null,
+              ...(mode === "cloud-child" ? { nativeMetadata: { boxOwnerThreadId: threadId } } : {}),
               createdAt: now,
               updatedAt: now,
             },
@@ -1077,7 +1078,11 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
           },
         ];
         yield* Effect.forEach(events, (candidate) => projectionStore.apply(candidate));
-        const gitUnavailable = () => Effect.die("side chats must not snapshot the shared worktree");
+        const assertCheckpointThread = (id: ThreadId | undefined) =>
+          Effect.sync(() => {
+            assert.equal(mode, "cloud");
+            assert.equal(id, sideChatThreadId);
+          });
         const layerCapture = CheckpointCaptureService.layer.pipe(
           Layer.provide(
             Layer.mergeAll(
@@ -1088,9 +1093,11 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
                     IdAllocator.layer,
                     NodeCrypto.layer,
                     Layer.mock(CheckpointStore.CheckpointStore)({
-                      isGitRepository: gitUnavailable,
-                      captureCheckpoint: gitUnavailable,
-                      hasCheckpointRef: gitUnavailable,
+                      isGitRepository: (_cwd, id) =>
+                        assertCheckpointThread(id).pipe(Effect.as(true)),
+                      captureCheckpoint: ({ threadId: id }) => assertCheckpointThread(id),
+                      hasCheckpointRef: ({ threadId: id }) =>
+                        assertCheckpointThread(id).pipe(Effect.as(false)),
                     }),
                   ),
                 ),
@@ -1119,7 +1126,7 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
         ]);
         assert.equal(runs[0]?.status, "completed");
         const checkpoint = checkpoints.find((candidate) => candidate.id === runs[0]?.checkpointId);
-        assert.equal(checkpoint?.status, "missing");
+        assert.equal(checkpoint?.status, mode === "cloud" ? "ready" : "missing");
       }),
   );
 });

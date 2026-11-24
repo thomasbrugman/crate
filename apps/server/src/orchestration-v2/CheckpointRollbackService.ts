@@ -222,12 +222,12 @@ export const layer: Layer.Layer<
             });
 
       const restoreFiles = input.restoreFiles !== false;
-      const isolated = isCheckpointRestoreIsolated(context.thread, scope, {
-        fileSystem,
-        projections,
-        projects,
-        path,
-      });
+      const isolated = isCheckpointRestoreIsolated(
+        context.thread,
+        scope,
+        { fileSystem, projections, projects, path },
+        providerThread,
+      );
       const sharedWorkspace = () =>
         new CheckpointRollbackExecutionError({
           reason: "shared-workspace",

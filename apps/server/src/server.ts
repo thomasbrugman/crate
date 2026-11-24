@@ -538,7 +538,10 @@ const layerVcs = Layer.empty.pipe(
   ),
 );
 
-const layerCheckpointStore = CheckpointStore.layer.pipe(Layer.provide(layerVcsDriverRegistry));
+const layerCheckpointStore = CheckpointStore.layer.pipe(
+  Layer.provide(layerVcsDriverRegistry),
+  Layer.provide(layerBoxGit),
+);
 
 const layerPortScanner = PortScanner.layer.pipe(
   Layer.provide(ProcessRunner.cloudLayer),

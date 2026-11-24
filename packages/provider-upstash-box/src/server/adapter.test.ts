@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 
 import { assert, it } from "@effect/vitest";
 import {
+  CheckpointId,
   MessageId,
   ContextHandoffId,
   NodeId,
@@ -34,7 +35,15 @@ import { vi } from "vite-plus/test";
 
 import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
-import { BoxApi, type BoxHandle, type BoxStream, type BoxSubagentChunk } from "./BoxApi.ts";
+import {
+  BOX_WORKSPACE_PATH,
+  BoxApi,
+  quoteShell,
+  type BoxHandle,
+  type BoxStream,
+  type BoxSubagentChunk,
+} from "./BoxApi.ts";
+import { forkWorkspace } from "./forkWorkspace.ts";
 import { EXCLUDE_HARNESS_FILES_COMMAND } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 
@@ -61,6 +70,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   command?: BoxHandle["exec"]["command"],
   apiKey = "test-key",
   githubToken?: string,
+  credentials?: { readonly commandCode: string },
 ) {
   const commands: string[] = [];
   const prompts: string[] = [];
@@ -126,6 +136,7 @@ const setup = Effect.fn("test.setupBox")(function* (
       templateBoxName: "cc-harness",
       size: "small",
       ...(githubToken ? { githubToken } : {}),
+      ...(credentials ? { credentials } : {}),
     }),
   ).pipe(
     Effect.provide(IdAllocator.layer),
@@ -1221,6 +1232,135 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
     ),
 );
 
+it.live("copies the selected checkpoint into a separate Box checkout", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const home = yield* Effect.acquireRelease(
+        Effect.promise(() => NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "box-fork-"))),
+        (path) => Effect.promise(() => NodeFSP.rm(path, { recursive: true, force: true })),
+      );
+      const makeBox = (id: string): BoxHandle => {
+        const directory = NodePath.join(home, id);
+        const local = (path: string) => path.replace(BOX_WORKSPACE_PATH, directory);
+        return {
+          id,
+          agent: { stream: async () => fakeStream([]) },
+          exec: {
+            command: async (command) => {
+              const result = NodeChildProcess.spawnSync(
+                "sh",
+                ["-c", command.replaceAll(BOX_WORKSPACE_PATH, directory)],
+                { encoding: "utf8" },
+              );
+              return {
+                stdout: result.stdout.replaceAll(directory, BOX_WORKSPACE_PATH),
+                stderr: result.stderr,
+                exitCode: result.status,
+              };
+            },
+          },
+          files: {
+            readBase64: async (path, offset, length) =>
+              (await NodeFSP.readFile(local(path)))
+                .subarray(offset, offset + length)
+                .toString("base64"),
+            write: async ({ path, content, encoding }) =>
+              NodeFSP.writeFile(local(path), content, encoding),
+          },
+          delete: async () => undefined,
+          resume: async () => undefined,
+          getStatus: async () => ({ status: "idle" }),
+        };
+      };
+      const source = makeBox("source");
+      const target = makeBox("target");
+      const ref = "refs/t3/checkpoints/fork/turn/1";
+      const command = async (box: BoxHandle, script: string) => {
+        const result = await box.exec.command(script);
+        assert.equal(result.exitCode, 0, result.stderr);
+        return result.stdout;
+      };
+      yield* Effect.promise(async () => {
+        const repo = `${BOX_WORKSPACE_PATH}/repo`;
+        for (const box of [source, target]) {
+          await command(
+            box,
+            `git init -q ${repo} && cd ${repo} && printf base > file && git add file && git -c user.name=Fixture -c user.email=fixture@example.com commit -qm base`,
+          );
+        }
+        await command(
+          source,
+          `cd ${repo} && printf checkpoint > file && printf added > extra && git add file extra && git -c user.name=Fixture -c user.email=fixture@example.com commit -qm checkpoint && git update-ref ${quoteShell(ref)} HEAD && printf later > file`,
+        );
+        await forkWorkspace(source, target, ref);
+        assert.equal(await command(source, `cat ${repo}/file`), "later");
+        assert.equal(
+          await command(
+            target,
+            `cd ${repo} && test -f extra && git diff --cached --quiet && cat file`,
+          ),
+          "checkpoint",
+        );
+      });
+    }),
+  ),
+);
+
+it.effect("rewinds Command Code conversation without replacing its Box", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn } = yield* setup(
+        fakeStream([]),
+        undefined,
+        "commandCode",
+        undefined,
+        undefined,
+        undefined,
+        { commandCode: "fixture" },
+      );
+      const snapshot = yield* runtime.rollbackThread({
+        providerThread: {
+          ...turn.providerThread,
+          nativeConversationHeadRef: {
+            driver: turn.providerThread.driver,
+            nativeId: "cc-session",
+            strength: "strong",
+          },
+          lastRunOrdinal: 1,
+        },
+        target: {
+          type: "thread_start",
+          checkpointId: CheckpointId.make("box-checkpoint"),
+          appRunOrdinal: 0,
+        },
+        providerThreadTurns: [],
+      });
+      assert.deepEqual(
+        snapshot.providerThread.nativeThreadRef,
+        turn.providerThread.nativeThreadRef,
+      );
+      assert.isNull(snapshot.providerThread.nativeConversationHeadRef);
+      assert.isNull(snapshot.providerThread.lastRunOrdinal);
+    }),
+  ),
+);
+
+it.effect("rejects approval-required mode before starting a Box run", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn, prompts } = yield* setup(fakeStream([]));
+      const result = yield* runtime
+        .startTurn({
+          ...turn,
+          runtimePolicy: { ...turn.runtimePolicy, runtimeMode: "approval-required" },
+        })
+        .pipe(Effect.flip);
+      assert.equal(result._tag, "ProviderAdapterProtocolError");
+      assert.isEmpty(prompts);
+    }),
+  ),
+);
+
 it.effect.each(["ok", "throw", "exit", "hang"] as const)(
   "cancels the active stream and interrupts despite %s cleanup",
   (cleanup) =>
@@ -1230,7 +1370,7 @@ it.effect.each(["ok", "throw", "exit", "hang"] as const)(
         const releaseCleanup = Promise.withResolvers<{ stdout: string; exitCode: number }>();
         let cancelCount = 0;
         const order: string[] = [];
-        const { runtime, turn, lookup } = yield* setup({
+        const { adapter, runtime, turn, lookup } = yield* setup({
           id: "native-run",
           cancel: async () => {
             cancelCount++;
@@ -1242,6 +1382,9 @@ it.effect.each(["ok", "throw", "exit", "hang"] as const)(
             await cancelled.promise;
           },
         });
+        const capabilities = yield* adapter.getCapabilities();
+        assert.isTrue(capabilities.turns.supportsSteeringByInterruptRestart);
+        assert.isFalse(capabilities.turns.supportsActiveSteering);
         lookup.exec = async (command) => {
           assert.include(command, "t3stash-harness.mjs");
           order.push("kill");

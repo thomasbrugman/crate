@@ -194,12 +194,14 @@ const nativeSessionMissesKeptTurns = (
     keepsHistory &&
     (runsById.get(newest.runId)?.status === "rolled_back" ||
       (newest.nativeThreadId !== undefined && newest.nativeThreadId !== nativeId)) &&
-    !projection.contextHandoffs.some(
-      (handoff) =>
-        handoff.toProviderThreadId === providerThread.id &&
-        handoff.delivery?.nativeThreadId === nativeId &&
-        handoff.delivery.status !== "pending",
-    )
+    ((providerThread.driver === "boxCommandCode" &&
+      providerThread.nativeConversationHeadRef === null) ||
+      !projection.contextHandoffs.some(
+        (handoff) =>
+          handoff.toProviderThreadId === providerThread.id &&
+          handoff.delivery?.nativeThreadId === nativeId &&
+          handoff.delivery.status !== "pending",
+      ))
   );
 };
 
@@ -988,7 +990,12 @@ export const layer: Layer.Layer<
       }
       // Opening a session does not prompt the provider, so the workspace is still unchanged.
       const baseline = yield* cloud
-        ? Effect.succeed(Effect.void)
+        ? Effect.succeed(
+            providerThread.driver === "boxCommandCode" &&
+              resolvedRuntimePolicy.boxOwnerThreadId === undefined
+              ? undefined
+              : Effect.void,
+          )
         : runExecution.forkBaseline({
             appThread: projection.thread,
             run,
@@ -1094,6 +1101,7 @@ export const layer: Layer.Layer<
       const tokenCap = yield* handoffTokenCapConfig.pipe(
         Effect.orElseSucceed(() => DEFAULT_HANDOFF_TOKEN_CAP),
       );
+      let resetBoxConversation = false;
       const handoffContextForThread = (loadedProviderThread: OrchestrationV2ProviderThread) => {
         const measuredContext = latestNativeContextUsage(projection, providerThread);
         const previousSelection =
@@ -1108,8 +1116,9 @@ export const layer: Layer.Layer<
           previousSelection === undefined ||
           modelSelectionsEqual(previousSelection, run.modelSelection);
         const sameNativeThread =
+          !resetBoxConversation &&
           loadedProviderThread.nativeThreadRef?.nativeId ===
-          providerThread.nativeThreadRef?.nativeId;
+            providerThread.nativeThreadRef?.nativeId;
         const threadUsage = loadedProviderThread.contextUsage ?? providerThread.contextUsage;
         const previousUsage = measuredContext
           ? { ...threadUsage, ...measuredContext.usage }
@@ -1131,6 +1140,7 @@ export const layer: Layer.Layer<
         });
         const settledHandoffs = projection.contextHandoffs.filter(
           (handoff) =>
+            !resetBoxConversation &&
             handoff.toProviderThreadId === providerThread.id &&
             handoff.delivery?.nativeThreadId === loadedProviderThread.nativeThreadRef?.nativeId &&
             handoff.delivery?.status !== "pending",
@@ -1153,6 +1163,7 @@ export const layer: Layer.Layer<
           acceptedAttempts
             .filter(
               (source) =>
+                !resetBoxConversation &&
                 source.nativeThreadId !== undefined &&
                 source.nativeThreadId === loadedProviderThread.nativeThreadRef?.nativeId,
             )
@@ -1160,7 +1171,7 @@ export const layer: Layer.Layer<
         );
         const legacyInputRunIds = new Set(
           acceptedAttempts
-            .filter((source) => source.nativeThreadId === undefined)
+            .filter((source) => !resetBoxConversation && source.nativeThreadId === undefined)
             .map((source) => source.runId),
         );
         const legacyRecoveredRunIds = new Set(
@@ -1571,6 +1582,41 @@ export const layer: Layer.Layer<
           return loaded;
         }
         if (providerThread.nativeThreadRef === null) {
+          const source = projection.thread.forkedFrom;
+          let boxFork: ProviderAdapter.ProviderAdapterV2EnsureThreadInput["boxFork"];
+          if (
+            providerThread.driver === "boxCommandCode" &&
+            resolvedRuntimePolicy.repositoryUrl &&
+            projection.thread.lineage.relationshipToParent === "fork" &&
+            projection.thread.lineage.sideChat !== true &&
+            source?.type === "run" &&
+            !projection.providerThreads.some(
+              (candidate) =>
+                isUpstashBoxDriver(candidate.driver) && candidate.nativeThreadRef !== null,
+            )
+          ) {
+            const parent = yield* projectionStore.getThreadRecords(source.threadId, [
+              "runs",
+              "checkpoints",
+              "providerThreads",
+            ]);
+            const parentRun = parent.runs.find((candidate) => candidate.id === source.runId);
+            const checkpoint = parent.checkpoints.find(
+              (candidate) =>
+                candidate.id === parentRun?.checkpointId && candidate.status === "ready",
+            );
+            const parentProvider = parent.providerThreads.find(
+              (candidate) => candidate.id === parentRun?.providerThreadId,
+            );
+            const sourceBoxId = parentProvider?.nativeThreadRef?.nativeId;
+            if (
+              checkpoint !== undefined &&
+              parentProvider?.providerInstanceId === providerThread.providerInstanceId &&
+              sourceBoxId != null
+            ) {
+              boxFork = { sourceBoxId, checkpointRef: checkpoint.ref };
+            }
+          }
           // Pass the stored provider row for adoption; adapter-minted duplicates make activeProviderThreadId flap.
           return yield* loadFromProvider(
             session.ensureThread({
@@ -1580,6 +1626,7 @@ export const layer: Layer.Layer<
               runtimePolicy: resolvedRuntimePolicy,
               providerSessionId,
               existingProviderThread: providerThread,
+              ...(boxFork === undefined ? {} : { boxFork }),
             }),
           );
         }
@@ -1700,23 +1747,35 @@ export const layer: Layer.Layer<
                 : "resume_failed",
           errorTag: resumed._tag === "Failure" ? resumed.failure._tag : "ContextHandoffBudgetError",
         });
+        const keepBox =
+          providerThread.driver === "boxCommandCode" &&
+          providerThread.nativeConversationHeadRef === null &&
+          nativeSessionLacksKeptTurns;
         const replacement = yield* loadFromProvider(
-          session.ensureThread({
-            threadId: projection.thread.id,
-            title: projection.thread.title,
-            modelSelection: run.modelSelection,
-            runtimePolicy: resolvedRuntimePolicy,
-            providerSessionId,
-            // Clear the native ref to force a fresh session while preserving row identity.
-            existingProviderThread: { ...providerThread, nativeThreadRef: null },
-            // A fresh session that never loaded the broken history needs no replacement.
-            ...(opensFreshSession && resumed._tag === "Failure"
-              ? {}
-              : { forceNewNativeThread: true }),
-          }),
+          keepBox
+            ? session.resumeThread({
+                threadId: projection.thread.id,
+                providerThread,
+                modelSelection: run.modelSelection,
+                runtimePolicy: resolvedRuntimePolicy,
+              })
+            : session.ensureThread({
+                threadId: projection.thread.id,
+                title: projection.thread.title,
+                modelSelection: run.modelSelection,
+                runtimePolicy: resolvedRuntimePolicy,
+                providerSessionId,
+                // Clear the native ref to force a fresh session while preserving row identity.
+                existingProviderThread: { ...providerThread, nativeThreadRef: null },
+                // A fresh session that never loaded the broken history needs no replacement.
+                ...(opensFreshSession && resumed._tag === "Failure"
+                  ? {}
+                  : { forceNewNativeThread: true }),
+              }),
         );
         if (replacement === undefined) return undefined;
         if (
+          !keepBox &&
           replacement.nativeThreadRef?.nativeId != null &&
           replacement.nativeThreadRef.driver === providerThread.nativeThreadRef?.driver &&
           replacement.nativeThreadRef.nativeId === providerThread.nativeThreadRef.nativeId
@@ -1830,6 +1889,7 @@ export const layer: Layer.Layer<
           ],
         });
         if (!replacementWrite.committed) return undefined;
+        resetBoxConversation = keepBox;
         effectiveHandoffs = withRecoveryHandoff(handoff);
         resumeFellBack = true;
         recoveryTurnItem = handoffTurnItem;
@@ -2166,7 +2226,7 @@ export const layer: Layer.Layer<
         providerThread: runningProviderThread,
         attempt: runningAttempt,
         attemptId: attempt.id,
-        baseline,
+        ...(baseline === undefined ? {} : { baseline }),
         loadInheritedBackgroundTurnItems: runControls.loadInheritedBackgroundTurnItems,
         relatedThreadIds: routableSubagents.flatMap((subagent) =>
           subagent.childThreadId === null ? [] : [subagent.childThreadId],

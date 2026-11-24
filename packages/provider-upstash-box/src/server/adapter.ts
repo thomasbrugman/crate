@@ -41,6 +41,7 @@ import {
 import { capabilities as baseCapabilities } from "./capabilities.ts";
 import { harnessCredentialKind } from "./credentials.ts";
 import { execHarness } from "./execHarness.ts";
+import { forkWorkspace } from "./forkWorkspace.ts";
 import { EXCLUDE_HARNESS_FILES_COMMAND, makeBoxGitSetup } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 import { cancelBoxRun } from "./stop.ts";
@@ -137,6 +138,16 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   const { driver, harness } = agent;
   const capabilities = {
     ...baseCapabilities,
+    threads: { ...baseCapabilities.threads, canRollbackThread: harness === "commandCode" },
+    checkpointing: {
+      ...baseCapabilities.checkpointing,
+      appCanCheckpointFilesystem: harness === "commandCode",
+      providerRollbackReturnsSnapshot: harness === "commandCode",
+    },
+    turns: {
+      ...baseCapabilities.turns,
+      supportsSteeringByInterruptRestart: harness === "commandCode",
+    },
     tools: { ...baseCapabilities.tools, supportsMcpTools: mcpSessions !== undefined },
     subagents:
       harness === "claudeCode"
@@ -312,6 +323,18 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   }),
             ),
           );
+          if (request.boxFork) {
+            const { sourceBoxId, checkpointRef } = request.boxFork;
+            yield* Effect.tryPromise({
+              try: async () =>
+                forkWorkspace(await api.get(sourceBoxId, config.apiKey), box, checkpointRef),
+              catch: () =>
+                new Adapter.ProviderAdapterProtocolError({
+                  driver,
+                  detail: "Could not copy the source checkpoint into the fork's Box.",
+                }),
+            }).pipe(Effect.tapError(() => setSessionStatus("error")));
+          }
           yield* setSessionStatus("ready");
           const at = yield* DateTime.now;
           const thread: OrchestrationV2ProviderThread = {
@@ -700,7 +723,28 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
             }),
           ),
         readThreadSnapshot: () => unsupported("Reading a conversation snapshot"),
-        rollbackThread: () => unsupported("Rollback"),
+        rollbackThread: Effect.fn("UpstashBox.rollbackThread")(function* (request) {
+          if (harness !== "commandCode" || (yield* environment).credentials === undefined)
+            return yield* unsupported("Rollback");
+          if (active)
+            return yield* new Adapter.ProviderAdapterProtocolError({
+              driver,
+              detail: "Cannot roll back an active Box turn.",
+            });
+          return {
+            providerThread: {
+              ...request.providerThread,
+              nativeConversationHeadRef: null,
+              contextUsage: null,
+              lastRunOrdinal: request.target.appRunOrdinal || null,
+              status: "idle",
+              updatedAt: yield* DateTime.now,
+            },
+            providerTurns: [],
+            messages: [],
+            runtimeRequests: [],
+          };
+        }),
         forkThread: () => unsupported("Fork"),
         respondToRuntimeRequest: () => unsupported("Runtime requests"),
       };
