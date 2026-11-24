@@ -337,7 +337,7 @@ describe("formatThreadTitleContext", () => {
 });
 
 describe("ThreadTitleRegenerationService", () => {
-  it.effect("silently keeps cloud titles without requesting text generation", () =>
+  it.effect("regenerates cloud titles through text generation", () =>
     Effect.gen(function* () {
       const harness = makeHarness({ cloud: true });
       yield* Effect.gen(function* () {
@@ -351,8 +351,7 @@ describe("ThreadTitleRegenerationService", () => {
         assert.isTrue(
           projection.providerThreads.some((thread) => thread.driver === "boxCommandCode"),
         );
-        assert.equal(harness.generateThreadTitle.mock.calls.length, 0);
-        assert.equal(projection.thread.title, "Seed title");
+        assert.equal(harness.generateThreadTitle.mock.calls.length, 1);
         assert.isNull(projection.thread.titleRegeneration);
       }).pipe(Effect.provide(harness.layer));
     }),
