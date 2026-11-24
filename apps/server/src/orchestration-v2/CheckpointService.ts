@@ -276,7 +276,7 @@ export const layer: Layer.Layer<
 
     // A failed probe is an operational error, not proof that the workspace has no repository.
     const probeRepository = (scope: OrchestrationV2CheckpointScope) =>
-      checkpointStore.isGitRepository(scope.cwd).pipe(
+      checkpointStore.isGitRepository(scope.cwd, scope.threadId).pipe(
         Effect.map((isRepository) =>
           isRepository ? ("repository" as const) : ("missing" as const),
         ),
@@ -292,7 +292,7 @@ export const layer: Layer.Layer<
       withWorkspaceLock(
         input.scope.cwd,
         Effect.gen(function* () {
-          if (!(yield* checkpointStore.isGitRepository(input.scope.cwd))) {
+          if (!(yield* checkpointStore.isGitRepository(input.scope.cwd, input.scope.threadId))) {
             return;
           }
 
@@ -302,6 +302,7 @@ export const layer: Layer.Layer<
           });
           const exists = yield* checkpointStore.hasCheckpointRef({
             cwd: input.scope.cwd,
+            threadId: input.scope.threadId,
             checkpointRef,
           });
           if (exists) {
@@ -316,7 +317,10 @@ export const layer: Layer.Layer<
             );
           }
 
-          yield* captureWorkspaceCheckpoint({ cwd: input.scope.cwd, checkpointRef }, true).pipe(
+          yield* captureWorkspaceCheckpoint(
+            { cwd: input.scope.cwd, threadId: input.scope.threadId, checkpointRef },
+            true,
+          ).pipe(
             Effect.catchTags({
               VcsUnsupportedOperationError: () => Effect.void,
             }),
@@ -353,6 +357,7 @@ export const layer: Layer.Layer<
                 ? yield* checkpointStore
                     .hasCheckpointRef({
                       cwd: input.scope.cwd,
+                      threadId: input.scope.threadId,
                       checkpointRef,
                     })
                     .pipe(
@@ -434,6 +439,7 @@ export const layer: Layer.Layer<
 
           const captureStatus = yield* captureWorkspaceCheckpoint({
             cwd: input.scope.cwd,
+            threadId: input.scope.threadId,
             checkpointRef,
             ...(input.ordinalWithinScope > 0 ? { previousCheckpointRef } : {}),
           }).pipe(
@@ -469,6 +475,7 @@ export const layer: Layer.Layer<
           const previousExists = yield* checkpointStore
             .hasCheckpointRef({
               cwd: input.scope.cwd,
+              threadId: input.scope.threadId,
               checkpointRef: previousCheckpointRef,
             })
             .pipe(
@@ -482,6 +489,7 @@ export const layer: Layer.Layer<
             );
           const refs = {
             cwd: input.scope.cwd,
+            threadId: input.scope.threadId,
             fromCheckpointRef: previousCheckpointRef,
             toCheckpointRef: checkpointRef,
           };
@@ -562,6 +570,7 @@ export const layer: Layer.Layer<
 
           const restored = yield* checkpointStore.restoreCheckpoint({
             cwd: input.scope.cwd,
+            threadId: input.scope.threadId,
             checkpointRef: input.checkpoint.ref,
             fallbackToHead: false,
           });
@@ -590,6 +599,7 @@ export const layer: Layer.Layer<
         input.scope.cwd,
         checkpointStore.deleteCheckpointRefs({
           cwd: input.scope.cwd,
+          threadId: input.scope.threadId,
           checkpointRefs: input.checkpoints.map((checkpoint) => checkpoint.ref),
         }),
       ).pipe(

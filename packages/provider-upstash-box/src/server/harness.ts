@@ -79,13 +79,23 @@ if (!prompt) {
 	process.exit(1);
 }
 
-const args = ['-p', prompt, '--output-format', 'json', '--skip-onboarding'];
+const planMode = argv.includes('--plan');
+// Headless Command Code answers its own questions and plan approvals. This mod ends the run
+// there instead, so the user's reply arrives as the next message on the saved session.
+const handoffMod = '/tmp/t3stash-handoff-mod.ts';
+writeFileSync(handoffMod, 'export default (cmd) => cmd.hooks({ beforeToolCall: async ({ toolName }) => ' +
+	"(toolName === 'ask_user_question' || toolName === 'exit_plan_mode' ? { block: true, terminate: true, " +
+	"additionalContext: 'Shown to the user. Their reply arrives as the next message.' } : undefined) });");
+// Print mode withholds these tools; the harness turns them into thread todos, questions and plans.
+const args = ['-p', prompt, '--output-format', 'json', '--skip-onboarding',
+	'--mod', handoffMod, '--tools-enable', planMode ? 'todo_write,ask_user_question,exit_plan_mode' : 'todo_write,ask_user_question'];
 // The box sends its own model label for custom harnesses ("custom" by default);
 // only forward it when it is a real Command Code model id.
 const passthroughModel = process.env.BOXJOB_CC_MODEL || model;
 if (passthroughModel && passthroughModel !== 'custom') args.push('--model', passthroughModel);
 if (session) args.push('--resume', session);
-if (process.env.BOXJOB_CC_PERMISSION !== 'default') args.push('--yolo');
+if (planMode) args.push('--permission-mode', 'plan');
+else if (process.env.BOXJOB_CC_PERMISSION !== 'default') args.push('--yolo');
 
 const env = { ...process.env, HOME: '${BOX_COMMAND_CODE_HOME}' };
 const bridge = argv.includes('--t3-mcp-relay') ? await startBoxMcp(emit) : null;
@@ -110,6 +120,7 @@ if (bridge) {
 	env.T3_BOX_MCP_SOCKET = bridge.address;
 	env.MCP_TOOL_TIMEOUT = '3900000';
 }
+const startedAt = Date.now();
 const child = spawn(resolveBin(), args, {
 	cwd: process.env.BOXJOB_CC_CWD || process.cwd(),
 	stdio: ['ignore', 'pipe', 'ignore'],
@@ -122,7 +133,12 @@ let finalText = '';
 let usage = {};
 let sessionId = session;
 let finished = false;
+// The handoff mod ends the run at a question or plan approval; that ending is a completed turn.
+let handedOff = false;
 const announcedTools = new Set();
+const handoffTools = new Set(['todo_write', 'task_create', 'task_update', 'ask_user_question', 'exit_plan_mode']);
+const taskInputs = new Map();
+const tasks = new Map();
 const secretTools = new Set();
 
 function exitAfterFlush(code) {
@@ -134,6 +150,69 @@ function finish(event, data) {
 	if (finished) return;
 	finished = true;
 	emit(event, data);
+}
+
+const todoStatus = { in_progress: 'running', completed: 'completed' };
+
+function newestPlan() {
+	const dir = join(env.HOME, '.commandcode', 'plans');
+	let newest;
+	try {
+		for (const file of readdirSync(dir)) {
+			const path = join(dir, file);
+			const mtime = statSync(path).mtimeMs;
+			if (file.endsWith('.md') && mtime >= startedAt && (!newest || mtime > newest.mtime)) newest = { path, mtime };
+		}
+		return newest && readFileSync(newest.path, 'utf8');
+	} catch {}
+}
+
+function emitTasks() {
+	emit('todo', { steps: [...tasks.values()] });
+}
+
+// Command Code may swap todo_write for its task ledger; the ledger's ids only appear in results.
+function handleTaskResult(e) {
+	const input = taskInputs.get(e.toolCallId);
+	taskInputs.delete(e.toolCallId);
+	if (!input) return;
+	const result = Array.isArray(e.result) ? e.result.map((part) => part?.text ?? '').join('') : String(e.result ?? '');
+	if (e.toolName === 'task_create') {
+		const id = /Task #(\\S+) created/.exec(result)?.[1];
+		if (!id || typeof input.subject !== 'string') return;
+		tasks.set(id, { text: input.subject, status: 'pending' });
+	} else {
+		const task = tasks.get(String(input.taskId));
+		if (!task) return;
+		if (input.status === 'deleted') tasks.delete(String(input.taskId));
+		else tasks.set(String(input.taskId), {
+			text: typeof input.subject === 'string' ? input.subject : task.text,
+			status: todoStatus[input.status] || (input.status === 'pending' ? 'pending' : task.status),
+		});
+	}
+	emitTasks();
+}
+
+function handleTool(e) {
+	const input = e.input || {};
+	if (e.toolName === 'task_create' || e.toolName === 'task_update') taskInputs.set(e.toolCallId, input);
+	else if (e.toolName === 'todo_write') {
+		const todos = Array.isArray(input.todos) ? input.todos : [];
+		emit('todo', {
+			steps: todos
+				.filter((todo) => typeof todo?.content === 'string' && todo.content.trim())
+				.map((todo) => ({ text: todo.content, status: todoStatus[todo.status] || 'pending' })),
+		});
+	} else if (e.toolName === 'ask_user_question') {
+		handedOff = true;
+		emit('question', { tool_call_id: e.toolCallId, questions: Array.isArray(input.questions) ? input.questions : [] });
+	} else if (e.toolName === 'exit_plan_mode') {
+		const markdown = newestPlan() || (typeof input.plan === 'string' ? input.plan : '');
+		if (markdown.trim()) {
+			handedOff = true;
+			emit('plan', { markdown });
+		}
+	}
 }
 
 function handleFrame(frame) {
@@ -149,7 +228,7 @@ function handleFrame(frame) {
 		if (!sawText && text) emit('text', { text });
 		usage = o.usage || usage;
 		sessionId = o.sessionId || sessionId;
-		if (o.subtype === 'error') {
+		if (o.subtype === 'error' && !handedOff) {
 			finish('error', { error: 'Command Code run failed', session_id: sessionId || '' });
 			return;
 		}
@@ -168,6 +247,9 @@ function handleFrame(frame) {
 		case 'run_start':
 			sessionId = e.sessionId || sessionId;
 			break;
+		case 'thinking_delta':
+			if (e.delta) emit('reasoning', { text: e.delta });
+			break;
 		case 'text_delta':
 			if (e.delta) {
 				emit('text', { text: e.delta });
@@ -179,12 +261,20 @@ function handleFrame(frame) {
 			const id = e.toolCallId || e.toolName;
 			if (announcedTools.has(id)) break;
 			announcedTools.add(id);
+			if (handoffTools.has(e.toolName)) {
+				handleTool(e);
+				break;
+			}
 			const secret = e.toolName?.endsWith('__request_secret');
 			if (secret) secretTools.add(id);
 			emit('tool', { tool_call_id: e.toolCallId, name: e.toolName, input: secret ? {} : e.input || (e.description ? { description: e.description } : {}) });
 			break;
 		}
 		case 'tool_completed':
+			if (handoffTools.has(e.toolName)) {
+				if (e.toolName === 'task_create' || e.toolName === 'task_update') handleTaskResult(e);
+				break;
+			}
 			emit('tool_result', { tool_call_id: e.toolCallId, name: e.toolName, output: secretTools.delete(e.toolCallId || e.toolName) ? null : e.result ?? null });
 			break;
 		case 'run_end': {
@@ -217,7 +307,7 @@ child.on('error', () => {
 child.on('close', (code) => {
 	if (buffer.trim()) handleFrame(buffer.trim());
 	if (!finished) {
-		if (code === 0) {
+		if (code === 0 || handedOff) {
 			if (!sawText && finalText) emit('text', { text: finalText });
 			finish('done', {
 				output: finalText,
@@ -233,6 +323,6 @@ child.on('close', (code) => {
 			});
 		}
 	}
-	exitAfterFlush(code === 0 ? 0 : 1);
+	exitAfterFlush(code === 0 || handedOff ? 0 : 1);
 });
 `;

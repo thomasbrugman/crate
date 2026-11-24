@@ -227,6 +227,7 @@ function startWithMissingWorktree(
         }),
         Layer.mock(RunExecutionService.RunExecutionServiceV2)({ startRootRun }),
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({}),
+        EffectOutbox.layer.pipe(Layer.provide(SqlitePersistence.layerMemory)),
       ),
     ),
   );
@@ -1408,6 +1409,7 @@ function makeLocalCommandHarness(input: {
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({
           resolve: resolveRuntimePolicy,
         }),
+        EffectOutbox.layer.pipe(Layer.provide(SqlitePersistence.layerMemory)),
       ),
     ),
   );

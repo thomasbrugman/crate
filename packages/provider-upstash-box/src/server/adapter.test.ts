@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 
 import { assert, it } from "@effect/vitest";
 import {
+  CheckpointId,
   MessageId,
   ContextHandoffId,
   NodeId,
@@ -37,11 +38,14 @@ import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import {
   BOX_ATTACHMENTS_PATH,
+  BOX_WORKSPACE_PATH,
   BoxApi,
+  quoteShell,
   type BoxHandle,
+  type BoxHarnessChunk,
   type BoxStream,
-  type BoxSubagentChunk,
 } from "./BoxApi.ts";
+import { forkWorkspace } from "./forkWorkspace.ts";
 import { EXCLUDE_HARNESS_FILES_COMMAND } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 
@@ -68,6 +72,7 @@ const setup = Effect.fn("test.setupBox")(function* (
   command?: BoxHandle["exec"]["command"],
   apiKey = "test-key",
   githubToken?: string,
+  credentials?: { readonly commandCode: string },
   attachmentFiles?: {
     readonly resolve: (attachment: ChatAttachment) => string | null;
     readonly upload: NonNullable<BoxHandle["files"]["upload"]>;
@@ -138,6 +143,7 @@ const setup = Effect.fn("test.setupBox")(function* (
       templateBoxName: "cc-harness",
       size: "small",
       ...(githubToken ? { githubToken } : {}),
+      ...(credentials ? { credentials } : {}),
     }),
     undefined,
     attachmentFiles?.resolve,
@@ -375,6 +381,11 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
       }
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.equal(deleted, 2);
+      const checkpointRef = "refs/t3/orchestration-v2/checkpoints/fixture/ordinal/1";
+      yield* Effect.sync(() => git("update-ref", checkpointRef, "HEAD"));
+      assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
+      yield* Effect.sync(() => git("update-ref", "-d", checkpointRef));
       const attachments = NodePath.join(home, ".crate-attachments");
       const attachmentTurn = NodePath.join(attachments, "7475726e");
       const attachment = NodePath.join(attachmentTurn, "0-notes.txt");
@@ -473,10 +484,7 @@ it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitiz
   ),
 );
 
-function fakeStream(
-  chunks: ReadonlyArray<Chunk | BoxSubagentChunk>,
-  error: unknown = false,
-): BoxStream {
+function fakeStream(chunks: ReadonlyArray<BoxHarnessChunk>, error: unknown = false): BoxStream {
   return {
     id: "native-run",
     cancel: async () => undefined,
@@ -561,6 +569,7 @@ it.effect("stages image and file attachments in the Box before starting the harn
         },
         undefined,
         "commandCode",
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -1094,6 +1103,92 @@ it.effect(
     ),
 );
 
+it.effect("projects reasoning, todo updates, proposed plans and questions", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const question = {
+        id: "0",
+        header: "Language",
+        question: "Which language?",
+        options: [{ label: "Python", description: "Python 3" }],
+      };
+      const { runtime, turn } = yield* setup(
+        fakeStream([
+          { type: "reasoning", text: "Think" },
+          { type: "reasoning", text: "ing" },
+          { type: "todo", steps: [{ text: "Plan", status: "running" }] },
+          {
+            type: "todo",
+            steps: [
+              { text: "Plan", status: "completed" },
+              { text: "Ship", status: "pending" },
+            ],
+          },
+          { type: "text-delta", text: "Asking." },
+          { type: "proposed-plan", markdown: "# Plan" },
+          { type: "question", toolCallId: "ask", questions: [question] },
+          { ...finish, output: "Asking." },
+        ]),
+      );
+      yield* runtime.startTurn(turn);
+      const events = yield* collect(runtime.events);
+      for (const event of events) yield* decodeEvent(event);
+      const items = new Map(
+        events.flatMap((event) =>
+          event.type === "turn_item.updated" ? [[event.turnItem.id, event.turnItem] as const] : [],
+        ),
+      );
+      assert.deepEqual(
+        [...items.values()].map((item) => [item.type, item.status, item.ordinal]),
+        [
+          ["reasoning", "completed", 1],
+          ["todo_list", "completed", 2],
+          ["assistant_message", "completed", 3],
+          ["proposed_plan", "completed", 4],
+          ["user_input_request", "waiting", 5],
+        ],
+      );
+      const [reasoning, todo, , plan, request] = [...items.values()];
+      assert.deepInclude(reasoning, { text: "Thinking", streaming: false });
+      assert.deepEqual(todo?.type === "todo_list" && todo.steps, [
+        { id: "1", text: "Plan", status: "completed" },
+        { id: "2", text: "Ship", status: "pending" },
+      ]);
+      const plans = events.flatMap((event) => (event.type === "plan.updated" ? [event.plan] : []));
+      assert.deepEqual(
+        plans.map((entry) => [entry.kind, entry.id]),
+        [
+          ["todo_list", todo?.type === "todo_list" && todo.planId],
+          ["todo_list", todo?.type === "todo_list" && todo.planId],
+          ["proposed_plan", plan?.type === "proposed_plan" && plan.planId],
+          ["todo_list", todo?.type === "todo_list" && todo.planId],
+        ],
+      );
+      assert.deepInclude(plans[2], { markdown: "# Plan", status: "active" });
+      assert.deepInclude(request, { questions: [question], responseMode: "message" });
+      const runtimeRequests = events.flatMap((event) =>
+        event.type === "runtime_request.updated" ? [event.runtimeRequest] : [],
+      );
+      assert.deepEqual(
+        runtimeRequests.map((entry) => [
+          String(entry.id),
+          entry.kind,
+          entry.status,
+          entry.responseCapability,
+        ]),
+        [
+          [
+            String(request?.type === "user_input_request" && request.requestId),
+            "user_input",
+            "pending",
+            { type: "message" },
+          ],
+        ],
+      );
+    }),
+  ),
+);
+
 it.effect("splits assistant messages around tools without duplicating finish output", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -1316,6 +1411,135 @@ it.effect.each(["commandCode", "claudeCode", "codex"] as const)(
     ),
 );
 
+it.live("copies the selected checkpoint into a separate Box checkout", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const home = yield* Effect.acquireRelease(
+        Effect.promise(() => NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "box-fork-"))),
+        (path) => Effect.promise(() => NodeFSP.rm(path, { recursive: true, force: true })),
+      );
+      const makeBox = (id: string): BoxHandle => {
+        const directory = NodePath.join(home, id);
+        const local = (path: string) => path.replace(BOX_WORKSPACE_PATH, directory);
+        return {
+          id,
+          agent: { stream: async () => fakeStream([]) },
+          exec: {
+            command: async (command) => {
+              const result = NodeChildProcess.spawnSync(
+                "sh",
+                ["-c", command.replaceAll(BOX_WORKSPACE_PATH, directory)],
+                { encoding: "utf8" },
+              );
+              return {
+                stdout: result.stdout.replaceAll(directory, BOX_WORKSPACE_PATH),
+                stderr: result.stderr,
+                exitCode: result.status,
+              };
+            },
+          },
+          files: {
+            readBase64: async (path, offset, length) =>
+              (await NodeFSP.readFile(local(path)))
+                .subarray(offset, offset + length)
+                .toString("base64"),
+            write: async ({ path, content, encoding }) =>
+              NodeFSP.writeFile(local(path), content, encoding),
+          },
+          delete: async () => undefined,
+          resume: async () => undefined,
+          getStatus: async () => ({ status: "idle" }),
+        };
+      };
+      const source = makeBox("source");
+      const target = makeBox("target");
+      const ref = "refs/t3/orchestration-v2/checkpoints/Zm9yaw/ordinal/1";
+      const command = async (box: BoxHandle, script: string) => {
+        const result = await box.exec.command(script);
+        assert.equal(result.exitCode, 0, result.stderr);
+        return result.stdout;
+      };
+      yield* Effect.promise(async () => {
+        const repo = `${BOX_WORKSPACE_PATH}/repo`;
+        for (const box of [source, target]) {
+          await command(
+            box,
+            `git init -q ${repo} && cd ${repo} && printf base > file && git add file && git -c user.name=Fixture -c user.email=fixture@example.com commit -qm base`,
+          );
+        }
+        await command(
+          source,
+          `cd ${repo} && printf checkpoint > file && printf added > extra && git add file extra && git -c user.name=Fixture -c user.email=fixture@example.com commit -qm checkpoint && git update-ref ${quoteShell(ref)} HEAD && printf later > file`,
+        );
+        await forkWorkspace(source, target, ref);
+        assert.equal(await command(source, `cat ${repo}/file`), "later");
+        assert.equal(
+          await command(
+            target,
+            `cd ${repo} && test -f extra && git diff --cached --quiet && cat file`,
+          ),
+          "checkpoint",
+        );
+      });
+    }),
+  ),
+);
+
+it.effect("rewinds Command Code conversation without replacing its Box", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn } = yield* setup(
+        fakeStream([]),
+        undefined,
+        "commandCode",
+        undefined,
+        undefined,
+        undefined,
+        { commandCode: "fixture" },
+      );
+      const snapshot = yield* runtime.rollbackThread({
+        providerThread: {
+          ...turn.providerThread,
+          nativeConversationHeadRef: {
+            driver: turn.providerThread.driver,
+            nativeId: "cc-session",
+            strength: "strong",
+          },
+          lastRunOrdinal: 1,
+        },
+        target: {
+          type: "thread_start",
+          checkpointId: CheckpointId.make("box-checkpoint"),
+          appRunOrdinal: 0,
+        },
+        providerThreadTurns: [],
+      });
+      assert.deepEqual(
+        snapshot.providerThread.nativeThreadRef,
+        turn.providerThread.nativeThreadRef,
+      );
+      assert.isNull(snapshot.providerThread.nativeConversationHeadRef);
+      assert.isNull(snapshot.providerThread.lastRunOrdinal);
+    }),
+  ),
+);
+
+it.effect("rejects approval-required mode before starting a Box run", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runtime, turn, prompts } = yield* setup(fakeStream([]));
+      const result = yield* runtime
+        .startTurn({
+          ...turn,
+          runtimePolicy: { ...turn.runtimePolicy, runtimeMode: "approval-required" },
+        })
+        .pipe(Effect.flip);
+      assert.equal(result._tag, "ProviderAdapterProtocolError");
+      assert.isEmpty(prompts);
+    }),
+  ),
+);
+
 it.effect.each(["ok", "throw", "exit", "hang"] as const)(
   "cancels the active stream and interrupts despite %s cleanup",
   (cleanup) =>
@@ -1325,18 +1549,25 @@ it.effect.each(["ok", "throw", "exit", "hang"] as const)(
         const releaseCleanup = Promise.withResolvers<{ stdout: string; exitCode: number }>();
         let cancelCount = 0;
         const order: string[] = [];
-        const { runtime, turn, lookup } = yield* setup({
-          id: "native-run",
-          cancel: async () => {
-            cancelCount++;
-            order.push("cancel");
-            cancelled.resolve();
-          },
-          async *[Symbol.asyncIterator]() {
-            yield { type: "start", runId: "native-run" };
-            await cancelled.promise;
-          },
+        let streamCount = 0;
+        const { adapter, runtime, turn, lookup, prompts } = yield* setup(async () => {
+          if (streamCount++ > 0) return fakeStream([finish]);
+          return {
+            id: "native-run",
+            cancel: async () => {
+              cancelCount++;
+              order.push("cancel");
+              cancelled.resolve();
+            },
+            async *[Symbol.asyncIterator]() {
+              yield { type: "start", runId: "native-run" };
+              await cancelled.promise;
+            },
+          };
         });
+        const capabilities = yield* adapter.getCapabilities();
+        assert.isTrue(capabilities.turns.supportsSteeringByInterruptRestart);
+        assert.isFalse(capabilities.turns.supportsActiveSteering);
         lookup.exec = async (command) => {
           assert.include(command, "crate-harness.mjs");
           order.push("kill");
@@ -1377,6 +1608,15 @@ it.effect.each(["ok", "throw", "exit", "hang"] as const)(
           events.filter((entry) => entry.type === "turn.terminal")[0]?.status,
           "interrupted",
         );
+        if (cleanup === "ok") {
+          yield* runtime.startTurn({
+            ...turn,
+            attemptId: RunAttemptId.make("box-replacement"),
+            message: { ...turn.message, text: "steering input" },
+          });
+          yield* collect(runtime.events);
+          assert.match(prompts[1] ?? "", /\nhello\n\nsteering input$/u);
+        }
       }),
     ),
 );

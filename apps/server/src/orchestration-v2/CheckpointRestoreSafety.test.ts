@@ -4,11 +4,13 @@ import {
   CheckpointId,
   CheckpointScopeId,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
   ProviderSessionId,
   ProviderThreadId,
   ThreadId,
 } from "@t3tools/contracts";
+import { BoxApi } from "@t3tools/provider-upstash-box/server";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -26,6 +28,56 @@ import { ProjectionStoreV2, type ProjectionCheckpointRollbackContext } from "./P
 import * as ProjectStore from "./ProjectStore.ts";
 import { ProviderSessionManagerV2 } from "./ProviderSessionManager.ts";
 import { RuntimePolicyV2 } from "./RuntimePolicy.ts";
+
+it.effect.each([
+  { checkoutRoot: BoxApi.BOX_WORKSPACE_PATH, hasChild: true, isolated: false },
+  { checkoutRoot: BoxApi.BOX_WORKSPACE_PATH, hasChild: false, isolated: true },
+  { checkoutRoot: BoxApi.BOX_REPOSITORY_PATH, hasChild: true, isolated: true },
+] as const)(
+  "checks Box restore isolation in $checkoutRoot with a child: $hasChild",
+  ({ checkoutRoot, hasChild, isolated }) =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("box-parent");
+      const driver = ProviderDriverKind.make("boxCommandCode");
+      const parent = {
+        id: threadId,
+        worktreePath: null,
+        lineage: { rootThreadId: threadId, relationshipToParent: null, parentThreadId: null },
+      };
+      const child = {
+        id: ThreadId.make("box-child"),
+        deletedAt: null,
+        lineage: {
+          rootThreadId: threadId,
+          relationshipToParent: "subagent",
+          parentThreadId: threadId,
+        },
+      };
+      const result = yield* isCheckpointRestoreIsolated(
+        parent,
+        { cwd: "/project" },
+        {
+          fileSystem: yield* FileSystem.FileSystem,
+          path: yield* Path.Path,
+          projects: {} as ProjectStore.ProjectStoreV2["Service"],
+          projections: {
+            getShellSnapshot: () =>
+              Effect.succeed({ threads: [], archivedThreads: hasChild ? [child] : [] }),
+          } as unknown as ProjectionStoreV2["Service"],
+          boxResolver: {
+            resolveCheckpointTarget: () =>
+              Effect.succeed({ threadId, projectRoot: "/project", checkoutRoot }),
+          },
+        },
+        {
+          driver,
+          nativeThreadRef: { driver, nativeId: "test-box", strength: "strong" },
+          nativeMetadata: null,
+        },
+      );
+      assert.equal(result, isolated);
+    }).pipe(Effect.provide(NodeServices.layer)),
+);
 
 it.effect.each([
   "nested",

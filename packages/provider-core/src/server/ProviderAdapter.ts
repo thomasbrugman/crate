@@ -544,6 +544,10 @@ export interface ProviderAdapterV2EnsureThreadInput {
   readonly providerSessionId?: ProviderSessionId;
   readonly existingProviderThread?: OrchestrationV2ProviderThread;
   readonly forceNewNativeThread?: boolean;
+  readonly boxFork?: {
+    readonly sourceBoxId: string;
+    readonly checkpointRef: string;
+  };
 }
 
 export interface ProviderAdapterV2TurnInput {

@@ -3,10 +3,34 @@ import * as NodeStream from "node:stream";
 import type { Chunk, ExecStreamChunk } from "@upstash/box";
 import type { McpProviderSessionConfig } from "@t3tools/provider-core/server/mcpSession";
 
-import type { BoxHandle, BoxStream, BoxSubagentChunk } from "./BoxApi.ts";
+import type { BoxHandle, BoxHarnessChunk, BoxStream } from "./BoxApi.ts";
 import { makeMcpRelay } from "./mcpRelay.ts";
 
-function decodeFrame(frame: string): Chunk | BoxSubagentChunk | undefined {
+const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+function decodeQuestions(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry: Record<string, unknown> | null, index) => {
+    const question = text(entry?.question);
+    if (!question) return [];
+    const options = Array.isArray(entry?.options) ? (entry.options as unknown[]) : [];
+    return [
+      {
+        id: String(index),
+        header: text(entry?.header) || "Question",
+        question,
+        options: options.flatMap((option) => {
+          const record = option as Record<string, unknown> | null;
+          const label = text(record?.label);
+          return label ? [{ label, description: text(record?.description) || label }] : [];
+        }),
+        ...(entry?.multiSelect === true ? { multiSelect: true } : {}),
+      },
+    ];
+  });
+}
+
+function decodeFrame(frame: string): BoxHarnessChunk | undefined {
   const match = /^event: (\w+)\r?\ndata: (.+)$/su.exec(frame);
   if (!match) return;
   let data: Record<string, unknown>;
@@ -19,6 +43,33 @@ function decodeFrame(frame: string): Chunk | BoxSubagentChunk | undefined {
   }
   if (match[1] === "text" && typeof data.text === "string") {
     return { type: "text-delta", text: data.text };
+  }
+  if (match[1] === "reasoning" && typeof data.text === "string") {
+    return { type: "reasoning", text: data.text };
+  }
+  if (match[1] === "todo" && Array.isArray(data.steps)) {
+    return {
+      type: "todo",
+      steps: data.steps.flatMap((step: Record<string, unknown> | null) => {
+        const value = text(step?.text);
+        if (!value) return [];
+        const status =
+          step?.status === "running" || step?.status === "completed" ? step.status : "pending";
+        return [{ text: value, status }];
+      }),
+    };
+  }
+  if (match[1] === "plan" && text(data.markdown)) {
+    return { type: "proposed-plan", markdown: data.markdown as string };
+  }
+  if (match[1] === "question") {
+    const questions = decodeQuestions(data.questions);
+    if (!questions.length) return;
+    return {
+      type: "question",
+      ...(typeof data.tool_call_id === "string" ? { toolCallId: data.tool_call_id } : {}),
+      questions,
+    };
   }
   if (typeof data.task_id === "string") {
     if (match[1] === "subagent_started") {

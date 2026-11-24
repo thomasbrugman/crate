@@ -4155,7 +4155,13 @@ export default function ChatView(props: ChatViewProps) {
       <RevertConfirmHost
         threadKey={routeThreadKey}
         checkpoints={serverProjection?.checkpoints}
-        worktreePath={activeThread?.worktreePath ?? null}
+        workspaceIsolated={
+          cloudThread
+            ? activeThread != null &&
+              activeThread.lineage.sideChat !== true &&
+              activeThread.lineage.relationshipToParent !== "subagent"
+            : activeThread?.worktreePath != null
+        }
         onConfirm={onConfirmRevertStable}
       />
       {embedded ? null : <LinkPullRequestDialogHost />}

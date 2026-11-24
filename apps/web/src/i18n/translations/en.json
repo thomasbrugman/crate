@@ -4643,6 +4643,8 @@
   "911464a3d04a2927": "(guest)",
   "25af91477adfb3bf": "Retry or remove failed uploads before saving.",
   "5fbeffb697c7b33c": "Supervised",
+  "3dcf6d7ca24f1959": "Command Code can’t ask for approval.",
+  "e99473f5a1208bed": "Command Code can’t use {requested}. This thread will run with {effective}.",
   "dd48edd43c854b53": "Ask before commands and file changes.",
   "cceea5cef0684b31": "Auto-accept edits",
   "3fe210c30bf00152": "Auto-approve edits, ask before other actions.",

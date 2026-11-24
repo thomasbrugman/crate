@@ -4641,6 +4641,8 @@
   "911464a3d04a2927": "(invitado)",
   "25af91477adfb3bf": "Reintenta o quita las subidas fallidas antes de guardar.",
   "5fbeffb697c7b33c": "Supervisado",
+  "3dcf6d7ca24f1959": "Command Code no puede pedir aprobación.",
+  "e99473f5a1208bed": "Command Code no admite el modo {requested}. Este hilo se ejecutará con {effective}.",
   "dd48edd43c854b53": "Pregunta antes de comandos y cambios en archivos.",
   "cceea5cef0684b31": "Aceptar ediciones automáticamente",
   "3fe210c30bf00152": "Aprueba las ediciones automáticamente y pregunta antes de otras acciones.",

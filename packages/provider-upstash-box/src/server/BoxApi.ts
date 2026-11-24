@@ -15,7 +15,7 @@ import {
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import type { BoxSnapshot } from "@t3tools/contracts";
+import type { BoxSnapshot, OrchestrationV2UserInputQuestion } from "@t3tools/contracts";
 
 import type { BoxHarness } from "../harnesses.ts";
 
@@ -87,7 +87,25 @@ export type BoxSubagentChunk =
       readonly result: string;
     };
 
-export interface BoxStream extends AsyncIterable<Chunk | BoxSubagentChunk> {
+/** Planning frames from the harness bridges; Box's own chunks carry none of these. */
+export type BoxPlanChunk =
+  | {
+      readonly type: "todo";
+      readonly steps: ReadonlyArray<{
+        readonly text: string;
+        readonly status: "pending" | "running" | "completed";
+      }>;
+    }
+  | { readonly type: "proposed-plan"; readonly markdown: string }
+  | {
+      readonly type: "question";
+      readonly toolCallId?: string;
+      readonly questions: ReadonlyArray<OrchestrationV2UserInputQuestion>;
+    };
+
+export type BoxHarnessChunk = Chunk | BoxSubagentChunk | BoxPlanChunk;
+
+export interface BoxStream extends AsyncIterable<BoxHarnessChunk> {
   readonly id: string;
   readonly cancel: () => Promise<void>;
   readonly ownsProcess?: true;
@@ -118,7 +136,11 @@ export interface BoxHandle {
   readonly files: {
     readonly upload?: (files: Array<{ path: string; destination: string }>) => Promise<void>;
     readonly readBase64?: (path: string, offset: number, length: number) => Promise<string>;
-    readonly write: (options: { path: string; content: string }) => Promise<unknown>;
+    readonly write: (options: {
+      path: string;
+      content: string;
+      encoding?: "base64";
+    }) => Promise<unknown>;
     readonly writeVolatile?: (path: string, content: string) => Promise<void>;
   };
   readonly delete: () => Promise<unknown>;
