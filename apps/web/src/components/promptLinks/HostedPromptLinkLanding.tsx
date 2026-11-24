@@ -52,7 +52,7 @@ function summarize(
           ? {
               title: resolve(msg("Open this thread")),
               description: resolve(
-                msg("It opens in T3 Code if you're connected to the machine it runs on."),
+                msg("It opens in t3stash if you're connected to the machine it runs on."),
               ),
               prompt: null,
               details: [],
@@ -175,7 +175,7 @@ function HostedPromptLinkLanding({
           </AlertTitle>
           <AlertDescription>
             {gt(
-              "{count, plural, one {T3 Code removed {count} hidden character. Read the prompt before you send it.} other {T3 Code removed {count} hidden characters. Read the prompt before you send it.}}",
+              "{count, plural, one {t3stash removed {count} hidden character. Read the prompt before you send it.} other {t3stash removed {count} hidden characters. Read the prompt before you send it.}}",
               { count: prompt.hiddenCharacters },
             )}
           </AlertDescription>

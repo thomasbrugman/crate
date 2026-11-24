@@ -1,7 +1,7 @@
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
 
 const FALLBACK_TRIAGE_COMMAND = "npx t3 triage";
-const DOWNLOAD_URL = "https://t3.codes/download";
+const DOWNLOAD_URL = "https://github.com/thomasbrugman/t3stash#mac";
 const ISSUE_URL = "https://github.com/pingdotgg/t3code/issues/new";
 const LAST_FAILURE_KEY = "t3code:boot-failed-at";
 const REPEAT_FAILURE_MS = 5 * 60_000;
@@ -274,7 +274,7 @@ export function showBootError(error: unknown) {
   };
 
   const message = element("div", {}, [
-    element("h1", { textContent: "T3 Code failed to start" }),
+    element("h1", { textContent: "t3stash failed to start" }),
     element("p", {
       textContent: offline
         ? "This browser appears to be offline. Check the connection, then reload."
@@ -362,17 +362,17 @@ export function showBootError(error: unknown) {
     ...(bridge
       ? [
           link(
-            nightly ? `${DOWNLOAD_URL}?channel=nightly` : DOWNLOAD_URL,
+            DOWNLOAD_URL,
             nightly
               ? "Download and reinstall the latest nightly build"
-              : "Download and reinstall T3 Code",
+              : "Download and reinstall t3stash",
           ),
         ]
       : []),
     element("div", {}, [
       element("p", {
         textContent:
-          "Run this on the computer that runs T3 Code. Your agent can check the local logs and help you file a bug report.",
+          "Run this on the computer that runs t3stash. Your agent can check the local logs and help you file a bug report.",
       }),
       element("div", { id: "boot-error-command" }, [command, copyCommand]),
     ]),
