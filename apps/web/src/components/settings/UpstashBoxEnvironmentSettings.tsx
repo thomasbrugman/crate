@@ -156,14 +156,11 @@ export function UpstashBoxEnvironmentSettings({
                 {gt("Get a Box API key")}
                 <ExternalLinkIcon className="size-3" />
               </a>
-              <Button
-                size="xs"
-                variant="ghost-muted"
-                disabled={!keyConfigured || readOnly}
-                onClick={() => update({ apiKey: "" })}
-              >
-                {gt("Remove")}
-              </Button>
+              {keyConfigured && !readOnly ? (
+                <Button size="xs" variant="ghost-muted" onClick={() => update({ apiKey: "" })}>
+                  {gt("Remove")}
+                </Button>
+              ) : null}
             </div>
           </div>
         </SetupSection>
