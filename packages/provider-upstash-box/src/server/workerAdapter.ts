@@ -2,6 +2,7 @@ import {
   ServerProviderModel,
   type ChatAttachment,
   type ProviderInstanceId,
+  type ThreadId,
 } from "@t3tools/contracts";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as Effect from "effect/Effect";
@@ -222,7 +223,8 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
             ),
             Effect.flatMap((value) =>
               Effect.try({
-                try: () => sessionResult(method, value, "decode"),
+                try: () =>
+                  stampOwner(sessionResult(method, value, "decode"), policy.boxOwnerThreadId),
                 catch: () => failure(`Invalid ${method} reply from the Box worker.`),
               }),
             ),
@@ -263,6 +265,21 @@ export const makeBoxWorkerAdapter = Effect.fn("UpstashBox.makeWorkerAdapter")(fu
     }),
   });
 });
+
+/** Replies that carry a provider thread record the shared Box owner on it, like the legacy adapter. */
+function stampOwner(value: unknown, boxOwnerThreadId: ThreadId | undefined) {
+  if (boxOwnerThreadId === undefined || typeof value !== "object" || value === null) return value;
+  const thread = (value as { providerThread?: unknown }).providerThread;
+  if (typeof thread !== "object" || thread === null) return value;
+  const metadata = (thread as { nativeMetadata?: Record<string, unknown> | null }).nativeMetadata;
+  return {
+    ...value,
+    providerThread: {
+      ...thread,
+      nativeMetadata: { ...metadata, boxOwnerThreadId },
+    },
+  };
+}
 
 function boxWorkspace(input: unknown, cwd: string) {
   if (

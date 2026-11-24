@@ -14,7 +14,11 @@ import { msg, useGT, useMessages } from "gt-react";
 import { useState } from "react";
 import { CheckIcon, ExternalLinkIcon } from "lucide-react";
 
-import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
+import {
+  useEnvironmentSettings,
+  usePersistEnvironmentProviderInstanceMutation,
+  useUpdateEnvironmentSettings,
+} from "../../hooks/useSettings";
 import { providersIgnoringCheckedAtAtom } from "../../state/server";
 import { useEnvironmentScope } from "../../state/session";
 import { Button } from "../ui/button";
@@ -95,6 +99,7 @@ export function UpstashBoxEnvironmentSettings({
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const keyConfigured = typeof box.apiKey !== "string" || box.apiKey !== "";
   const update = (patch: Partial<typeof box>) => updateSettings({ upstashBox: patch });
+  const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
   const saveCredential = (
     harness: (typeof harnessCredentials)[number]["harness"],
     field: (typeof harnessCredentials)[number]["field"],
@@ -102,19 +107,20 @@ export function UpstashBoxEnvironmentSettings({
   ) => {
     // The worker harnesses are disabled by default: a saved credential is the
     // user's connect action, so enable their default instance or onboarding
-    // never counts the provider as ready.
+    // never counts the provider as ready. The upsert applies server-side to
+    // the current instance map, so it cannot clobber another client's edits.
     const driver = BOX_HARNESS_DRIVER_KINDS[harness];
     const instanceId = defaultInstanceIdForDriver(driver);
     const existing = providerInstances?.[instanceId] ?? { driver };
-    const enablePatch = resolveProviderInstanceEnabled(existing)
-      ? {}
-      : {
-          providerInstances: {
-            ...providerInstances,
-            [instanceId]: turnedOnInstance(existing),
-          },
-        };
-    updateSettings({ upstashBox: { [field]: credential }, ...enablePatch });
+    const patch = { upstashBox: { [field]: credential } };
+    if (resolveProviderInstanceEnabled(existing)) {
+      updateSettings(patch);
+      return;
+    }
+    void persistProviderInstance(
+      { operation: "upsert", instanceId, instance: turnedOnInstance(existing) },
+      patch,
+    );
   };
   const [selectedHarness, setSelectedHarness] = useState<
     (typeof harnessCredentials)[number]["harness"] | null
