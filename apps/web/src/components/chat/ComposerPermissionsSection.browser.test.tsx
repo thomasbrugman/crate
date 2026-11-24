@@ -1,4 +1,5 @@
-import type { RuntimeMode } from "@t3tools/contracts";
+import { ProviderDriverKind, type RuntimeMode } from "@t3tools/contracts";
+import { m } from "~/i18n/messages";
 import { type ReactNode, useRef, useState } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
@@ -15,9 +16,39 @@ import {
 } from "./composerEventScope";
 import { ComposerFooterModeControls, ComposerPermissionsSection } from "./ComposerFooterControls";
 import { ComposerPickerFooter } from "./ComposerModelEffort";
-import { resolveRuntimeModeOption, runtimeModeOptions } from "./runtimeModeConfig";
+import {
+  resolveComposerRuntimeModes,
+  resolveRuntimeModeOption,
+  runtimeModeOptions,
+} from "./runtimeModeConfig";
 
 const options = runtimeModeOptions.map((mode) => resolveRuntimeModeOption(mode));
+
+it("explains the Command Code fallback before sending a supervised draft", async () => {
+  const modes = resolveComposerRuntimeModes(
+    "approval-required",
+    { driver: ProviderDriverKind.make("boxCommandCode"), supportedRuntimeModes: ["full-access"] },
+    undefined,
+    m,
+  );
+  expect(modes.fallbackNotice).toBe(
+    "Command Code can’t use Supervised. This thread will run with Full access.",
+  );
+  await using screen = await render(
+    <ComposerFooterModeControls
+      runtimeMode={modes.mode}
+      runtimeModeOptions={modes.options}
+      onRuntimeModeChange={vi.fn()}
+    />,
+    { router: false },
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Permissions: Full access" }));
+  const supervised = page.getByRole("menuitemradio", { name: "Supervised" });
+  await expect.element(supervised).toHaveAttribute("aria-disabled", "true");
+  await expect
+    .element(supervised)
+    .toHaveAccessibleDescription("Command Code can’t ask for approval.");
+});
 
 // Mirrors the overflow menu, which holds the Permissions section.
 function OverflowMenu() {

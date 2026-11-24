@@ -1,3 +1,4 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
   ProviderDriverKind,
@@ -16,6 +17,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { vi } from "vite-plus/test";
 
+import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as BoxThreadCleanup from "./BoxThreadCleanup.ts";
 
@@ -200,6 +202,10 @@ it.effect.each(scenarios)(
         BoxThreadCleanup.layer.pipe(
           Layer.provideMerge(
             Layer.mergeAll(
+              NodeServices.layer,
+              ServerConfig.ServerConfig.layerTest(process.cwd(), {
+                prefix: "box-cleanup-test-",
+              }).pipe(Layer.provide(NodeServices.layer)),
               settings,
               Layer.mock(SecretResolver.SecretResolver)({
                 read: () => Effect.succeed(key === "secret_missing" ? [] : ["private-key"]),

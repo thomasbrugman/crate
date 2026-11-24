@@ -538,7 +538,10 @@ const layerVcs = Layer.empty.pipe(
   ),
 );
 
-const layerCheckpointStore = CheckpointStore.layer.pipe(Layer.provide(layerVcsDriverRegistry));
+const layerCheckpointStore = CheckpointStore.layer.pipe(
+  Layer.provide(layerVcsDriverRegistry),
+  Layer.provide(layerBoxGit),
+);
 
 const layerPortScanner = PortScanner.layer.pipe(
   Layer.provide(ProcessRunner.cloudLayer),
@@ -631,6 +634,7 @@ const layerScheduledTaskWebhookOrigin = Layer.effect(
 );
 
 const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
+  Layer.provide(layerBoxThreadResolver),
   Layer.provide(UsageLimitSources.layerResetFallback),
   Layer.provide(layerScheduledTaskWebhookOrigin),
   Layer.provide(ProviderUsageAnalytics.layer),

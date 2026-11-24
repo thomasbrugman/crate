@@ -450,6 +450,7 @@ export function layerWithRegistry<Error>(
         layerRuntime,
         layerServerConfig,
         layerServerSettings,
+        layerEffectOutboxProvided,
       ),
     ),
   );

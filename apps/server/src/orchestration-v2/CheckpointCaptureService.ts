@@ -1,4 +1,3 @@
-import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import {
   CheckpointScopeId,
   CommandId,
@@ -10,6 +9,7 @@ import {
   RunId,
   ThreadId,
 } from "@t3tools/contracts";
+import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -101,6 +101,11 @@ export const layer: Layer.Layer<
       }
 
       const capturedAt = yield* DateTime.now;
+      const forceMissing =
+        sideChat ||
+        (isUpstashBoxDriver(providerThread.driver) &&
+          (providerThread.driver !== "boxCommandCode" ||
+            providerThread.nativeMetadata?.boxOwnerThreadId !== undefined));
       const baselineOrdinalWithinScope = Math.max(0, run.ordinal - 1);
       const isPreserved = (ordinalWithinScope: number) =>
         preservedCheckpointOrdinals.includes(ordinalWithinScope);
@@ -112,7 +117,7 @@ export const layer: Layer.Layer<
           ordinalWithinScope,
           nodeId: rootNode.id,
           capturedAt: run.requestedAt,
-          forceMissing: sideChat || isUpstashBoxDriver(providerThread.driver),
+          forceMissing,
         });
       const threadStartCheckpoint =
         baselineOrdinalWithinScope === 0 || isPreserved(0) ? null : yield* materializeBaseline(0);
@@ -126,7 +131,7 @@ export const layer: Layer.Layer<
         ordinalWithinScope: run.ordinal,
         appRunOrdinal: run.ordinal,
         capturedAt,
-        forceMissing: sideChat || isUpstashBoxDriver(providerThread.driver),
+        forceMissing,
       });
       // Omit delegatedCompletion to preserve cohort writes made after capture loaded the run.
       const { delegatedCompletion: _delegatedCompletion, ...runWithoutDelegatedCompletion } = run;

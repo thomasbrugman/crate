@@ -1,5 +1,5 @@
 import { managedRuntimeModeDenial } from "@t3tools/client-runtime/contract-labels";
-import type { ManagedPolicySummary, RuntimeMode } from "@t3tools/contracts";
+import type { ManagedPolicySummary, RuntimeMode, ServerProvider } from "@t3tools/contracts";
 import { msg } from "gt-react";
 import { m, type MessageResolver } from "~/i18n/messages";
 import {
@@ -98,4 +98,39 @@ export function resolveRuntimeModeOptions(
     const disabledReason = runtimeModeDenial(managedPolicy, mode, resolve);
     return disabledReason === undefined ? option : { ...option, disabledReason };
   });
+}
+
+export function resolveComposerRuntimeModes(
+  requestedMode: RuntimeMode,
+  provider: Pick<ServerProvider, "driver" | "supportedRuntimeModes"> | undefined,
+  managedPolicy: ManagedPolicySummary | undefined,
+  resolve: MessageResolver,
+) {
+  const { mode, modes } = resolveCompatibleRuntimeMode(
+    requestedMode,
+    provider?.supportedRuntimeModes,
+  );
+  const options = resolveRuntimeModeOptions(modes, managedPolicy, resolve);
+  if (provider?.driver !== "boxCommandCode" || modes.includes("approval-required"))
+    return { mode, modes, options, fallbackNotice: undefined };
+  return {
+    mode,
+    modes,
+    options: [
+      {
+        ...resolveRuntimeModeOption("approval-required", resolve),
+        disabledReason: resolve(msg("Command Code can’t ask for approval.")),
+      },
+      ...options,
+    ],
+    fallbackNotice:
+      mode === requestedMode
+        ? undefined
+        : resolve(
+            msg("Command Code can’t use {requested}. This thread will run with {effective}.", {
+              requested: resolve(runtimeModeConfig[requestedMode].label),
+              effective: resolve(runtimeModeConfig[mode].label),
+            }),
+          ),
+  };
 }

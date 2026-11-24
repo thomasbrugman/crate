@@ -39,6 +39,9 @@ export class BoxThreadResolver extends Context.Service<
     readonly resolve: (
       threadId: ThreadId,
     ) => Effect.Effect<VcsThreadTarget.Target, BoxExec.BoxExecError>;
+    readonly resolveCheckpointTarget: (
+      threadId: ThreadId,
+    ) => Effect.Effect<VcsThreadTarget.Target | undefined, BoxExec.BoxExecError>;
     readonly resolveTerminal: (
       threadId: ThreadId,
     ) => Effect.Effect<
@@ -135,7 +138,7 @@ export const make = Effect.gen(function* () {
   );
   const resolve = Effect.fn("BoxThreadResolver.resolve")(function* (threadId: ThreadId) {
     const thread = yield* resolveThread(threadId);
-    if (!thread) return null;
+    if (!thread) return thread;
     const { providerThread, nativeId, apiKey, projectRoot } = thread;
     if (!repositories.has(nativeId)) {
       const unavailable = () => new BoxExec.BoxExecError({ threadId, reason: "box_unavailable" });
@@ -166,8 +169,21 @@ export const make = Effect.gen(function* () {
       comparisonBaseRef: thread.comparisonBaseRef,
     };
   });
+  const toTarget = (
+    threadId: ThreadId,
+    value: NonNullable<Effect.Success<ReturnType<typeof resolve>>>,
+  ): VcsThreadTarget.Target => ({
+    threadId,
+    projectRoot: value.projectRoot,
+    checkoutRoot: value.checkoutRoot,
+    ...(value.comparisonBaseRef ? { comparisonBaseRef: value.comparisonBaseRef } : {}),
+  });
   return {
-    exec: BoxExec.BoxExecThreadResolver.of({ resolve }),
+    exec: BoxExec.BoxExecThreadResolver.of({
+      resolve: Effect.fn("BoxThreadResolver.execTarget")((threadId) =>
+        resolve(threadId).pipe(Effect.map((value) => value ?? null)),
+      ),
+    }),
     target: BoxThreadResolver.of({
       resolveTerminal: Effect.fn("BoxThreadResolver.resolveTerminal")((threadId: ThreadId) =>
         resolveThread(threadId).pipe(
@@ -190,16 +206,21 @@ export const make = Effect.gen(function* () {
       resolve: Effect.fn("BoxThreadResolver.target")((threadId) =>
         resolve(threadId).pipe(
           Effect.filterOrFail(
-            (value) => value !== null,
+            (value) => value != null,
             () => new BoxExec.BoxExecError({ threadId, reason: "thread_unavailable" }),
           ),
-          Effect.map((value) => ({
-            threadId,
-            projectRoot: value.projectRoot,
-            checkoutRoot: value.checkoutRoot,
-            ...(value.comparisonBaseRef ? { comparisonBaseRef: value.comparisonBaseRef } : {}),
-          })),
+          Effect.map((value) => toTarget(threadId, value)),
         ),
+      ),
+      resolveCheckpointTarget: Effect.fn("BoxThreadResolver.checkpointTarget")(
+        (threadId: ThreadId) =>
+          resolve(threadId).pipe(
+            Effect.filterOrFail(
+              (value) => value !== null,
+              () => new BoxExec.BoxExecError({ threadId, reason: "thread_unavailable" }),
+            ),
+            Effect.map((value) => (value === undefined ? undefined : toTarget(threadId, value))),
+          ),
       ),
     }),
   };

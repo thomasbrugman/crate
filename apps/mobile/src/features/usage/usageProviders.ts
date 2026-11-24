@@ -11,10 +11,12 @@ export const PROVIDER_ORDER: readonly UsageProviderKind[] = [
   "antigravity",
   "pi",
   "muse",
+  "commandCode",
 ];
 
 export function usageProviderKind(driver: string): UsageProviderKind | null {
   if (driver === "claudeAgent") return "claude";
+  if (driver === "boxCommandCode") return "commandCode";
   return PROVIDER_ORDER.find((kind) => kind === driver) ?? null;
 }
 
@@ -27,6 +29,7 @@ export const PROVIDER_LABEL: Record<UsageProviderKind, string> = {
   antigravity: "Antigravity",
   pi: "Pi",
   muse: "Muse Code",
+  commandCode: "Command Code",
 };
 
 export function useProviderColors(): Record<UsageProviderKind, string> {

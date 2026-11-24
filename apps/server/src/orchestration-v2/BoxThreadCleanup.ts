@@ -5,15 +5,18 @@ import {
   ProviderThreadId,
   type OrchestrationV2ProviderThread,
 } from "@t3tools/contracts";
-import { BoxApi } from "@t3tools/provider-upstash-box/server";
+import { BoxApi, mirrorEveryBoxTranscript } from "@t3tools/provider-upstash-box/server";
 import { boxNameForThread, isBoxWorkerDriver } from "@t3tools/provider-upstash-box/harnesses";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
+import * as ServerConfig from "../config.ts";
 import { deriveProviderInstanceConfigMap } from "../provider/ProviderInstanceRegistryHydration.ts";
 import * as ServerSettings from "../serverSettings.ts";
 
@@ -59,6 +62,15 @@ const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
   const secrets = yield* SecretResolver.SecretResolver;
   const api = yield* BoxApi.BoxApi;
+  const config = yield* ServerConfig.ServerConfig;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  // Usage history reads host copies of the transcripts, so take the last copy before deleting.
+  const mirrorTranscripts = (box: BoxApi.BoxHandle) =>
+    mirrorEveryBoxTranscript(box, config.stateDir).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    );
   const readSecret = (value: SettingsSecretValue, threadId: ThreadId) =>
     isSecretReference(value)
       ? secrets
@@ -122,24 +134,35 @@ const make = Effect.gen(function* () {
         ),
       );
       if (!apiKey) return yield* failure("credentials_unavailable");
+      const deleteFailed = (error: unknown) =>
+        new BoxThreadCleanupError({
+          threadId,
+          providerThreadId: thread.id,
+          reason: "delete_failed",
+          boxError: BoxApi.boxErrorDetails(error, { boxId: nativeId }),
+        });
+      const box = yield* Effect.tryPromise({
+        try: async () => {
+          try {
+            return await api.get(nativeId, apiKey);
+          } catch (error) {
+            if (!BoxApi.isMissingBox(error)) throw error;
+            return undefined;
+          }
+        },
+        catch: deleteFailed,
+      });
+      if (box === undefined) return;
+      yield* mirrorTranscripts(box);
       yield* Effect.tryPromise({
         try: async () => {
           try {
-            const box = await api.get(nativeId, apiKey);
             await box.delete();
           } catch (error) {
             if (!BoxApi.isMissingBox(error)) throw error;
           }
         },
-        catch: (error) => {
-          const diagnostic = BoxApi.boxErrorDetails(error, { boxId: nativeId });
-          return new BoxThreadCleanupError({
-            threadId,
-            providerThreadId: thread.id,
-            reason: "delete_failed",
-            boxError: diagnostic,
-          });
-        },
+        catch: deleteFailed,
       });
     }),
   });

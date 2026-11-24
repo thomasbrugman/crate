@@ -1114,7 +1114,6 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       const startedAt = yield* Clock.currentTimeMillis;
       const indexId = yield* random.uuidV4();
       const tempIndexPath = path.join(gitCommonDir, `t3-checkpoint-index-${indexId}`);
-      const hostEnv = yield* HostProcess.Environment;
       // VcsProcess clears inherited object selectors, so every other command uses this store.
       const sharedObjects = path.join(gitCommonDir, "objects");
       const quotedObjects = quoteGitPatchPath(sharedObjects);
@@ -1467,7 +1466,6 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
                 );
                 if (candidates.length > CHECKPOINT_RECOVERY_MAX_CANDIDATES) return yield* error;
                 const nestedRepoEnv: NodeJS.ProcessEnv = {
-                  ...hostEnv,
                   GIT_DIR: undefined,
                   GIT_WORK_TREE: undefined,
                   GIT_COMMON_DIR: undefined,

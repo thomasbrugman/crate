@@ -6,10 +6,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 ${boxMcpStdio}
 
-const [harness, markedPrompt, model, session, kind, relay] = process.argv.slice(2);
-const prompt = markedPrompt.replace(/^t3stash-run:[0-9a-f]+\n/, '');
+const [harness, markedPrompt, model, session, kind, ...flags] = process.argv.slice(2);
+const planMode = flags.includes('plan');
+const codexPlanInstructions = 'You are in plan mode. Do not edit files or run commands that change state. ' +
+  'Explore as needed, then reply with your complete plan inside <proposed_plan></proposed_plan> tags.';
+const userPrompt = markedPrompt.replace(/^t3stash-run:[0-9a-f]+\n/, '');
+const prompt = planMode && harness === 'codex' ? codexPlanInstructions + '\n\n' + userPrompt : userPrompt;
 const emit = (type, data) => process.stdout.write('event: ' + type + '\ndata: ' + JSON.stringify(data) + '\n\n');
-const bridge = relay === 'relay' ? await startBoxMcp(emit) : null;
+const bridge = flags.includes('relay') ? await startBoxMcp(emit) : null;
 const binName = harness === 'claudeCode' ? 'claude' : 'codex';
 const localBin = '/home/boxuser/.local/bin/' + binName;
 const isolateSubagent = 'node -e ' + JSON.stringify(
@@ -31,10 +35,12 @@ const mcpArgs = !bridge ? []
        '-c', 'mcp_servers.t3-code.tool_timeout_sec=3900'];
 const args = harness === 'claudeCode'
   ? ['--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages',
-     '--permission-mode', 'bypassPermissions', ...claudeSettings, ...mcpArgs, '--model', model,
+     '--permission-mode', planMode ? 'plan' : 'bypassPermissions', ...claudeSettings, ...mcpArgs, '--model', model,
      ...(session ? ['--resume', session] : []), '--', prompt]
-  : [...mcpArgs, 'exec', ...(session ? ['resume'] : []), '--json',
-     '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--model', model,
+  : [...mcpArgs, 'exec', ...(planMode ? ['--sandbox', 'read-only'] : []),
+     ...(session ? ['resume'] : []), '--json',
+     ...(planMode ? [] : ['--dangerously-bypass-approvals-and-sandbox']),
+     '--skip-git-repo-check', '--model', model,
      '--', ...(session ? [session] : []), prompt];
 const env = { ...process.env };
 env.HOME = '/home/boxuser';
@@ -63,6 +69,41 @@ let sessionId = session;
 let sawText = false;
 let completed = false;
 let reportedError = false;
+let handedOff = false;
+const todoStatus = { in_progress: 'running', completed: 'completed' };
+const todo = (todos) => emit('todo', {
+  steps: (Array.isArray(todos) ? todos : []).map((step) => ({
+    text: step?.content ?? step?.text,
+    status: step?.completed === true ? 'completed' : todoStatus[step?.status] || 'pending',
+  })),
+});
+// Headless agents answer their own questions and plan approvals, so the run ends here
+// and the user's reply arrives as the next message on the resumed session.
+const handOff = () => {
+  handedOff = true;
+  child.kill('SIGTERM');
+  done(undefined, '');
+};
+const handoffTools = new Set();
+const claudeTool = (block) => {
+  if (block.name === 'TodoWrite') todo(block.input?.todos);
+  else if (block.name === 'AskUserQuestion') {
+    emit('question', { tool_call_id: block.id, questions: block.input?.questions ?? [] });
+    handOff();
+  } else if (block.name === 'ExitPlanMode') {
+    if (typeof block.input?.plan === 'string') emit('plan', { markdown: block.input.plan });
+    handOff();
+  } else return false;
+  handoffTools.add(block.id);
+  return true;
+};
+const codexMessage = (value) => {
+  if (typeof value !== 'string') return;
+  const match = planMode ? /<proposed_plan>([\s\S]*?)<\/proposed_plan>/u.exec(value) : null;
+  if (!match) return text(value);
+  text((value.slice(0, match.index) + value.slice(match.index + match[0].length)).trim());
+  emit('plan', { markdown: match[1].trim() });
+};
 const text = (value) => {
   if (typeof value !== 'string' || !value) return;
   sawText = true;
@@ -119,6 +160,7 @@ const handleClaudeSubagent = (frame) => {
   }
 };
 for await (const line of createInterface({ input: child.stdout })) {
+  if (handedOff) break;
   let frame;
   try { frame = JSON.parse(line); } catch { continue; }
   if (harness === 'claudeCode') {
@@ -129,13 +171,16 @@ for await (const line of createInterface({ input: child.stdout })) {
     }
     if (frame.type === 'stream_event' && frame.event?.delta?.type === 'text_delta') {
       text(frame.event.delta.text);
+    } else if (frame.type === 'stream_event' && frame.event?.delta?.type === 'thinking_delta') {
+      if (frame.event.delta.thinking) emit('reasoning', { text: frame.event.delta.thinking });
     } else if (frame.type === 'assistant') {
       for (const block of frame.message?.content ?? []) {
-        if (block.type === 'tool_use' && !isSubagentTool(block.name)) tool(block);
+        if (block.type === 'tool_use' && !isSubagentTool(block.name) && !claudeTool(block)) tool(block);
+        if (handedOff) break;
       }
     } else if (frame.type === 'user') {
       for (const block of frame.message?.content ?? []) {
-        if (block.type === 'tool_result') {
+        if (block.type === 'tool_result' && !handoffTools.has(block.tool_use_id)) {
           toolResult(block.tool_use_id, secretTools.delete(block.tool_use_id) ? null : block.content);
         }
       }
@@ -150,8 +195,12 @@ for await (const line of createInterface({ input: child.stdout })) {
   } else {
     if (frame.type === 'thread.started') sessionId = frame.thread_id;
     if (frame.type === 'item.started' && frame.item?.type === 'command_execution') tool(frame.item);
+    if (frame.item?.type === 'todo_list' && /^item\.(started|updated|completed)$/u.test(frame.type)) {
+      todo(frame.item.items);
+    }
     if (frame.type === 'item.completed') {
-      if (frame.item?.type === 'agent_message') text(frame.item.text);
+      if (frame.item?.type === 'agent_message') codexMessage(frame.item.text);
+      if (frame.item?.type === 'reasoning' && frame.item.text) emit('reasoning', { text: frame.item.text });
       if (frame.item?.type === 'command_execution') toolResult(frame.item.id, frame.item.aggregated_output);
     }
     if (frame.type === 'turn.completed') done(frame.usage);
@@ -160,5 +209,5 @@ for await (const line of createInterface({ input: child.stdout })) {
 }
 const code = await exited;
 bridge?.close();
-if (!completed || reportedError || code !== 0) process.exitCode = 1;
+if (!handedOff && (!completed || reportedError || code !== 0)) process.exitCode = 1;
 `;
