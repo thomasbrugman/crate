@@ -2683,7 +2683,7 @@
   "7f6d34983e89a91c": "Aktion löschen",
   "84435bd5cb8cfac0": "Aktion bearbeiten",
   "2d1f6668f713dca9": "Aktion hinzufügen",
-  "73bedbce4c29257a": "Aktionen werden für dieses Projekt gespeichert, aber nicht in Cloud-Threads ausgeführt.",
+  "adaa5145d9e1453e": "Die Setup-Aktion wird beim Start eines Cloud-Threads ausgeführt. Andere Aktionen werden gespeichert, aber nicht in Cloud-Threads ausgeführt.",
   "da1b3bc9635dcdc8": "Aktionen sind projektbezogene Befehle, die du über die obere Leiste oder Tastenkürzel ausführen kannst.",
   "4614a422f1430cd7": "Name",
   "d3502e7db0cdb998": "Tastenkürzel",

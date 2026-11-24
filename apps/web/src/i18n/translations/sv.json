@@ -2682,7 +2682,7 @@
   "7f6d34983e89a91c": "Ta bort åtgärd",
   "84435bd5cb8cfac0": "Redigera åtgärd",
   "2d1f6668f713dca9": "Lägg till åtgärd",
-  "73bedbce4c29257a": "Åtgärder sparas för det här projektet men körs inte i molntrådar.",
+  "adaa5145d9e1453e": "Konfigurationsåtgärden körs när en molntråd startar. Andra åtgärder sparas men körs inte i molntrådar.",
   "da1b3bc9635dcdc8": "Åtgärder är projektspecifika kommandon som du kan köra från det övre fältet eller med kortkommandon.",
   "4614a422f1430cd7": "Namn",
   "d3502e7db0cdb998": "Kortkommando",

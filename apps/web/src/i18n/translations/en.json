@@ -2682,7 +2682,7 @@
   "7f6d34983e89a91c": "Delete action",
   "84435bd5cb8cfac0": "Edit Action",
   "2d1f6668f713dca9": "Add Action",
-  "73bedbce4c29257a": "Actions are saved for this project but do not run in cloud threads.",
+  "adaa5145d9e1453e": "The setup action runs when a cloud thread starts. Other actions are saved but do not run in cloud threads.",
   "da1b3bc9635dcdc8": "Actions are project-scoped commands you can run from the top bar or keybindings.",
   "4614a422f1430cd7": "Name",
   "d3502e7db0cdb998": "Keybinding",
