@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { OrchestrationV2ProviderSession } from "@t3tools/contracts";
 import { ProviderAdapterV2Event } from "@t3tools/provider-core/server/ProviderAdapter";
 
 const Call = Schema.Struct({
@@ -8,13 +9,25 @@ const Call = Schema.Struct({
 });
 
 const Frame = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("ready"), methods: Schema.Array(Schema.String) }),
+  Schema.Struct({
+    type: Schema.Literal("startup_failure"),
+    reason: Schema.Literals(["launch", "authentication"]),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("ready"),
+    methods: Schema.Array(Schema.String),
+    providerSession: Schema.optionalKey(OrchestrationV2ProviderSession),
+  }),
   Schema.Struct({
     type: Schema.Literal("result"),
     id: Schema.Number,
     value: Schema.optionalKey(Schema.Unknown),
   }),
-  Schema.Struct({ type: Schema.Literal("failure"), id: Schema.Number }),
+  Schema.Struct({
+    type: Schema.Literal("failure"),
+    id: Schema.Number,
+    reason: Schema.optionalKey(Schema.Literal("authentication")),
+  }),
   Schema.Struct({ type: Schema.Literal("event"), event: ProviderAdapterV2Event }),
 ]);
 

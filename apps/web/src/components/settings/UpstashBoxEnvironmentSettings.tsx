@@ -40,6 +40,24 @@ const harnessCredentials = [
     label: BOX_HARNESS_LABELS.codex,
     hint: msg("Paste an OpenAI API key or the contents of ~/.codex/auth.json after signing in."),
   },
+  {
+    harness: "opencode",
+    field: "opencodeAuth",
+    label: BOX_HARNESS_LABELS.opencode,
+    hint: msg("Paste the contents of ~/.local/share/opencode/auth.json after signing in."),
+  },
+  {
+    harness: "cursor",
+    field: "cursorAuth",
+    label: BOX_HARNESS_LABELS.cursor,
+    hint: msg("Paste your Cursor API key."),
+  },
+  {
+    harness: "antigravity",
+    field: "antigravityAuth",
+    label: BOX_HARNESS_LABELS.antigravity,
+    hint: msg("Paste your Gemini API key."),
+  },
 ] as const;
 
 export const UPSTASH_BOX_SIZE_LABELS = {

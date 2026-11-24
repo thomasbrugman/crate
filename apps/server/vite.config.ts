@@ -9,6 +9,7 @@ import { resolveTaggedSourceVersion } from "../../scripts/lib/tagged-source-vers
 import rootPackageJson from "../../package.json" with { type: "json" };
 import packageJson from "./package.json" with { type: "json" };
 import { WeightedShardSequencer } from "./src/testUtils/weightedShardSequencer.ts";
+import { boxProviderArtifact } from "./src/provider/boxProviderArtifactSource.ts";
 
 // NSIS install time tracks file count, not bytes.
 import {
@@ -93,6 +94,17 @@ export default mergeConfig(
     },
     pack: {
       plugins: [
+        {
+          name: "t3code:box-provider-worker",
+          resolveId(id) {
+            if (id === "./boxProviderArtifactSource.ts") return "\0box-provider-artifact";
+          },
+          async load(id) {
+            if (id === "\0box-provider-artifact") {
+              return `export const boxProviderArtifact = async () => ${JSON.stringify(await boxProviderArtifact())};`;
+            }
+          },
+        },
         {
           // Every server module reads its version from this manifest import.
           name: "t3code:build-version",

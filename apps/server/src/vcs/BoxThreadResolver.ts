@@ -5,7 +5,11 @@ import {
   GitCommandError,
 } from "@t3tools/contracts";
 import { BoxApi, BoxExec } from "@t3tools/provider-upstash-box/server";
-import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
+import {
+  boxNameForThread,
+  isBoxWorkerDriver,
+  isUpstashBoxDriver,
+} from "@t3tools/provider-upstash-box/harnesses";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as Context from "effect/Context";
 import * as Config from "effect/Config";
@@ -112,7 +116,9 @@ export const make = Effect.gen(function* () {
       if (!apiKey) return null;
       return {
         providerThread,
-        nativeId: providerThread.nativeThreadRef.nativeId,
+        nativeId: isBoxWorkerDriver(providerThread.driver)
+          ? boxNameForThread(providerThread.nativeMetadata?.boxOwnerThreadId ?? threadId)
+          : providerThread.nativeThreadRef.nativeId,
         apiKey,
         projectRoot: project.value.workspaceRoot,
         comparisonBaseRef: context.thread.lineage.boxBaseCommit,

@@ -1,7 +1,7 @@
 import type { ServerProviderModel } from "@t3tools/contracts";
 import { ClaudeCode, OpenAICodex } from "@upstash/box";
 
-import type { BoxHarness } from "../harnesses.ts";
+import type { LegacyBoxHarness } from "../harnesses.ts";
 
 export const COMMAND_CODE_TEMPLATE_MODEL = "default";
 
@@ -9,7 +9,7 @@ const DEFAULT_MODELS = {
   commandCode: COMMAND_CODE_TEMPLATE_MODEL,
   claudeCode: ClaudeCode.Opus_5,
   codex: OpenAICodex.GPT_5_5,
-} as const satisfies Record<BoxHarness, string>;
+} as const satisfies Record<LegacyBoxHarness, string>;
 
 const words = (value: string) =>
   value
@@ -26,7 +26,7 @@ export function boxModelName(slug: string): string {
   return id;
 }
 
-export function boxHarnessModels(harness: BoxHarness): ReadonlyArray<ServerProviderModel> {
+export function boxHarnessModels(harness: LegacyBoxHarness): ReadonlyArray<ServerProviderModel> {
   const slugs: ReadonlyArray<string> =
     harness === "commandCode"
       ? [COMMAND_CODE_TEMPLATE_MODEL]

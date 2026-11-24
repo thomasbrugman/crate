@@ -17,13 +17,26 @@ it.effect("resolves vault-backed harness credentials alongside pasted ones", () 
         commandCodeAuth: "fixture-key",
         claudeCodeAuth: { provider, reference: "op://fixture/claude" },
         codexAuth: { provider, reference: "op://fixture/missing" },
+        opencodeAuth: '{"provider":{"type":"api","key":"fixture"}}',
+        cursorAuth: { provider, reference: "op://fixture/cursor" },
+        antigravityAuth: "fixture-gemini-key",
       },
-      (ref) => Effect.succeed(ref.reference.endsWith("/claude") ? "fixture-oauth" : undefined),
+      (ref) =>
+        Effect.succeed(
+          ref.reference.endsWith("/claude")
+            ? "fixture-oauth"
+            : ref.reference.endsWith("/cursor")
+              ? "fixture-cursor-key"
+              : undefined,
+        ),
     );
     assert.deepEqual(credentials, {
       commandCode: "fixture-key",
       claudeCode: "fixture-oauth",
       codex: "",
+      opencode: '{"provider":{"type":"api","key":"fixture"}}',
+      cursor: "fixture-cursor-key",
+      antigravity: "fixture-gemini-key",
     });
   }),
 );

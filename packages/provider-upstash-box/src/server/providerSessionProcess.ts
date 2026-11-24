@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off -- The Box exec callbacks supply stdout bytes, not a stream.
 import * as NodeReadline from "node:readline";
 import * as NodeStream from "node:stream";
+import type { OrchestrationV2ProviderSession } from "@t3tools/contracts";
 import type { ProviderAdapterV2Event } from "@t3tools/provider-core/server/ProviderAdapter";
 import type { ExecSessionOptions } from "@upstash/box";
 import * as Cause from "effect/Cause";
@@ -16,11 +17,15 @@ export class BoxProviderProcessError extends Schema.TaggedError<
   BoxProviderProcessError,
   { readonly brand: unique symbol }
 >()("BoxProviderProcessError", {
-  reason: Schema.Literals(["launch", "closed", "protocol", "request_failed"]),
+  reason: Schema.Literals(["launch", "closed", "protocol", "request_failed", "authentication"]),
 }) {}
 
 type Ready =
-  | { readonly type: "ready"; readonly methods: ReadonlySet<string> }
+  | {
+      readonly type: "ready";
+      readonly methods: ReadonlySet<string>;
+      readonly providerSession: OrchestrationV2ProviderSession | undefined;
+    }
   | { readonly type: "failed"; readonly error: BoxProviderProcessError };
 const isBoxProviderProcessError = Schema.is(BoxProviderProcessError);
 
@@ -32,6 +37,7 @@ interface PendingCall {
 export const openBoxProviderProcess = Effect.fn("UpstashBox.openProviderProcess")(function* (
   box: Pick<BoxHandle, "exec">,
   launch: Pick<ExecSessionOptions, "argv" | "cwd" | "env">,
+  initialize?: string,
 ) {
   const events = yield* Queue.make<ProviderAdapterV2Event, BoxProviderProcessError>();
   const spawn = box.exec.session;
@@ -75,10 +81,12 @@ export const openBoxProviderProcess = Effect.fn("UpstashBox.openProviderProcess"
     if (closed) return;
     try {
       const frame = decodeFrame(line);
-      if (frame.type === "ready") {
+      if (frame.type === "startup_failure") {
+        close(frame.reason);
+      } else if (frame.type === "ready") {
         if (methods) throw new Error();
         methods = new Set(frame.methods);
-        ready.resolve({ type: "ready", methods });
+        ready.resolve({ type: "ready", methods, providerSession: frame.providerSession });
       } else if (frame.type === "event") {
         if (!methods) throw new Error();
         Queue.offerUnsafe(events, frame.event);
@@ -87,7 +95,7 @@ export const openBoxProviderProcess = Effect.fn("UpstashBox.openProviderProcess"
         if (!call) return;
         pending.delete(frame.id);
         if (frame.type === "result") call.resolve(frame.value);
-        else call.reject(new BoxProviderProcessError({ reason: "request_failed" }));
+        else call.reject(new BoxProviderProcessError({ reason: frame.reason ?? "request_failed" }));
       }
     } catch {
       close("protocol");
@@ -98,6 +106,12 @@ export const openBoxProviderProcess = Effect.fn("UpstashBox.openProviderProcess"
     () => close("closed"),
     () => close("closed"),
   );
+  if (initialize !== undefined) {
+    yield* Effect.try({
+      try: () => session.write(initialize + "\n"),
+      catch: () => new BoxProviderProcessError({ reason: "launch" }),
+    });
+  }
   const startup = yield* Effect.promise(() => ready.promise);
   if (startup.type === "failed") return yield* startup.error;
   const available = startup.methods;
@@ -132,5 +146,10 @@ export const openBoxProviderProcess = Effect.fn("UpstashBox.openProviderProcess"
           : new BoxProviderProcessError({ reason: "protocol" }),
     });
 
-  return { call, methods: available, events: Stream.fromQueue(events) };
+  return {
+    call,
+    methods: available,
+    providerSession: startup.providerSession,
+    events: Stream.fromQueue(events),
+  };
 });

@@ -15,7 +15,7 @@ import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
-import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
+import { BOX_HARNESS_LABELS, type LegacyBoxHarness } from "../harnesses.ts";
 import {
   BOX_HOME,
   BOX_REPOSITORY_PATH,
@@ -55,7 +55,7 @@ export type BoxEnvironmentConfig = Pick<
 /** Which agent runs inside the thread's Box. */
 export interface BoxAgentConfig {
   readonly driver: ProviderDriverKind;
-  readonly harness: BoxHarness;
+  readonly harness: LegacyBoxHarness;
   readonly agentApiKey: string;
 }
 

@@ -10,9 +10,14 @@ import {
 } from "./ServerSecretStore.ts";
 
 const keyName = "upstash-box-harness-encryption-key";
-const encryptedNames = ["commandCodeAuth", "claudeCodeAuth", "codexAuth"].map(
-  (field) => `upstash-box-${Buffer.from(field).toString("base64url")}`,
-);
+const encryptedNames = [
+  "commandCodeAuth",
+  "claudeCodeAuth",
+  "codexAuth",
+  "opencodeAuth",
+  "cursorAuth",
+  "antigravityAuth",
+].map((field) => `upstash-box-${Buffer.from(field).toString("base64url")}`);
 const isHarnessSecret = (name: string) =>
   encryptedNames.some((prefix) => name === prefix || name.startsWith(`${prefix}-`));
 

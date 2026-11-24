@@ -385,7 +385,7 @@ it.effect.each([
                 ? volatile.has("/dev/shm/t3stash-git/stamp")
                   ? 0
                   : 1
-                : command.startsWith("test -f")
+                : command.startsWith("test -f") && !command.includes(" || npm i ")
                   ? 1
                   : 0,
             };
@@ -405,6 +405,9 @@ it.effect.each([
         commandCode: '{"token":"command-fixture"}',
         claudeCode: "sk-ant-oat-test",
         codex: "codex-key-fixture",
+        opencode: '{"fixture":{"type":"api","key":"opencode-key-fixture"}}',
+        cursor: "cursor-key-fixture",
+        antigravity: "gemini-key-fixture",
       };
       const prepareBox = ensureBox(
         {
@@ -415,6 +418,7 @@ it.effect.each([
           model: "default",
           agentApiKey: "",
           credentials,
+          workerArtifact: async () => "fixture worker bundle",
           githubToken: "fixture-github-token",
           ...(snapshotId ? { snapshotId } : {}),
         },
@@ -497,6 +501,18 @@ it.effect.each([
         volatile.get("/dev/shm/t3stash-auth/codex/auth.json") ?? "",
         credentials.codex,
       );
+      assert.include(commands.join("\n"), "npm i -g --prefix /home/boxuser/.local opencode-ai@");
+      assert.include(commands.join("\n"), "@cursor/sdk@1.3.1");
+      assert.include([...files.values()], "fixture worker bundle");
+      for (const harness of ["opencode", "cursor", "antigravity"] as const) {
+        assert.equal(
+          volatile.get(`/dev/shm/t3stash-auth/${harness}/credential`),
+          credentials[harness],
+        );
+        assert.notInclude(commands.join("\n"), credentials[harness]);
+        assert.notInclude(JSON.stringify(created), credentials[harness]);
+        assert.notInclude(JSON.stringify([...files]), credentials[harness]);
+      }
       assert.deepEqual(templateReads, []);
       assert.include(
         commands.join("\n"),

@@ -10,7 +10,7 @@ import { BoxProviderProcessError, openBoxProviderProcess } from "./providerSessi
 import { decodeCall, decodeFrame, encodeCall, encodeFrame } from "./providerSessionWire.ts";
 import { serveProviderSession } from "./serveProviderSession.ts";
 
-function fixture(response: (line: string, emit: (line: string) => void) => void) {
+function fixture(response: (line: string, emit: (line: string) => void) => void, eager = true) {
   const exited = Promise.withResolvers<number>();
   let closed = false;
   const exec: BoxHandle["exec"] = {
@@ -21,7 +21,8 @@ function fixture(response: (line: string, emit: (line: string) => void) => void)
         onStdout?.(bytes.subarray(0, 3));
         onStdout?.(bytes.subarray(3));
       };
-      emit(encodeFrame({ type: "ready", methods: ["startTurn", "interruptTurn"] }) + "\n");
+      if (eager)
+        emit(encodeFrame({ type: "ready", methods: ["startTurn", "interruptTurn"] }) + "\n");
       return {
         id: "exec",
         pid: 7,
@@ -75,6 +76,25 @@ it.effect("closes the session and redacts invalid process frames", () =>
     assert.deepEqual(error, new BoxProviderProcessError({ reason: "protocol" }));
     assert.isTrue(box.closed());
   }).pipe(Effect.scoped),
+);
+
+it.effect("sends the startup input before awaiting a worker sign-in failure", () =>
+  Effect.gen(function* () {
+    const box = fixture((line, emit) => {
+      assert.equal(line, '{"instanceId":"cursor"}\n');
+      emit(encodeFrame({ type: "startup_failure", reason: "authentication" }) + "\n");
+    }, false);
+    const error = yield* openBoxProviderProcess(
+      box,
+      { argv: ["node", "worker.mjs"] },
+      '{"instanceId":"cursor"}',
+    ).pipe(
+      Effect.scoped,
+      Effect.match({ onSuccess: () => undefined, onFailure: (error) => error }),
+    );
+    assert.deepEqual(error, new BoxProviderProcessError({ reason: "authentication" }));
+    assert.isTrue(box.closed());
+  }),
 );
 
 it.effect("serves upstream runtime calls without advertising unavailable methods", () =>

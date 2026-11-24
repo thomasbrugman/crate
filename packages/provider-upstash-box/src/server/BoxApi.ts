@@ -16,10 +16,9 @@ import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import type { BoxSnapshot } from "@t3tools/contracts";
+import { isWorkerBoxHarness, type BoxHarness } from "../harnesses.ts";
 
-import type { BoxHarness } from "../harnesses.ts";
-
-export type ManagedAgentHarness = Exclude<BoxHarness, "commandCode">;
+export type ManagedAgentHarness = "claudeCode" | "codex";
 import { COMMAND_CODE_TEMPLATE_MODEL } from "./models.ts";
 
 export const BOX_HOME = "/home/boxuser";
@@ -346,6 +345,7 @@ export function boxConfig(input: {
     labels: ["t3stash"],
     networkPolicy: { mode: "allow-all" },
   } satisfies BoxConfig;
+  if (isWorkerBoxHarness(input.harness)) return base;
   if (input.harness === "commandCode")
     return {
       ...base,
