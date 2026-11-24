@@ -58,7 +58,7 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
-import { getUpstashBoxHarness } from "@t3tools/client-runtime/provider-clients";
+import { getUpstashBoxHarness, isWorkerBoxHarness } from "@t3tools/client-runtime/provider-clients";
 import { projectEnvironment } from "../../state/projects";
 import { useEnvironmentQuery } from "../../state/query";
 import { type FolderDropTarget, folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
@@ -988,6 +988,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isSendDisabled = sendDisabledReason !== null;
   const selectedProviderStatus = selectedProviderEntry?.snapshot ?? null;
   const boxHarness = getUpstashBoxHarness(selectedProviderStatus?.driver);
+  const boxComposerHarness =
+    boxHarness !== undefined && !isWorkerBoxHarness(boxHarness) ? boxHarness : undefined;
   const boxComposerThreadId =
     props.cloudThread && routeKind === "server" ? activeThread?.id : undefined;
   const { refresh: refreshWorkspaceSnapshotOnTyping, scanning: localWorkspaceSkillsScanning } =
@@ -1040,11 +1042,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const boxComposerCapabilities = useEnvironmentQuery(
     environmentId &&
       boxComposerThreadId &&
-      boxHarness &&
+      boxComposerHarness &&
       (composerTrigger?.kind === "slash-command" || composerTrigger?.kind === "skill")
       ? projectEnvironment.boxComposerCapabilities({
           environmentId,
-          input: { threadId: boxComposerThreadId, harness: boxHarness },
+          input: { threadId: boxComposerThreadId, harness: boxComposerHarness },
         })
       : null,
   );

@@ -6,6 +6,7 @@ import {
   type OrchestrationV2ProviderThread,
 } from "@t3tools/contracts";
 import { BoxApi, mirrorEveryBoxTranscript } from "@t3tools/provider-upstash-box/server";
+import { boxNameForThread, isBoxWorkerDriver } from "@t3tools/provider-upstash-box/harnesses";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -91,9 +92,12 @@ const make = Effect.gen(function* () {
       const nativeRef = thread.nativeThreadRef;
       if (nativeRef !== null && (nativeRef.driver !== thread.driver || !nativeRef.nativeId))
         return yield* failure("invalid_reference");
-      const nativeId =
-        nativeRef?.nativeId ??
-        (thread.appThreadId ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}` : undefined);
+      const nativeId = isBoxWorkerDriver(thread.driver)
+        ? boxNameForThread(threadId)
+        : (nativeRef?.nativeId ??
+          (thread.appThreadId
+            ? `t3-${Buffer.from(thread.appThreadId).toString("hex")}`
+            : undefined));
       if (!nativeId) return yield* failure("invalid_reference");
       const apiKey = yield* Effect.gen(function* () {
         const current = yield* settings.getSettings.pipe(

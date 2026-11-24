@@ -5,7 +5,7 @@ import { EphemeralBox } from "@upstash/box";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 
-import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
+import { BOX_HARNESS_LABELS } from "../harnesses.ts";
 import type { BoxEnvironmentConfig } from "./adapter.ts";
 import { BOX_HOME } from "./BoxApi.ts";
 import { cliPackages } from "./bootstrap.ts";
@@ -15,11 +15,12 @@ const login = {
   commandCode: { args: ["login"], file: ".commandcode/auth.json" },
   claudeCode: { args: ["auth", "login", "--claudeai"], file: ".claude/.credentials.json" },
   codex: { args: ["login", "--device-auth"], file: ".codex/auth.json" },
+  opencode: { args: ["auth", "login"], file: ".local/share/opencode/auth.json" },
 } as const;
 
 export const makeBoxHarnessAuth = Effect.fn("UpstashBox.makeAuth")(function* (
   instanceId: ProviderInstanceId,
-  harness: BoxHarness,
+  harness: keyof typeof login,
   environment: Effect.Effect<BoxEnvironmentConfig>,
   updateSettings: NonNullable<ProviderHost["Service"]["settings"]["update"]>,
 ) {

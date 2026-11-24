@@ -34,7 +34,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vite-plus/test";
 
-import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
+import { BOX_HARNESS_DRIVER_KINDS, type LegacyBoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import {
   BOX_ATTACHMENTS_PATH,
@@ -68,7 +68,7 @@ const finish: Chunk = {
 const setup = Effect.fn("test.setupBox")(function* (
   stream: BoxStream | (() => Promise<BoxStream>),
   deleteBox?: () => Promise<void>,
-  harness: BoxHarness = "commandCode",
+  harness: LegacyBoxHarness = "commandCode",
   command?: BoxHandle["exec"]["command"],
   apiKey = "test-key",
   githubToken?: string,
@@ -735,7 +735,12 @@ it.effect("shares a Box across harnesses and gives a linked subagent an isolated
         size: "small" as const,
         credentials: { commandCode: '{"token":"fixture"}', codex: "fixture-key" },
       });
-      const open = (harness: BoxHarness, owner: ThreadId, thread: ThreadId, worktree: boolean) =>
+      const open = (
+        harness: LegacyBoxHarness,
+        owner: ThreadId,
+        thread: ThreadId,
+        worktree: boolean,
+      ) =>
         Effect.gen(function* () {
           const providerId = ProviderInstanceId.make(harness);
           const selected = { ...modelSelection, instanceId: providerId };

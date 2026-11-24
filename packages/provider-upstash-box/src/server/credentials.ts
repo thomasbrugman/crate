@@ -16,6 +16,9 @@ export const BOX_HARNESS_AUTH_FIELDS = {
   commandCode: "commandCodeAuth",
   claudeCode: "claudeCodeAuth",
   codex: "codexAuth",
+  opencode: "opencodeAuth",
+  cursor: "cursorAuth",
+  antigravity: "antigravityAuth",
 } as const;
 
 export function readBoxSecret(
@@ -34,6 +37,9 @@ export function readHarnessCredentials(
     commandCode: readBoxSecret(box.commandCodeAuth, resolve),
     claudeCode: readBoxSecret(box.claudeCodeAuth, resolve),
     codex: readBoxSecret(box.codexAuth, resolve),
+    opencode: readBoxSecret(box.opencodeAuth, resolve),
+    cursor: readBoxSecret(box.cursorAuth, resolve),
+    antigravity: readBoxSecret(box.antigravityAuth, resolve),
   });
 }
 
@@ -75,6 +81,10 @@ export function isAuthJson(value: string): boolean {
 
 export function harnessCredentialKind(harness: BoxHarness, value: string) {
   if (!value?.trim()) return undefined;
+  if (harness === "opencode") return isAuthJson(value) ? "file" : undefined;
+  if (harness === "cursor" || harness === "antigravity") {
+    return /[\s{}]/u.test(value) ? undefined : "key";
+  }
   if (value.trimStart().startsWith("{")) return isAuthJson(value) ? "file" : undefined;
   if (/[\s{}]/u.test(value)) return undefined;
   return harness === "claudeCode" && value.startsWith("sk-ant-oat") ? "token" : "key";

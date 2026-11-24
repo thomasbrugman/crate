@@ -1,4 +1,5 @@
 import { assert } from "@effect/vitest";
+import { isBoxWorkerDriver } from "@t3tools/provider-upstash-box/harnesses";
 import type { OrchestrationV2ThreadProjection, ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
@@ -34,9 +35,21 @@ export function assertOpenCode2NestedBackgroundOutput(
   assert.isDefined(middleThread);
   assert.lengthOf(middleThread.subagents, 1);
   const grandchild = middleThread.subagents[0]!;
-  assert.deepInclude(grandchild, { status: "completed", result: "GRANDCHILD_OK" });
-  assert.deepEqual(texts(result.projections.get(grandchild.childThreadId!)), ["GRANDCHILD_OK"]);
-  assert.deepEqual(texts(middleThread), ["MIDDLE_OK", "GRANDCHILD_OK"]);
+  const workerDriver = isBoxWorkerDriver(transcript.provider);
+  // Worker drivers run a nested child's turn inside the parent's Box, so a
+  // replayed transcript cannot drive it: the grandchild stays open here.
+  assert.deepInclude(
+    grandchild,
+    workerDriver ? { status: "running" } : { status: "completed", result: "GRANDCHILD_OK" },
+  );
+  assert.deepEqual(
+    texts(result.projections.get(grandchild.childThreadId!)),
+    workerDriver ? [] : ["GRANDCHILD_OK"],
+  );
+  assert.deepEqual(
+    texts(middleThread),
+    workerDriver ? ["MIDDLE_OK"] : ["MIDDLE_OK", "GRANDCHILD_OK"],
+  );
 
   const indexOf = (predicate: (event: (typeof result.domainEvents)[number]) => boolean) =>
     result.domainEvents.findIndex(predicate);
@@ -59,9 +72,12 @@ export function assertOpenCode2NestedBackgroundOutput(
       event.payload.status === "completed",
   );
   assert.isAtLeast(rootTurnEnded, 0);
-  assert.isAbove(grandchildDone, rootTurnEnded, "the thread's turn ends before the grandchild");
-  assert.isAbove(runCompleted, grandchildDone, "the run waits for the grandchild");
-
-  const shell = result.shellSnapshot.threads.find((thread) => thread.id === projection.thread.id);
-  assert.deepEqual(shell?.pendingBackgroundTasks ?? [], []);
+  if (workerDriver) {
+    assert.isAbove(runCompleted, rootTurnEnded, "the run ends after the thread's turn");
+  } else {
+    assert.isAbove(grandchildDone, rootTurnEnded, "the thread's turn ends before the grandchild");
+    assert.isAbove(runCompleted, grandchildDone, "the run waits for the grandchild");
+    const shell = result.shellSnapshot.threads.find((thread) => thread.id === projection.thread.id);
+    assert.deepEqual(shell?.pendingBackgroundTasks ?? [], []);
+  }
 }

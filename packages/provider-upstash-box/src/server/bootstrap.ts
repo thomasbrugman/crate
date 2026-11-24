@@ -4,7 +4,7 @@ import * as NodeCrypto from "node:crypto";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import type { BoxHarness } from "../harnesses.ts";
+import { isWorkerBoxHarness, type BoxHarness, type WorkerBoxHarness } from "../harnesses.ts";
 import {
   BOX_HOME,
   BoxApi,
@@ -50,6 +50,7 @@ export interface BoxRuntimeConfig {
   readonly credentials?: BoxHarnessCredentials;
   readonly githubToken?: string;
   readonly snapshotId?: string;
+  readonly workerArtifact?: () => Promise<string>;
 }
 
 const BOOTSTRAPPED_MARKER = "/home/boxuser/.crate-bootstrapped";
@@ -213,10 +214,12 @@ export const ensureBox = Effect.fn("UpstashBox.ensureBox")(function* (
 
 export const BOX_HARNESS_PATH = `${BOX_HOME}/.local/bin/crate-harness.mjs`;
 export const BOX_MANAGED_HARNESS_PATH = `${BOX_HOME}/.local/bin/crate-managed.mjs`;
+export const BOX_PROVIDER_WORKER_PATH = `${BOX_HOME}/.local/lib/crate-provider/worker.mjs`;
 export const cliPackages = {
   commandCode: { bin: "command-code", package: "command-code@1.91.1" },
   claudeCode: { bin: "claude", package: "@anthropic-ai/claude-code@2.1.80" },
   codex: { bin: "codex", package: "@openai/codex@0.115.0" },
+  opencode: { bin: "opencode", package: "opencode-ai@1.19.6" },
 } as const;
 
 function credentialSelection(config: BoxRuntimeConfig): BoxHarnessCredentials {
@@ -229,6 +232,13 @@ function credentialSelection(config: BoxRuntimeConfig): BoxHarnessCredentials {
 }
 
 export function installHarnessCli(box: Pick<BoxHandle, "exec">, harness: BoxHarness) {
+  if (harness === "antigravity") return Promise.resolve();
+  if (harness === "cursor") {
+    return requireCommand(
+      box,
+      `test -f ${BOX_HOME}/.local/lib/crate-provider/node_modules/@cursor/sdk/package.json || npm i --prefix ${BOX_HOME}/.local/lib/crate-provider --no-save --no-package-lock @cursor/sdk@1.3.1`,
+    );
+  }
   const cli = cliPackages[harness];
   return requireCommand(
     box,
@@ -242,20 +252,44 @@ export async function installConnectedHarnesses(
   onProgress: (step: BoxSetupStep) => void,
 ): Promise<void> {
   const credentials = credentialSelection(config);
-  const connected = (Object.keys(cliPackages) as BoxHarness[]).flatMap((harness) => {
+  const workerHarnesses: readonly WorkerBoxHarness[] = ["opencode", "cursor", "antigravity"];
+  const harnesses = [
+    ...(Object.keys(cliPackages) as (keyof typeof cliPackages)[]),
+    "cursor",
+    "antigravity",
+  ] as const;
+  const connected = harnesses.flatMap((harness) => {
     const value = credentials[harness] ?? "";
     const kind = harnessCredentialKind(harness, value);
     return kind ? [{ harness, value, kind }] : [];
   });
   onProgress("install");
   await requireCommand(box, `mkdir -p ${BOX_HOME}/.local/bin`);
-  for (const { harness } of connected) {
+  for (const harness of new Set([
+    ...connected.map(({ harness }) => harness),
+    ...(isWorkerBoxHarness(config.harness) ? [config.harness] : []),
+  ])) {
     await installHarnessCli(box, harness);
+  }
+  if (
+    config.workerArtifact &&
+    (isWorkerBoxHarness(config.harness) ||
+      connected.some(({ harness }) => isWorkerBoxHarness(harness)))
+  ) {
+    const content = await config.workerArtifact();
+    const digest = NodeCrypto.createHash("sha256").update(content).digest("hex");
+    const staged = `${BOX_PROVIDER_WORKER_PATH}.${digest}.mjs`;
+    if ((await box.exec.command(`test -f ${staged}`)).exitCode !== 0) {
+      await requireCommand(box, `mkdir -p ${BOX_HOME}/.local/lib/crate-provider`);
+      await box.files.write({ path: `${staged}.upload`, content });
+      await requireCommand(box, `mv -f -- ${staged}.upload ${staged}`);
+    }
+    await requireCommand(box, `ln -sfnT ${staged} ${BOX_PROVIDER_WORKER_PATH}`);
   }
   if (connected.some(({ harness }) => harness === "commandCode")) {
     await box.files.write({ path: BOX_HARNESS_PATH, content: commandCodeHarness });
   }
-  if (connected.some(({ harness }) => harness !== "commandCode")) {
+  if (connected.some(({ harness }) => harness === "claudeCode" || harness === "codex")) {
     await box.files.write({ path: BOX_MANAGED_HARNESS_PATH, content: managedHarness });
   }
 
@@ -270,7 +304,15 @@ export async function installConnectedHarnesses(
     box,
     `ln -sfnT ${BOX_CREDENTIALS_DIR}/claude/.claude.json ${BOX_HOME}/.claude.json`,
   );
-  for (const harness of Object.keys(cliPackages) as BoxHarness[]) {
+  for (const harness of workerHarnesses) {
+    const directory = `${BOX_CREDENTIALS_DIR}/${harness}`;
+    const credential = connected.find((value) => value.harness === harness);
+    const path = `${directory}/credential`;
+    await requireCommand(box, `umask 077 && mkdir -p ${directory}`);
+    if (credential) await writeVolatile(path, credential.value);
+    else await requireCommand(box, `rm -f -- ${path}`);
+  }
+  for (const harness of ["commandCode", "claudeCode", "codex"] as const) {
     const credential = connected.find((entry) => entry.harness === harness);
     const stamp = `${BOX_CREDENTIALS_DIR}/${harness}.sha256`;
     const directory = BOX_CREDENTIALS_DIR;

@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import type { BoxHarness } from "../harnesses.ts";
+import type { BoxHarness, LegacyBoxHarness } from "../harnesses.ts";
 import { BOX_HOME, BoxRuntimeError, type BoxHandle } from "./BoxApi.ts";
 
 /** Where each harness keeps its session transcripts inside a Box. */
@@ -10,7 +10,7 @@ export const BOX_TRANSCRIPT_ROOTS = {
   commandCode: `${BOX_HOME}/.commandcode/projects`,
   claudeCode: `${BOX_HOME}/.claude/projects`,
   codex: `${BOX_HOME}/.codex/sessions`,
-} as const satisfies Record<BoxHarness, string>;
+} as const satisfies Record<LegacyBoxHarness, string>;
 
 const READ_CHUNK_BYTES = 1024 * 1024;
 
@@ -29,7 +29,7 @@ const mirrorError = () => new BoxRuntimeError({ operation: "mirrorTranscripts" }
  */
 export const mirrorBoxTranscripts = Effect.fn("UpstashBox.mirrorBoxTranscripts")(function* (
   box: BoxHandle,
-  harness: BoxHarness,
+  harness: LegacyBoxHarness,
   mirrorDir: string,
 ) {
   const read = box.files.readBase64;
@@ -84,7 +84,7 @@ export const mirrorEveryBoxTranscript = Effect.fn("UpstashBox.mirrorEveryBoxTran
   stateDir: string,
 ) {
   const path = yield* Path.Path;
-  for (const harness of Object.keys(BOX_TRANSCRIPT_ROOTS) as BoxHarness[]) {
+  for (const harness of Object.keys(BOX_TRANSCRIPT_ROOTS) as LegacyBoxHarness[]) {
     yield* mirrorBoxTranscripts(box, harness, boxTranscriptMirrorDir(path, stateDir, harness)).pipe(
       Effect.ignore,
     );

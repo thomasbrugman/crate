@@ -1,4 +1,10 @@
-import { AuthProvidersManageScope, type EnvironmentId, UpstashBoxSize } from "@t3tools/contracts";
+import {
+  AuthProvidersManageScope,
+  defaultInstanceIdForDriver,
+  resolveProviderInstanceEnabled,
+  type EnvironmentId,
+  UpstashBoxSize,
+} from "@t3tools/contracts";
 import {
   BOX_HARNESS_DRIVER_KINDS,
   BOX_HARNESS_LABELS,
@@ -8,15 +14,26 @@ import { msg, useGT, useMessages } from "gt-react";
 import { useState } from "react";
 import { CheckIcon, ExternalLinkIcon } from "lucide-react";
 
-import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
+import {
+  useEnvironmentSettings,
+  usePersistEnvironmentProviderInstanceMutation,
+  useUpdateEnvironmentSettings,
+} from "../../hooks/useSettings";
 import { providersIgnoringCheckedAtAtom } from "../../state/server";
 import { useEnvironmentScope } from "../../state/session";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { toastManager } from "../ui/toast";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { SetupSection } from "../onboarding/SetupSection";
 import { DraftInput } from "../ui/draft-input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { turnedOnInstance } from "../../onboarding/welcomePage.logic";
 import { SecretInput } from "./SecretInput";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
@@ -40,6 +57,24 @@ const harnessCredentials = [
     label: BOX_HARNESS_LABELS.codex,
     hint: msg("Paste an OpenAI API key or the contents of ~/.codex/auth.json after signing in."),
   },
+  {
+    harness: "opencode",
+    field: "opencodeAuth",
+    label: BOX_HARNESS_LABELS.opencode,
+    hint: msg("Paste the contents of ~/.local/share/opencode/auth.json after signing in."),
+  },
+  {
+    harness: "cursor",
+    field: "cursorAuth",
+    label: BOX_HARNESS_LABELS.cursor,
+    hint: msg("Paste your Cursor API key."),
+  },
+  {
+    harness: "antigravity",
+    field: "antigravityAuth",
+    label: BOX_HARNESS_LABELS.antigravity,
+    hint: msg("Paste your Gemini API key."),
+  },
 ] as const;
 
 export const UPSTASH_BOX_SIZE_LABELS = {
@@ -61,11 +96,53 @@ export function UpstashBoxEnvironmentSettings({
   const gt = useGT();
   const m = useMessages();
   const box = useEnvironmentSettings(environmentId, (settings) => settings.upstashBox);
+  const providerInstances = useEnvironmentSettings(
+    environmentId,
+    (settings) => settings.providerInstances,
+  );
   const providers = useAtomValue(providersIgnoringCheckedAtAtom(environmentId));
   const canSignIn = useEnvironmentScope(environmentId, AuthProvidersManageScope);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const keyConfigured = typeof box.apiKey !== "string" || box.apiKey !== "";
   const update = (patch: Partial<typeof box>) => updateSettings({ upstashBox: patch });
+  const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
+  const saveCredential = async (
+    harness: (typeof harnessCredentials)[number]["harness"],
+    field: (typeof harnessCredentials)[number]["field"],
+    credential: string,
+  ) => {
+    // The worker harnesses are disabled by default: a saved credential is the
+    // user's connect action, so enable their default instance or onboarding
+    // never counts the provider as ready. The upsert applies server-side to
+    // the current instance map, so it cannot clobber another client's edits.
+    const driver = BOX_HARNESS_DRIVER_KINDS[harness];
+    const instanceId = defaultInstanceIdForDriver(driver);
+    const existing = providerInstances?.[instanceId] ?? { driver };
+    const patch = { upstashBox: { [field]: credential } };
+    if (resolveProviderInstanceEnabled(existing)) {
+      updateSettings(patch);
+      return true;
+    }
+    const result = await persistProviderInstance(
+      { operation: "upsert", instanceId, instance: turnedOnInstance(existing) },
+      patch,
+    );
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: gt("Credential not saved"),
+          description:
+            error instanceof Error
+              ? (thrownErrorMessage(error, m) ?? error.message)
+              : gt("The settings update failed."),
+        });
+      }
+      return false;
+    }
+    return true;
+  };
   const [selectedHarness, setSelectedHarness] = useState<
     (typeof harnessCredentials)[number]["harness"] | null
   >(null);
@@ -83,7 +160,7 @@ export function UpstashBoxEnvironmentSettings({
             label={label}
             configured={connected}
             disabled={readOnly}
-            onSave={(credential) => update({ [field]: credential })}
+            onSave={(credential) => saveCredential(harness, field, credential)}
           />
         ) : (
           <SecretInput
@@ -91,7 +168,7 @@ export function UpstashBoxEnvironmentSettings({
             configured={connected}
             disabled={readOnly}
             value=""
-            onCommit={(credential) => update({ [field]: credential.trim() })}
+            onCommit={(credential) => void saveCredential(harness, field, credential.trim())}
           />
         )}
         {connected &&
@@ -144,7 +221,10 @@ export function UpstashBoxEnvironmentSettings({
               label={gt("Upstash Box API key")}
               configured={keyConfigured}
               disabled={readOnly}
-              onSave={(apiKey) => update({ apiKey })}
+              onSave={(apiKey) => {
+                update({ apiKey });
+                return true;
+              }}
             />
             <div className="flex min-h-7 flex-wrap items-center justify-between gap-2 text-xs">
               <a
@@ -294,7 +374,7 @@ function OnboardingSecretInput({
   readonly label: string;
   readonly configured: boolean;
   readonly disabled: boolean;
-  readonly onSave: (value: string) => void;
+  readonly onSave: (value: string) => boolean | Promise<boolean>;
 }) {
   const gt = useGT();
   const [draft, setDraft] = useState("");
@@ -305,8 +385,7 @@ function OnboardingSecretInput({
         onSubmit={(event) => {
           event.preventDefault();
           if (disabled || !draft.trim()) return;
-          onSave(draft.trim());
-          setDraft("");
+          void Promise.resolve(onSave(draft.trim())).then((saved) => saved && setDraft(""));
         }}
       >
         <Input

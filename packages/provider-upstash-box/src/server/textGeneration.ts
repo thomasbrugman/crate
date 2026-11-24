@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 
-import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
+import { BOX_HARNESS_LABELS, type LegacyBoxHarness } from "../harnesses.ts";
 import type { BoxEnvironmentConfig } from "./adapter.ts";
 import { BoxApi, BOX_HOME, BOX_WORKSPACE_PATH, type BoxHandle, quoteShell } from "./BoxApi.ts";
 import { BOX_HARNESS_PATH, BOX_MANAGED_HARNESS_PATH, ensureBox } from "./bootstrap.ts";
@@ -20,7 +20,7 @@ const TEXT_GENERATION_TIMEOUT_MS = 180_000;
 const MAX_PROMPT_BYTES = 96_000;
 
 /** One small Box per harness answers every auxiliary prompt; it sleeps between requests. */
-export const textGenerationBoxName = (harness: BoxHarness) =>
+export const textGenerationBoxName = (harness: LegacyBoxHarness) =>
   `t3-text-${Buffer.from(harness).toString("hex")}`;
 
 /** The thread Box whose checkout a review guide investigates; unset means no checkout is reachable. */
@@ -29,7 +29,7 @@ export const BoxInvestigationTarget = Context.Reference<
 >("t3/upstashBox/BoxInvestigationTarget", { defaultValue: () => undefined });
 
 export function textGenerationCommand(input: {
-  readonly harness: BoxHarness;
+  readonly harness: LegacyBoxHarness;
   readonly prompt: string;
   readonly model: string;
   readonly credentialKind: string;
@@ -105,7 +105,7 @@ async function collectReply(
 }
 
 export const makeBoxTextGeneration = Effect.fn("UpstashBox.makeTextGeneration")(function* (
-  harness: BoxHarness,
+  harness: LegacyBoxHarness,
   agentApiKey: string,
   environment: Effect.Effect<BoxEnvironmentConfig>,
 ) {

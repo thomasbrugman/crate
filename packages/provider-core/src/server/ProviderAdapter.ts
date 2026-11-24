@@ -54,6 +54,7 @@ export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
   boxSnapshotId: Schema.optionalKey(Schema.String),
   boxSize: Schema.optionalKey(UpstashBoxSize),
   boxOwnerThreadId: Schema.optionalKey(ThreadId),
+  boxBaseCommit: Schema.optionalKey(Schema.String),
   approvalPolicy: Schema.optional(Schema.Unknown),
   sandboxPolicy: Schema.optional(Schema.Unknown),
   /**

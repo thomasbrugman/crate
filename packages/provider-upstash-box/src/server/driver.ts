@@ -1,6 +1,7 @@
 import {
   DEFAULT_SERVER_SETTINGS,
   settingsSecretLiteral,
+  TextGenerationError,
   type ServerProvider,
 } from "@t3tools/contracts";
 import {
@@ -27,7 +28,13 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import { BOX_HARNESS_DRIVER_KINDS, BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
+import {
+  BOX_HARNESS_DRIVER_KINDS,
+  BOX_HARNESS_LABELS,
+  isWorkerBoxHarness,
+  type BoxHarness,
+  type WorkerBoxHarness,
+} from "../harnesses.ts";
 import { BoxCommandCodeSettings, BoxManagedAgentSettings } from "../settings.ts";
 import { makeUpstashBoxAdapter, type BoxEnvironmentConfig } from "./adapter.ts";
 import { makeBoxHarnessAuth } from "./auth.ts";
@@ -45,6 +52,7 @@ import {
 } from "./BoxApi.ts";
 import { boxHarnessModels } from "./models.ts";
 import { makeBoxTextGeneration } from "./textGeneration.ts";
+import { makeBoxWorkerAdapter, readBoxWorkerModels } from "./workerAdapter.ts";
 import {
   harnessCredentialKind,
   readBoxSecret,
@@ -134,7 +142,12 @@ export const probe = Effect.fn("UpstashBox.probe")(function* (
         }) as const,
     }),
   );
-  if (box.status !== "ready" || agent.harness === "commandCode" || kind !== "key") return box;
+  if (
+    box.status !== "ready" ||
+    (agent.harness !== "claudeCode" && agent.harness !== "codex") ||
+    kind !== "key"
+  )
+    return box;
   return yield* probeModelKey(agent.harness, agent.agentApiKey);
 });
 
@@ -146,11 +159,16 @@ export type UpstashBoxDriverEnv =
   | Path.Path
   | ProviderHost;
 
-type HarnessSettings = BoxCommandCodeSettings | BoxManagedAgentSettings;
+type HarnessSettings = Pick<BoxCommandCodeSettings, "customModels">;
 
 function makeBoxHarnessDriver<Settings extends HarnessSettings>(
   harness: BoxHarness,
   settingsSchema: Schema.Codec<Settings, any>,
+  worker?: {
+    readonly artifact: () => Promise<string>;
+    readonly settings: (config: Settings) => object;
+    readonly models: ReadonlyArray<ServerProvider["models"][number]>;
+  },
 ): ProviderDriver<Settings, UpstashBoxDriverEnv> {
   const driverKind = BOX_HARNESS_DRIVER_KINDS[harness];
   const label = BOX_HARNESS_LABELS[harness];
@@ -201,34 +219,47 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
       const mirrorLock = yield* Semaphore.make(1);
       const transcriptMirrorDir = boxTranscriptMirrorDir(path, host.paths.stateDir, harness);
       const continuationIdentity = defaultProviderContinuationIdentity({ driverKind, instanceId });
-      const agent = {
-        driver: driverKind,
-        harness,
-        agentApiKey: "apiKey" in config ? settingsSecretLiteral(config.apiKey) : "",
-      };
-      const orchestrationAdapter = yield* makeUpstashBoxAdapter(
-        instanceId,
-        agent,
-        environment,
-        yield* McpProviderSessions,
-        host.resolveAttachmentPath,
-        (box, options) =>
-          (options?.everyHarness
-            ? mirrorEveryBoxTranscript(box, host.paths.stateDir)
-            : mirrorBoxTranscripts(box, harness, transcriptMirrorDir)
-          ).pipe(
-            Effect.provideService(FileSystem.FileSystem, fileSystem),
-            Effect.provideService(Path.Path, path),
-            Effect.ignore,
-            // Copies append from the mirrored size, so two at once would duplicate bytes.
-            mirrorLock.withPermits(1),
-          ),
+      const agentApiKey =
+        !isWorkerBoxHarness(harness) && "apiKey" in config
+          ? settingsSecretLiteral(config.apiKey as BoxManagedAgentSettings["apiKey"])
+          : "";
+      const orchestrationAdapter = yield* (
+        isWorkerBoxHarness(harness)
+          ? worker
+            ? makeBoxWorkerAdapter(
+                instanceId,
+                harness,
+                environment,
+                worker.settings(config),
+                worker.artifact,
+                host.resolveAttachmentPath,
+              )
+            : Effect.die("Missing Box provider worker artifact.")
+          : makeUpstashBoxAdapter(
+              instanceId,
+              { driver: driverKind, harness, agentApiKey },
+              environment,
+              yield* McpProviderSessions,
+              host.resolveAttachmentPath,
+              (box, options) =>
+                (options?.everyHarness
+                  ? mirrorEveryBoxTranscript(box, host.paths.stateDir)
+                  : mirrorBoxTranscripts(box, harness, transcriptMirrorDir)
+                ).pipe(
+                  Effect.provideService(FileSystem.FileSystem, fileSystem),
+                  Effect.provideService(Path.Path, path),
+                  Effect.ignore,
+                  // Copies append from the mirrored size, so two at once would duplicate bytes.
+                  mirrorLock.withPermits(1),
+                ),
+            )
       ).pipe(Effect.provide(boxApiLayer));
-      const auth = host.settings.update
-        ? yield* makeBoxHarnessAuth(instanceId, harness, environment, host.settings.update).pipe(
-            Effect.provide(SecureRandom.layerWebCrypto),
-          )
-        : undefined;
+      const auth =
+        host.settings.update && harness !== "cursor" && harness !== "antigravity"
+          ? yield* makeBoxHarnessAuth(instanceId, harness, environment, host.settings.update).pipe(
+              Effect.provide(SecureRandom.layerWebCrypto),
+            )
+          : undefined;
       const base = Effect.gen(function* () {
         const checkedAt = DateTime.formatIso(yield* DateTime.now);
         return {
@@ -244,18 +275,22 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
           status: enabled ? "warning" : "disabled",
           auth: { status: "unknown" },
           supportsConversationRollback: harness === "commandCode",
-          supportsTextGeneration: true,
+          supportsTextGeneration: !isWorkerBoxHarness(harness),
           supportedRuntimeModes: ["full-access"],
           showInteractionModeToggle: true,
           setup: { canAuthenticate: auth !== undefined, canInstall: false },
-          models: providerModelsFromSettings(boxHarnessModels(harness), config.customModels, null),
+          models: providerModelsFromSettings(
+            isWorkerBoxHarness(harness) ? (worker?.models ?? []) : boxHarnessModels(harness),
+            config.customModels,
+            null,
+          ),
           slashCommands: [],
           skills: [],
         } satisfies ServerProvider;
       });
       const toProbeSettings = ({ apiKey, credentials }: BoxEnvironmentConfig) => ({
         apiKey,
-        agentApiKey: credentials?.[harness] || agent.agentApiKey,
+        agentApiKey: credentials?.[harness] || agentApiKey,
       });
       // Claude Code and Codex in a Box have no plan-usage endpoint that their stored sign-in reaches.
       const readUsageLimits = (credential: string) =>
@@ -272,18 +307,39 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
           ),
         ),
         haveSettingsChanged: (previous, next) => !Equal.equals(previous, next),
+        refreshOnInterval: !isWorkerBoxHarness(harness),
         initialSnapshot: () => base,
         checkProvider: Effect.gen(function* () {
           const initial = yield* base;
           if (!enabled) return initial;
           const settings = toProbeSettings(yield* environment);
-          const probed = yield* probe(settings.apiKey, {
+          const result = yield* probe(settings.apiKey, {
             harness,
             agentApiKey: settings.agentApiKey,
           });
+          const models =
+            worker && (harness === "opencode" || harness === "cursor") && result.status === "ready"
+              ? yield* readBoxWorkerModels(
+                  harness,
+                  settings.apiKey,
+                  settings.agentApiKey,
+                  worker.artifact,
+                ).pipe(
+                  Effect.timeout("3 minutes"),
+                  Effect.orElseSucceed(() => []),
+                )
+              : [];
           const usageLimits =
-            probed.status === "ready" ? yield* readUsageLimits(settings.agentApiKey) : undefined;
-          return { ...initial, ...probed, ...(usageLimits ? { usageLimits } : {}) };
+            result.status === "ready" ? yield* readUsageLimits(settings.agentApiKey) : undefined;
+          return {
+            ...initial,
+            ...result,
+            ...(usageLimits ? { usageLimits } : {}),
+            models:
+              models.length === 0
+                ? initial.models
+                : providerModelsFromSettings(models, config.customModels, null),
+          };
         }).pipe(Effect.provide(boxApiLayer)),
         ...(harness === "commandCode"
           ? {
@@ -306,11 +362,26 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
             }),
         ),
       );
-      const textGeneration = yield* makeBoxTextGeneration(
-        harness,
-        agent.agentApiKey,
-        environment,
-      ).pipe(Effect.provide(boxApiLayer));
+      const unsupported = (operation: string) =>
+        Effect.fail(
+          new TextGenerationError({
+            operation,
+            detail: `${label} in Upstash Box does not provide auxiliary text generation.`,
+          }),
+        );
+      const textGeneration = isWorkerBoxHarness(harness)
+        ? {
+            generateCommitMessage: () => unsupported("generateCommitMessage"),
+            generatePrContent: () => unsupported("generatePrContent"),
+            generateBranchName: () => unsupported("generateBranchName"),
+            generateThreadTitle: () => unsupported("generateThreadTitle"),
+            generateReviewGuide: () => unsupported("generateReviewGuide"),
+            generateTranscriptionPostProcessing: () =>
+              unsupported("generateTranscriptionPostProcessing"),
+          }
+        : yield* makeBoxTextGeneration(harness, agentApiKey, environment).pipe(
+            Effect.provide(boxApiLayer),
+          );
       return {
         instanceId,
         driverKind,
@@ -330,3 +401,11 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
 export const BoxCommandCodeDriver = makeBoxHarnessDriver("commandCode", BoxCommandCodeSettings);
 export const BoxClaudeCodeDriver = makeBoxHarnessDriver("claudeCode", BoxManagedAgentSettings);
 export const BoxCodexDriver = makeBoxHarnessDriver("codex", BoxManagedAgentSettings);
+
+export function makeBoxBackedProviderDriver<Settings extends HarnessSettings>(
+  harness: WorkerBoxHarness,
+  schema: Schema.Codec<Settings, any>,
+  worker: NonNullable<Parameters<typeof makeBoxHarnessDriver<Settings>>[2]>,
+) {
+  return makeBoxHarnessDriver(harness, schema, worker);
+}

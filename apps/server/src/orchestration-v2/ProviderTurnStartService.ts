@@ -952,7 +952,13 @@ export const layer: Layer.Layer<
           current = parent.thread;
         }
         if (boxOwnerThreadId)
-          resolvedRuntimePolicy = { ...resolvedRuntimePolicy, boxOwnerThreadId };
+          resolvedRuntimePolicy = {
+            ...resolvedRuntimePolicy,
+            boxOwnerThreadId,
+            ...(projection.thread.lineage.boxBaseCommit === undefined
+              ? {}
+              : { boxBaseCommit: projection.thread.lineage.boxBaseCommit }),
+          };
       }
       if (!(yield* isCurrentAttemptInStatus("starting"))) return;
       const existingSessionProjection = projection.providerSessions.find(

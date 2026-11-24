@@ -982,6 +982,18 @@ export const UpstashBoxEnvironmentSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed("")),
     secretSetting,
   ),
+  opencodeAuth: SettingsSecretValue.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
+  cursorAuth: SettingsSecretValue.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
+  antigravityAuth: SettingsSecretValue.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    secretSetting,
+  ),
   templateBoxName: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("cc-harness"))),
   snapshotNames: Schema.Record(Schema.String, TrimmedString).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
@@ -2027,6 +2039,9 @@ export const ServerSettingsPatch = Schema.Struct({
       commandCodeAuth: Schema.optionalKey(SettingsSecretValue),
       claudeCodeAuth: Schema.optionalKey(SettingsSecretValue),
       codexAuth: Schema.optionalKey(SettingsSecretValue),
+      opencodeAuth: Schema.optionalKey(SettingsSecretValue),
+      cursorAuth: Schema.optionalKey(SettingsSecretValue),
+      antigravityAuth: Schema.optionalKey(SettingsSecretValue),
       templateBoxName: Schema.optionalKey(TrimmedString),
       snapshotNames: Schema.optionalKey(Schema.Record(Schema.String, TrimmedString)),
       size: Schema.optionalKey(UpstashBoxSize),

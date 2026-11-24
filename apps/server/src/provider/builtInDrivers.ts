@@ -4,15 +4,22 @@ import type {
   ProviderUsageReader,
   TranscriptUsageFormat,
 } from "@t3tools/provider-core/server/usage";
-import type { BoxHarness } from "@t3tools/provider-upstash-box/harnesses";
+import type { LegacyBoxHarness } from "@t3tools/provider-upstash-box/harnesses";
 import {
   BoxClaudeCodeDriver,
   BoxCodexDriver,
   BoxCommandCodeDriver,
+  makeBoxBackedProviderDriver,
   boxTranscriptMirrorDir,
   commandCodeUsageFormat,
   type UpstashBoxDriverEnv,
 } from "@t3tools/provider-upstash-box/server";
+import { AntigravitySettings } from "@t3tools/contracts";
+import { CursorDriver } from "@t3tools/provider-cursor/server";
+import { OpenCodeDriver } from "@t3tools/provider-opencode/server";
+import * as ModelManifest from "./ModelManifest.ts";
+import { AntigravityDriver } from "./Drivers/AntigravityDriver.ts";
+import { boxProviderArtifact } from "./boxProviderArtifactSource.ts";
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 
@@ -20,18 +27,48 @@ import * as ServerConfig from "../config.ts";
 import { claudeUsageFormat } from "./Drivers/claudeUsage.ts";
 import { codexUsageFormat } from "./Drivers/codexUsage.ts";
 
+const BoxOpenCodeDriver = makeBoxBackedProviderDriver("opencode", OpenCodeDriver.configSchema, {
+  artifact: boxProviderArtifact,
+  settings: ({ customModels }) => ({ customModels }),
+  models: [],
+});
+const BoxCursorDriver = makeBoxBackedProviderDriver("cursor", CursorDriver.configSchema, {
+  artifact: boxProviderArtifact,
+  settings: ({ customModels }) => ({ customModels }),
+  models: [],
+});
+const BoxAntigravityDriver = makeBoxBackedProviderDriver("antigravity", AntigravitySettings, {
+  artifact: boxProviderArtifact,
+  settings: ({ customModels, enabled }) => ({ customModels, enabled }),
+  models: (
+    ModelManifest.resolveProviderCatalog(
+      ModelManifest.BUNDLED_MODEL_MANIFEST,
+      AntigravityDriver.driverKind,
+      0,
+    )?.models ?? []
+  ).map((model) => ({
+    slug: model.slug,
+    name: model.name,
+    isCustom: false,
+    capabilities: model.capabilities,
+  })),
+});
+
 export type BuiltInDriversEnv = UpstashBoxDriverEnv;
 export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv>> = [
   BoxCommandCodeDriver,
   BoxClaudeCodeDriver,
   BoxCodexDriver,
+  BoxOpenCodeDriver,
+  BoxCursorDriver,
+  BoxAntigravityDriver,
 ];
 
 export type BuiltInUsageReadersEnv = Path.Path | ServerConfig.ServerConfig;
 
 /** Box harness transcripts are read from the copies the Box adapter keeps under the state dir. */
 const boxTranscripts = <State>(
-  harness: BoxHarness,
+  harness: LegacyBoxHarness,
   provider: UsageProviderKind,
   format: TranscriptUsageFormat<State>,
 ): ProviderUsageReader<unknown, BuiltInUsageReadersEnv> => ({

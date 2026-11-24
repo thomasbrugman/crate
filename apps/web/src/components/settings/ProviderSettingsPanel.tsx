@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
 import { useAtomValue } from "@effect/atom-react";
+import { isBoxWorkerDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { connectionErrorText, connectionStatusTitle } from "@t3tools/client-runtime/connection";
 import {
   errorDisplayMessage,
@@ -1399,7 +1400,7 @@ function ProviderInstanceRow({
       }
       canWriteSettings={canWriteSettings}
       setup={
-        mode === "editor" && driver === "antigravity" ? (
+        mode === "editor" && driver === "antigravity" && !isBoxWorkerDriver(driver) ? (
           <ProviderSetupSection
             environmentId={environmentId}
             environmentLabel={environmentLabel}
@@ -1449,6 +1450,7 @@ function ProviderInstanceRow({
         ) : mode === "editor" &&
           !readOnly &&
           driver === "cursor" &&
+          !isBoxWorkerDriver(driver) &&
           liveProvider?.setup?.canAuthenticate === false ? (
           <SettingsRow
             title={gt("Cursor account")}
