@@ -110,6 +110,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ProjectStore from "./ProjectStore.ts";
+import { BoxThreadResolver } from "../vcs/BoxThreadResolver.ts";
 import {
   isCheckpointRestoreIsolated,
   SHARED_WORKSPACE_RESTORE_MESSAGE,
@@ -1610,6 +1611,7 @@ const hasRunningDelegatedTasks = (subagents: ReadonlyArray<OrchestrationV2Subage
 
 const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(function* () {
   const checkpointService = yield* CheckpointServiceV2;
+  const boxResolver = yield* Effect.serviceOption(BoxThreadResolver);
   const commandPolicy = yield* CommandPolicyV2;
   const contextHandoffService = yield* ContextHandoffServiceV2;
   const eventSink = yield* EventSinkV2;
@@ -14353,7 +14355,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         const isolated = yield* isCheckpointRestoreIsolated(
           projection.thread,
           targetScope,
-          { projects, path, fileSystem, projections: projectionStore },
+          {
+            projects,
+            path,
+            fileSystem,
+            projections: projectionStore,
+            ...(Option.isSome(boxResolver) ? { boxResolver: boxResolver.value } : {}),
+          },
           providerThread,
         ).pipe(
           Effect.mapError(

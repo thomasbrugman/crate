@@ -7,10 +7,12 @@ import {
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
+import { BoxApi } from "@t3tools/provider-upstash-box/server";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
+import type { BoxThreadResolver } from "../vcs/BoxThreadResolver.ts";
 import type { ProjectionStoreV2 } from "./ProjectionStore.ts";
 import type * as ProjectStore from "./ProjectStore.ts";
 
@@ -30,17 +32,48 @@ export const isCheckpointRestoreIsolated = Effect.fn("orchestrationV2.isCheckpoi
       readonly projections: ProjectionStoreV2["Service"];
       readonly projects: ProjectStore.ProjectStoreV2["Service"];
       readonly path: Path.Path;
+      readonly boxResolver?: Pick<BoxThreadResolver["Service"], "resolveCheckpointTarget">;
     },
-    providerThread?: OrchestrationV2ProviderThread,
+    providerThread?: Pick<
+      OrchestrationV2ProviderThread,
+      "driver" | "nativeThreadRef" | "nativeMetadata"
+    >,
   ) {
     if (providerThread && isUpstashBoxDriver(providerThread.driver)) {
-      return (
-        providerThread.nativeThreadRef !== null &&
-        providerThread.nativeMetadata?.boxOwnerThreadId === undefined &&
-        thread.lineage !== undefined &&
-        thread.lineage.sideChat !== true &&
-        thread.lineage.relationshipToParent !== "subagent"
+      if (
+        !providerThread.nativeThreadRef?.nativeId ||
+        providerThread.nativeMetadata?.boxOwnerThreadId !== undefined ||
+        thread.lineage === undefined ||
+        thread.lineage.sideChat === true ||
+        thread.lineage.relationshipToParent === "subagent"
+      )
+        return false;
+      const target = yield* (
+        dependencies.boxResolver?.resolveCheckpointTarget(thread.id) ?? Effect.undefined
+      ).pipe(Effect.orElseSucceed(() => undefined));
+      if (target === undefined) return false;
+      if (target.checkoutRoot === BoxApi.BOX_REPOSITORY_PATH) return true;
+      if (target.checkoutRoot !== BoxApi.BOX_WORKSPACE_PATH) return false;
+      const snapshot = yield* dependencies.projections.getShellSnapshot({ familyOf: thread.id });
+      const others = [...snapshot.threads, ...snapshot.archivedThreads].filter(
+        (other) =>
+          other.id !== thread.id &&
+          other.deletedAt === null &&
+          other.lineage.relationshipToParent === "subagent",
       );
+      for (const other of others) {
+        if (other.lineage.parentThreadId === thread.id) return false;
+        const { providerThreads } = yield* dependencies.projections.getThreadRecords(other.id, [
+          "providerThreads",
+        ]);
+        if (
+          providerThreads.some(
+            (provider) => provider.nativeMetadata?.boxOwnerThreadId === thread.id,
+          )
+        )
+          return false;
+      }
+      return true;
     }
     const { fileSystem, projections, projects, path } = dependencies;
     const contains = (parent: string, child: string) => {
