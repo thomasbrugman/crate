@@ -55,7 +55,6 @@ import type { ComposerDocumentAttachment } from "../../lib/composerContext";
 import { useProject, useVisibleThreadShells } from "../../state/entities";
 import { useMentionableEnvironments } from "../../state/environments";
 import { useLinkedEnvironments } from "../../state/peerLinks";
-import { useBoxComposerCapabilities } from "../../state/queries";
 import { useEnvironmentScopeDenied } from "../../state/session";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 
@@ -357,12 +356,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   })();
   const boxHarness = getUpstashBoxHarness(selectedProviderStatus?.driver);
   const cloudThread = boxHarness !== undefined;
-  const boxComposerCapabilities = useBoxComposerCapabilities(
-    props.environmentId,
-    !props.isDraft && boxHarness
-      ? { threadId: props.selectedThread.id, harness: boxHarness }
-      : null,
-  );
   const openDraftDocument = (attachment: ComposerDocumentAttachment) => {
     Keyboard.dismiss();
     navigation.navigate("ThreadAttachment", {
@@ -443,7 +436,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     projectCwd: props.projectCwd,
     cloudThread,
     boxHarness,
-    boxComposerCapabilities: boxComposerCapabilities.data ?? null,
     pullRequestProjectId: props.serverConfig ? (project?.id ?? null) : null,
     pullRequestRepository: project?.repositoryIdentity?.displayName ?? null,
     threadPullRequests: props.selectedThread.pullRequests,

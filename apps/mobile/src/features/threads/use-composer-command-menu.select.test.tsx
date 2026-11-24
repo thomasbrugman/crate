@@ -4,6 +4,7 @@ import { expect, it, vi } from "vite-plus/test";
 
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 vi.mock("../../state/queries", () => ({
+  useBoxComposerCapabilities: () => ({ data: null }),
   useComposerPathSearch: () => ({ entries: [], isPending: false }),
   useComposerPullRequestSearch: () => ({ entries: [], isPending: false, error: null }),
   useThreadSearch: () => undefined,

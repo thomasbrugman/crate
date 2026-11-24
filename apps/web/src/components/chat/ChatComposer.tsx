@@ -994,24 +994,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isSendDisabled = sendDisabledReason !== null;
   const selectedProviderStatus = selectedProviderEntry?.snapshot ?? null;
   const boxHarness = getUpstashBoxHarness(selectedProviderStatus?.driver);
-  const boxComposerCapabilities = useEnvironmentQuery(
-    environmentId && activeThread && boxHarness
-      ? projectEnvironment.boxComposerCapabilities({
-          environmentId,
-          input: { threadId: activeThread.id, harness: boxHarness },
-        })
-      : null,
-  );
-  const selectedProviderSkills = boxHarness
-    ? (boxComposerCapabilities.data?.skills ?? NO_PROVIDER_SKILLS)
-    : selectedProviderStatus
-      ? resolveProviderSkillsForCwd(selectedProviderStatus, gitCwd)
-      : NO_PROVIDER_SKILLS;
-  const selectedProviderSlashCommands = boxHarness
-    ? (boxComposerCapabilities.data?.slashCommands ?? NO_PROVIDER_SLASH_COMMANDS)
-    : selectedProviderStatus
-      ? resolveProviderSlashCommandsForCwd(selectedProviderStatus, gitCwd)
-      : NO_PROVIDER_SLASH_COMMANDS;
   const { refresh: refreshWorkspaceSnapshotOnTyping, scanning: localWorkspaceSkillsScanning } =
     useProviderWorkspaceSnapshotRefresh({
       environmentId,
@@ -1059,6 +1041,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   } = useComposerTriggerState(() =>
     isLiteralPendingAnswer ? null : detectComposerTrigger(prompt, prompt.length),
   );
+  const boxComposerCapabilities = useEnvironmentQuery(
+    environmentId &&
+      activeThread &&
+      boxHarness &&
+      (composerTrigger?.kind === "slash-command" || composerTrigger?.kind === "skill")
+      ? projectEnvironment.boxComposerCapabilities({
+          environmentId,
+          input: { threadId: activeThread.id, harness: boxHarness },
+        })
+      : null,
+  );
+  const selectedProviderSkills = boxHarness
+    ? (boxComposerCapabilities.data?.skills ?? NO_PROVIDER_SKILLS)
+    : selectedProviderStatus
+      ? resolveProviderSkillsForCwd(selectedProviderStatus, gitCwd)
+      : NO_PROVIDER_SKILLS;
+  const selectedProviderSlashCommands = boxHarness
+    ? (boxComposerCapabilities.data?.slashCommands ?? NO_PROVIDER_SLASH_COMMANDS)
+    : selectedProviderStatus
+      ? resolveProviderSlashCommandsForCwd(selectedProviderStatus, gitCwd)
+      : NO_PROVIDER_SLASH_COMMANDS;
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   const composerSuggestionId = useId();
   const composerSuggestionListId = `${composerSuggestionId}-${encodeURIComponent(draftId ?? activeThreadId ?? "new")}-suggestions`;

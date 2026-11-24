@@ -1,7 +1,6 @@
 import { threadPullRequestKeyOf } from "@t3tools/client-runtime/thread-pull-requests";
 import * as Dialog from "../../components/ui/Dialog";
 import type {
-  BoxComposerCapabilities,
   BoxComposerCapabilitiesInput,
   EnvironmentId,
   ProjectId,
@@ -63,6 +62,7 @@ import { useEffect, useState } from "react";
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { providerWorkspaceSnapshotRefresh } from "../../state/provider-workspace-snapshot-refresh";
 import {
+  useBoxComposerCapabilities,
   useComposerPathSearch,
   useComposerPullRequestSearch,
   useThreadSearch,
@@ -261,7 +261,6 @@ export function useComposerCommandMenu({
   currentThreadId = null,
   projectCwd,
   cloudThread,
-  boxComposerCapabilities,
   boxHarness,
   pullRequestProjectId = null,
   pullRequestRepository = null,
@@ -289,7 +288,6 @@ export function useComposerCommandMenu({
   readonly currentThreadId?: ThreadId | null;
   readonly projectCwd: string | null;
   readonly cloudThread?: boolean;
-  readonly boxComposerCapabilities?: BoxComposerCapabilities | null;
   readonly boxHarness?: BoxComposerCapabilitiesInput["harness"] | undefined;
   readonly pullRequestProjectId?: ProjectId | null;
   readonly pullRequestRepository?: string | null;
@@ -327,11 +325,6 @@ export function useComposerCommandMenu({
   const setSelection = (next: ComposerEditorSelection) =>
     setLocalSelection({ ownerKey, start: next.start, end: next.end });
 
-  const skills = boxHarness
-    ? (boxComposerCapabilities?.skills ?? [])
-    : selectedProviderStatus
-      ? resolveProviderSkillsForCwd(selectedProviderStatus, projectCwd)
-      : [];
   const selectedProviderInstanceId = selectedProviderStatus?.instanceId;
   const refreshWorkspaceSnapshot = useAtomRefresh(
     !boxHarness && environmentId && projectCwd && selectedProviderInstanceId
@@ -362,6 +355,20 @@ export function useComposerCommandMenu({
     }
     return detectComposerTrigger(draftMessage, selection.end);
   })();
+  const { data: boxComposerCapabilities } = useBoxComposerCapabilities(
+    environmentId,
+    boxHarness &&
+      hasThread &&
+      currentThreadId &&
+      (trigger?.kind === "slash-command" || trigger?.kind === "skill")
+      ? { threadId: currentThreadId, harness: boxHarness }
+      : null,
+  );
+  const skills = boxHarness
+    ? (boxComposerCapabilities?.skills ?? [])
+    : selectedProviderStatus
+      ? resolveProviderSkillsForCwd(selectedProviderStatus, projectCwd)
+      : [];
   const pathSearch = useComposerPathSearch({
     environmentId,
     cwd: trigger?.kind === "path" && !cloudThread ? projectCwd : null,

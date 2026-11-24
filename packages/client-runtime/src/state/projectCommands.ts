@@ -160,7 +160,7 @@ export function createProjectEnvironmentAtoms<R, E>(
     boxComposerCapabilities: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:box-composer-capabilities",
       tag: WS_METHODS.projectsBoxComposerCapabilities,
-      staleTimeMs: 15_000,
+      staleTimeMs: 0,
     }),
     listEntries: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:list-entries",

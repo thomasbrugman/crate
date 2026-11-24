@@ -488,11 +488,13 @@ export function useComposerPathSearch(target: ComposerPathSearchTarget) {
 }
 
 export function useBoxComposerCapabilities(
-  environmentId: EnvironmentId,
+  environmentId: EnvironmentId | null | undefined,
   input: BoxComposerCapabilitiesInput | null,
 ) {
   return useEnvironmentQuery(
-    input === null ? null : projectEnvironment.boxComposerCapabilities({ environmentId, input }),
+    environmentId && input
+      ? projectEnvironment.boxComposerCapabilities({ environmentId, input })
+      : null,
   );
 }
 
