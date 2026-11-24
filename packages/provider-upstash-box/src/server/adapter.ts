@@ -639,6 +639,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   );
                   const session = providerThread.nativeConversationHeadRef?.nativeId ?? "";
                   const markedPrompt = runMarker + prompt;
+                  const planMode = request.runtimePolicy.interactionMode === "plan";
                   const args =
                     harness === "commandCode"
                       ? [
@@ -649,6 +650,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                           ...(model === "default" ? [] : ["--model", model]),
                           ...(session ? ["--session", session] : []),
                           ...(mcpSession === undefined ? [] : ["--t3-mcp-relay"]),
+                          ...(planMode ? ["--plan"] : []),
                         ]
                       : [
                           BOX_MANAGED_HARNESS_PATH,
@@ -658,6 +660,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                           session,
                           credentialKind ?? "",
                           ...(mcpSession === undefined ? [] : ["relay"]),
+                          ...(planMode ? ["plan"] : []),
                         ];
                   return execHarness(
                     box,

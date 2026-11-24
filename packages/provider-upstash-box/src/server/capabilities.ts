@@ -30,7 +30,7 @@ export const capabilities = {
   },
   streaming: {
     streamsAssistantText: true,
-    streamsReasoning: false,
+    streamsReasoning: true,
     streamsToolOutput: true,
     streamsPlanText: false,
     emitsMessageCompleted: true,
@@ -53,10 +53,10 @@ export const capabilities = {
     approvalsCanOriginateFromSubagents: false,
   },
   planning: {
-    emitsPlanUpdated: false,
-    emitsTodoList: false,
-    emitsProposedPlan: false,
-    supportsStructuredQuestions: false,
+    emitsPlanUpdated: true,
+    emitsTodoList: true,
+    emitsProposedPlan: true,
+    supportsStructuredQuestions: true,
     planDeltasHaveItemIds: false,
   },
   subagents: {

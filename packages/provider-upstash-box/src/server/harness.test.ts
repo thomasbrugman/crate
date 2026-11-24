@@ -11,6 +11,7 @@ async function setup(
     explicitSession?: boolean;
     files?: Record<string, { mtimeMs: number; header: unknown }>;
     unavailable?: boolean;
+    plan?: boolean;
   } = {},
 ) {
   const pipe = () => {
@@ -29,6 +30,7 @@ async function setup(
   let output = "";
   let args: string[] = [];
   let env: Record<string, string> = {};
+  const written = new Map<string, string>();
   await NodeVM.runInNewContext(
     `(async () => {${commandCodeHarness.replace(/^#!.*$|^import .*;$/gm, "")}})()`,
     {
@@ -41,6 +43,7 @@ async function setup(
       readSync: (fd: string, buffer: Buffer) =>
         buffer.write(JSON.stringify(options.files?.[fd]?.header) + "\n"),
       closeSync: () => undefined,
+      writeFileSync: (path: string, content: string) => written.set(path, content),
       Buffer,
       join: (...parts: string[]) => parts.join("/"),
       homedir: () => "/home/boxuser",
@@ -57,6 +60,7 @@ async function setup(
           options.prompt ?? "test",
           ...(options.explicitSession ? ["--explicit-session"] : []),
           ...(options.session ? ["--session", options.session] : []),
+          ...(options.plan ? ["--plan"] : []),
         ],
         env: { BOXJOB_CC_BIN: "command-code" },
         cwd: () => "/workspace/home",
@@ -73,6 +77,7 @@ async function setup(
   return {
     args,
     env,
+    written,
     child,
     frame: (event: Record<string, unknown>) => {
       child.stdout.write(JSON.stringify({ type: "event", event }) + "\n");
@@ -158,6 +163,95 @@ it("preserves Command Code call IDs through box-sse-v1 for concurrent calls comp
       data: { tool_call_id: "pwd", name: "Shell_command", output: "/workspace/home/repo" },
     },
   ]);
+});
+
+it("starts plan mode read-only and ends the run at questions and plan approval", async () => {
+  const normal = await setup();
+  assert.include(normal.args, "--yolo");
+  assert.notInclude(normal.args.join(" "), "exit_plan_mode");
+  const { args, written } = await setup({ plan: true });
+  assert.notInclude(args, "--yolo");
+  assert.include(args.join(" "), "--permission-mode plan");
+  assert.include(args.join(" "), "--tools-enable todo_write,ask_user_question,exit_plan_mode");
+  const mod = written.get(args[args.indexOf("--mod") + 1]!)!;
+  let hooks: { beforeToolCall: (call: { toolName: string }) => Promise<unknown> } | undefined;
+  new Function(mod.replace("export default", "return"))()({
+    hooks: (value: typeof hooks) => (hooks = value),
+  });
+  assert.deepInclude(await hooks!.beforeToolCall({ toolName: "ask_user_question" }), {
+    block: true,
+    terminate: true,
+  });
+  assert.deepInclude(await hooks!.beforeToolCall({ toolName: "exit_plan_mode" }), {
+    terminate: true,
+  });
+  assert.isUndefined(await hooks!.beforeToolCall({ toolName: "shell_command" }));
+});
+
+it("forwards reasoning, todo lists, task ledgers, questions and plans", async () => {
+  const { child, frame, events } = await setup();
+  frame({ type: "thinking_delta", delta: "hmm" });
+  const todos = [
+    { content: "Plan", status: "in_progress" },
+    { content: "Ship", status: "pending" },
+  ];
+  frame({ type: "tool_queued", toolCallId: "todo", toolName: "todo_write", input: { todos } });
+  frame({ type: "tool_running", toolCallId: "todo", toolName: "todo_write" });
+  frame({ type: "tool_completed", toolCallId: "todo", toolName: "todo_write", result: "ok" });
+  frame({
+    type: "tool_queued",
+    toolCallId: "c",
+    toolName: "task_create",
+    input: { subject: "Test" },
+  });
+  frame({
+    type: "tool_completed",
+    toolCallId: "c",
+    toolName: "task_create",
+    result: [{ type: "text", text: "Task #4 created: Test" }],
+  });
+  frame({
+    type: "tool_queued",
+    toolCallId: "u",
+    toolName: "task_update",
+    input: { taskId: "4", status: "completed" },
+  });
+  frame({ type: "tool_completed", toolCallId: "u", toolName: "task_update", result: "Updated" });
+  const questions = [{ question: "Which language?", options: [{ label: "Python" }] }];
+  frame({
+    type: "tool_queued",
+    toolCallId: "ask",
+    toolName: "ask_user_question",
+    input: { questions },
+  });
+  frame({
+    type: "tool_queued",
+    toolCallId: "exit",
+    toolName: "exit_plan_mode",
+    input: { plan: "# Plan" },
+  });
+  assert.deepEqual(events(), [
+    { event: "reasoning", data: { text: "hmm" } },
+    {
+      event: "todo",
+      data: {
+        steps: [
+          { text: "Plan", status: "running" },
+          { text: "Ship", status: "pending" },
+        ],
+      },
+    },
+    { event: "todo", data: { steps: [{ text: "Test", status: "pending" }] } },
+    { event: "todo", data: { steps: [{ text: "Test", status: "completed" }] } },
+    { event: "question", data: { tool_call_id: "ask", questions } },
+    { event: "plan", data: { markdown: "# Plan" } },
+  ]);
+  child.stdout.write(JSON.stringify({ type: "result", subtype: "error", sessionId: "s1" }) + "\n");
+  child.emit("close", 1);
+  assert.deepEqual(events().at(-1), {
+    event: "done",
+    data: { output: "", input_tokens: 0, output_tokens: 0, session_id: "s1" },
+  });
 });
 
 it("ignores malformed frames, preserves empty results and reports process errors", async () => {
