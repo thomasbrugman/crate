@@ -4,7 +4,7 @@ import type {
   ProviderUsageReader,
   TranscriptUsageFormat,
 } from "@t3tools/provider-core/server/usage";
-import type { BoxHarness } from "@t3tools/provider-upstash-box/harnesses";
+import type { LegacyBoxHarness } from "@t3tools/provider-upstash-box/harnesses";
 import {
   BoxClaudeCodeDriver,
   BoxCodexDriver,
@@ -68,7 +68,7 @@ export type BuiltInUsageReadersEnv = Path.Path | ServerConfig.ServerConfig;
 
 /** Box harness transcripts are read from the copies the Box adapter keeps under the state dir. */
 const boxTranscripts = <State>(
-  harness: BoxHarness,
+  harness: LegacyBoxHarness,
   provider: UsageProviderKind,
   format: TranscriptUsageFormat<State>,
 ): ProviderUsageReader<unknown, BuiltInUsageReadersEnv> => ({
