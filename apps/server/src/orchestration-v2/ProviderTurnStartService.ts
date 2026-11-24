@@ -1631,7 +1631,7 @@ export const layer: Layer.Layer<
             if (
               parentProvider?.providerInstanceId === providerThread.providerInstanceId &&
               sourceBoxId != null &&
-              parentRun?.checkpointId !== undefined &&
+              parentRun?.checkpointId != null &&
               checkpoint === undefined
             ) {
               return yield* new ProviderTurnStartError({

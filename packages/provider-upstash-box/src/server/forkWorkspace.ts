@@ -45,18 +45,22 @@ export async function forkWorkspace(source: BoxHandle, target: BoxHandle, checkp
       await requireCommand(target, `cat -- ${chunk} >> ${bundle} && rm -- ${chunk}`);
     }
     // A checkpoint's first parent is the Git commit under its working tree; an empty
-    // repository's checkpoint has none. Restore the tree on the clone's own branch so
-    // push and pull keep working, materializing the snapshot over the unborn HEAD
-    // when there is no parent commit.
-    const branch = `${git} symbolic-ref --short -q HEAD || echo main`;
+    // repository's checkpoint has none. Restore on the source checkout's branch name —
+    // a fresh local branch with no upstream — materializing the snapshot over the
+    // unborn HEAD when there is no parent commit.
+    const branchResult = await source.exec.command(`${git} symbolic-ref --short -q HEAD`);
+    const branch = /^[A-Za-z0-9._/-]+$/u.test(branchResult.stdout.trim())
+      ? branchResult.stdout.trim()
+      : "t3-fork";
     await requireCommand(
       target,
-      `${git} fetch --no-tags -- ${bundle} ${ref} && branch=$(${branch}) && ` +
+      `${git} fetch --no-tags -- ${bundle} ${ref} && ` +
         `if ${git} rev-parse --verify --quiet FETCH_HEAD^ >/dev/null; then ` +
-        `${git} checkout -B "$branch" FETCH_HEAD^ && ` +
+        `${git} checkout -B ${quoteShell(branch)} FETCH_HEAD^ && ` +
         `${git} restore --source=FETCH_HEAD --staged --worktree -- . && ` +
         `${git} reset --quiet -- .; ` +
         `else ` +
+        `${git} symbolic-ref HEAD ${quoteShell(`refs/heads/${branch}`)} && ` +
         `${git} read-tree FETCH_HEAD && ` +
         `${git} checkout-index -q -f -a && ` +
         `${git} reset --quiet -- .; ` +
