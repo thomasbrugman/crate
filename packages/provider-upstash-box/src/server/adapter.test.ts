@@ -575,6 +575,7 @@ it.effect("stages image and file attachments in the Box before starting the harn
         undefined,
         undefined,
         undefined,
+        undefined,
         {
           resolve: (attachment) => `/server/attachments/${attachment.id}`,
           upload: async (files) => {
