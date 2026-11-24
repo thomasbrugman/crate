@@ -11,14 +11,19 @@
           "name": "Box Buddy",
           "position": {
             "scale": 2,
-            "translation-in-points": [0, 0]
+            "translation-in-points": [
+              0,
+              0
+            ]
           }
         }
       ]
     }
   ],
   "supported-platforms": {
-    "circles": ["watchOS"],
+    "circles": [
+      "watchOS"
+    ],
     "squares": "shared"
   }
 }
