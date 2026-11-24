@@ -68,6 +68,7 @@ export function useComposerMenuItems({
   environmentId,
   linkedEnvironments,
   gitCwd,
+  cloudThread,
   activeThreadId,
   pullRequestProjectId,
   pullRequestRepository,
@@ -88,6 +89,7 @@ export function useComposerMenuItems({
   readonly environmentId: EnvironmentId;
   readonly linkedEnvironments: ReadonlyMap<EnvironmentId, string>;
   readonly gitCwd: string | null;
+  readonly cloudThread?: boolean;
   readonly activeThreadId: ThreadId | null;
   readonly pullRequestProjectId: ProjectId | null;
   readonly pullRequestRepository: string | null;
@@ -144,7 +146,8 @@ export function useComposerMenuItems({
   const workspaceEntries = useComposerPathSearch(
     {
       environmentId,
-      cwd: isPathTrigger ? gitCwd : null,
+      cwd: isPathTrigger && !cloudThread ? gitCwd : null,
+      ...(cloudThread && activeThreadId ? { boxThreadId: activeThreadId } : {}),
       query: isPathTrigger ? pathTriggerQuery : null,
     },
     messages,

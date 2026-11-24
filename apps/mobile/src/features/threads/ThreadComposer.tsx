@@ -433,6 +433,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     linkedEnvironments: useLinkedEnvironments(props.environmentId),
     currentThreadId: props.selectedThread.id,
     projectCwd: props.projectCwd,
+    cloudThread,
     pullRequestProjectId: props.serverConfig ? (project?.id ?? null) : null,
     pullRequestRepository: project?.repositoryIdentity?.displayName ?? null,
     threadPullRequests: props.selectedThread.pullRequests,
@@ -492,10 +493,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   );
   const contextImports = useAtomValue(composerContextImportsAtom);
   const sendBlockedReason =
-    (cloudThread &&
-    (draftAttachments.length > 0 || (queuedEdit?.existingAttachments.length ?? 0) > 0)
-      ? gt("Not available in cloud threads. Ask the agent to use its Box tools.")
-      : null) ??
     (queuedEdit?.saving === true ? gt("Saving…") : null) ??
     props.sendBlockedReason ??
     (pendingPastedTextAttachmentCount > 0 ? gt("Attaching pasted text") : null) ??
@@ -597,8 +594,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     draftKey: composerDraftKey,
     readResetGeneration,
     blocked: isSubmissionLocked || sendBlockedReason !== null,
-    onPasteImages: (uris) =>
-      cloudThread ? Promise.resolve(false) : props.onNativePasteImages(uris),
+    onPasteImages: props.onNativePasteImages,
     onSubmit: (followUp) => void handleSend(followUp),
   });
 
@@ -798,13 +794,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
           />
         ) : null}
 
-        {cloudThread ? (
-          <Text className="px-3 py-2 text-xs text-foreground-muted">
-            {gt(
-              "Attachments and file previews are not available in cloud threads. File mentions use the server checkout; only pushed files are available in the Box.",
-            )}
-          </Text>
-        ) : null}
         <ComposerSurface
           animateLayout={false}
           style={{
@@ -846,15 +835,13 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
               compact
               hidden={showsCompactDictation}
             >
-              {cloudThread ? null : (
-                <ComposerAttachmentButton
-                  size={usesLargeControls ? "large" : "regular"}
-                  disabled={isSubmissionLocked}
-                  supportsFiles={props.serverConfig !== null}
-                  onPickMedia={props.onPickDraftMedia}
-                  onPickFiles={props.onPickDraftFiles}
-                />
-              )}
+              <ComposerAttachmentButton
+                size={usesLargeControls ? "large" : "regular"}
+                disabled={isSubmissionLocked}
+                supportsFiles={props.serverConfig !== null}
+                onPickMedia={props.onPickDraftMedia}
+                onPickFiles={props.onPickDraftFiles}
+              />
               <Animated.View
                 className="min-w-0 flex-1"
                 onLayout={compactEditor.onEditorLayout}
@@ -914,7 +901,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   }}
                   onSelectionChange={composerMenu.onSelectionChange}
                   onPasteImages={(uris) => {
-                    if (isSubmissionLocked || cloudThread) return;
+                    if (isSubmissionLocked) return;
                     pendingNativeImagePasteCountRef.current += 1;
                     void nativeImageSubmit.pasteImages(uris).finally(() => {
                       pendingNativeImagePasteCountRef.current -= 1;
@@ -944,7 +931,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                         paste.text.length >
                       PROVIDER_SEND_TURN_MAX_INPUT_CHARS;
                     const canAttach =
-                      !cloudThread &&
                       maxBytes !== null &&
                       countComposerDraftAttachmentsAfterSelection(composerDraftKey, {
                         text: paste.value,

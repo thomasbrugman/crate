@@ -1,11 +1,14 @@
 import {
   ProviderSetupError,
+  type ChatAttachment,
   type OrchestrationV2ProviderSession,
   type OrchestrationV2ProviderThread,
   type ProviderDriverKind,
   type ProviderInstanceId,
   type ProviderThreadId,
 } from "@t3tools/contracts";
+import { providerMessageTextWithAttachmentPaths } from "@t3tools/provider-core/server/attachmentPrompt";
+import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import type { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Adapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -17,6 +20,7 @@ import * as Stream from "effect/Stream";
 
 import { BOX_HARNESS_LABELS, type BoxHarness } from "../harnesses.ts";
 import {
+  BOX_ATTACHMENTS_PATH,
   BOX_HOME,
   BOX_REPOSITORY_PATH,
   BOX_WORKSPACE_PATH,
@@ -86,7 +90,7 @@ clean_checkout() (
 for path in ./* ./.[!.]* ./..?*; do
   test -e "$path" || test -L "$path" || continue
   case "$path" in
-    ./repo|./.t3stash-worktrees|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
+    ./repo|./.t3stash-worktrees|./.t3stash-attachments|./.box|./.box-internal|./.claude|./.codex|./.cursor|./.local) ;;
     *) exit 1 ;;
   esac
 done
@@ -133,6 +137,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
   agent: BoxAgentConfig,
   environment: Effect.Effect<BoxEnvironmentConfig>,
   mcpSessions?: McpProviderSessions["Service"],
+  resolveAttachmentPath?: (attachment: ChatAttachment) => string | null,
 ) {
   const { driver, harness } = agent;
   const capabilities = {
@@ -459,8 +464,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               detail: "A Box turn is already active",
               reason: "previous_turn_active",
             });
-          if (request.message.attachments.length || request.resume)
-            return yield* unsupported("Attachments and native turn resume");
+          if (request.resume) return yield* unsupported("Native turn resume");
           if (request.runtimePolicy.runtimeMode !== "full-access")
             return yield* unsupported("Restricted runtime policies");
           const providerThread = request.providerThread;
@@ -480,14 +484,45 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               ? yield* mcpSessions.read(request.threadId)
               : undefined;
           const mcpSession = mcp?.providerInstanceId === instanceId ? mcp : undefined;
-          // Managed agents start in the Box workspace, so they are told where the clone is.
-          const prompt = [
+          const attachmentDirectory = `${BOX_ATTACHMENTS_PATH}/${Buffer.from(request.attemptId).toString("hex")}`;
+          const attachments: Array<{ path: string; destination: string }> = [];
+          const attachmentDestinations = new Map<string, string>();
+          const upload = box.files.upload;
+          for (const [index, attachment] of request.message.attachments.entries()) {
+            const path = resolveAttachmentPath?.(attachment);
+            if (!path || !upload)
+              return yield* new Adapter.ProviderAdapterProtocolError({
+                driver,
+                detail: "Could not access the saved attachments for this Box turn.",
+              });
+            const filename = attachment.name.replace(/[^a-zA-Z0-9._ -]/gu, "_").slice(-120);
+            const destination = `${attachmentDirectory}/${index}-${filename}`;
+            attachments.push({ path, destination });
+            attachmentDestinations.set(attachment.id, destination);
+          }
+          const messageText = yield* providerMessageTextWithAttachmentPaths({
+            text: request.message.text,
+            attachments: request.message.attachments,
+            resolveAttachmentPath: (attachment) =>
+              attachmentDestinations.get(attachment.id) ?? null,
+          });
+          const messageContext = [
             ...(request.appContext ?? []).map(({ text }) => text),
             ...(!credentials && harness !== "commandCode" && request.runtimePolicy.repositoryUrl
               ? [`The repository is checked out at ${BOX_REPOSITORY_PATH}.`]
               : []),
-            request.message.text,
-          ].join("\n\n");
+            ...([...request.message.text.matchAll(SKILL_MENTION_PATTERN)].length > 0
+              ? [
+                  "When the user mentions an installed skill with $name, follow that skill’s instructions from this Box.",
+                ]
+              : []),
+          ];
+          // These harnesses recognize native commands only at the start of the prompt.
+          const nativeSlash =
+            harness !== "codex" && /^\/[a-zA-Z0-9_:.-]+(?:\s|$)/u.test(messageText);
+          const prompt = (
+            nativeSlash ? [messageText, ...messageContext] : [...messageContext, messageText]
+          ).join("\n\n");
           const runMarker = `t3stash-run:${Buffer.from(request.attemptId).toString("hex")}\n`;
           const streamPrompt = harness === "commandCode" ? runMarker + prompt : prompt;
           const translation = new BoxTurnTranslation(
@@ -555,6 +590,26 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               try: async () => {
                 let stream: BoxStream;
                 const start = async () => {
+                  if (upload && attachments.length > 0) {
+                    try {
+                      await requireCommand(
+                        box,
+                        `umask 077; mkdir -p -- ${quoteShell(attachmentDirectory)}`,
+                      );
+                      for (const { path, destination } of attachments) {
+                        await upload([{ path, destination }]);
+                      }
+                    } catch (error) {
+                      if (
+                        isMissingBox(error) ||
+                        (error instanceof BoxError && error.statusCode === 409)
+                      )
+                        throw error;
+                      failureMessage =
+                        "Could not copy an attachment into this Box. Send the message again to retry.";
+                      throw new BoxRuntimeError({ operation: "attachments" });
+                    }
+                  }
                   if (!credentials) return box.agent.stream({ prompt: streamPrompt });
                   const cwd = request.runtimePolicy.repositoryUrl
                     ? providerThread.nativeMetadata?.boxOwnerThreadId

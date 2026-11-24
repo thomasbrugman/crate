@@ -15,6 +15,7 @@ import type {
   EnvironmentId,
   OrchestrationV2ProjectedTurnItem,
   ProjectId,
+  ThreadId,
   ThreadPullRequestLink,
   VcsListRefsResult,
   VcsRef,
@@ -90,6 +91,7 @@ const threadSearch = createThreadSearchResultsAtomFamily({
 export interface ComposerPathSearchTarget {
   readonly environmentId: EnvironmentId | null;
   readonly cwd: string | null;
+  readonly boxThreadId?: ThreadId | undefined;
   readonly query: string | null;
 }
 
@@ -419,7 +421,12 @@ export function usePaginatedBranches(target: VcsRefTarget) {
 export function useComposerPathSearch(target: ComposerPathSearchTarget) {
   const resolve = useMessages();
   const query = normalizeComposerPathSearchQuery(target.query);
-  const normalizedTarget = { environmentId: target.environmentId, cwd: target.cwd, query };
+  const normalizedTarget = {
+    environmentId: target.environmentId,
+    cwd: target.cwd,
+    boxThreadId: target.boxThreadId,
+    query,
+  };
   const debouncedTarget = useDebouncedValue(normalizedTarget, COMPOSER_PATH_SEARCH_DEBOUNCE_MS);
   const fileAccessSession = useEnvironmentQuery(
     debouncedTarget.environmentId === null
@@ -439,12 +446,15 @@ export function useComposerPathSearch(target: ComposerPathSearchTarget) {
   const { canReadFiles } = fileAccess;
   const searchTarget =
     debouncedTarget.environmentId !== null &&
-    debouncedTarget.cwd !== null &&
+    (debouncedTarget.cwd !== null || debouncedTarget.boxThreadId !== undefined) &&
     debouncedTarget.query !== null
       ? {
           environmentId: debouncedTarget.environmentId,
           input: {
-            cwd: debouncedTarget.cwd,
+            cwd: debouncedTarget.cwd ?? ".",
+            ...(debouncedTarget.boxThreadId === undefined
+              ? {}
+              : { boxThreadId: debouncedTarget.boxThreadId }),
             query: debouncedTarget.query.slice(0, 256).replace(/[\uD800-\uDBFF]$/, ""),
             limit: COMPOSER_PATH_SEARCH_LIMIT,
           },
@@ -456,7 +466,8 @@ export function useComposerPathSearch(target: ComposerPathSearchTarget) {
   const hasTarget = searchTarget !== null;
   const isSameCheckout =
     normalizedTarget.environmentId === debouncedTarget.environmentId &&
-    normalizedTarget.cwd === debouncedTarget.cwd;
+    normalizedTarget.cwd === debouncedTarget.cwd &&
+    normalizedTarget.boxThreadId === debouncedTarget.boxThreadId;
 
   return {
     // Entries from another checkout must not be offered while the new one is debounced.

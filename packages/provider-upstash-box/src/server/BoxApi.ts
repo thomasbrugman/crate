@@ -26,6 +26,7 @@ export const BOX_HOME = "/home/boxuser";
 export const BOX_WORKSPACE_PATH = "/workspace/home";
 export const BOX_REPOSITORY_PATH = "/workspace/home/repo";
 export const BOX_WORKTREES_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-worktrees`;
+export const BOX_ATTACHMENTS_PATH = `${BOX_WORKSPACE_PATH}/.t3stash-attachments`;
 
 export const boxWorktreePath = (threadId: string) =>
   `${BOX_WORKTREES_PATH}/${Buffer.from(threadId).toString("hex")}`;
@@ -115,6 +116,7 @@ export interface BoxHandle {
     >;
   };
   readonly files: {
+    readonly upload?: (files: Array<{ path: string; destination: string }>) => Promise<void>;
     readonly readBase64?: (path: string, offset: number, length: number) => Promise<string>;
     readonly write: (options: { path: string; content: string }) => Promise<unknown>;
     readonly writeVolatile?: (path: string, content: string) => Promise<void>;
@@ -227,6 +229,7 @@ function projectBox(box: Box): BoxHandle {
       },
     },
     files: {
+      upload: (files) => box.files.upload(files),
       readBase64: (path, offset, length) =>
         box.files.read(path, { encoding: "base64", offset, length }),
       write: async (options) => {
