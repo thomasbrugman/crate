@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 
 import { BoxApi, type BoxHandle } from "./BoxApi.ts";
 import {
+  BoxInvestigationTarget,
   makeBoxTextGeneration,
   structuredPrompt,
   textGenerationBoxName,
@@ -32,6 +33,17 @@ function fakeBox(chunks: ReadonlyArray<Chunk>) {
       command: async (command) => {
         commands.push(command);
         return { stdout: "", exitCode: 0 };
+      },
+      stream: async (command) => {
+        commands.push(command);
+        return {
+          id: "exec-1",
+          cancel: async () => undefined,
+          async *[Symbol.asyncIterator]() {
+            yield { type: "output" as const, data: `event: done\ndata: {"session_id":"s"}\n\n` };
+            yield { type: "exit" as const, exitCode: 0, cpuNs: 0 };
+          },
+        };
       },
     },
     files: { write: async () => undefined },
@@ -107,3 +119,50 @@ it("keeps structured prompts under the shell argument limit", () => {
   assert.notInclude(prompt, "\uFFFD");
   assert.isTrue(prompt.endsWith('{"type":"object"}'));
 });
+
+it.effect("investigates review guides read-only in the thread's own Box", () =>
+  Effect.gen(function* () {
+    const fake = fakeBox([]);
+    const textGeneration = yield* makeBoxTextGeneration(
+      "claudeCode",
+      "",
+      Effect.succeed({
+        apiKey: "test-key",
+        templateBoxName: "cc-harness",
+        size: "medium",
+        githubToken: "ghp_test",
+        credentials: { claudeCode: "sk-ant-api-test" },
+      }),
+    ).pipe(Effect.provideService(BoxApi, fake.api));
+    const guide = textGeneration.generateReviewGuide({
+      cwd: "/tmp/t3-review-guide-1",
+      number: 1,
+      title: "Change",
+      description: "",
+      baseBranch: "main",
+      baseCommit: "abc",
+      settledReview: "",
+      modelSelection: { instanceId: ProviderInstanceId.make("boxClaudeCode"), model: "sonnet" },
+    });
+
+    // Without a thread Box there is no checkout to read, so it says so instead of guessing.
+    const unsupported = yield* Effect.flip(guide);
+    assert.match(unsupported.detail, /cannot investigate a checkout read-only/u);
+    assert.deepEqual(fake.names, []);
+
+    yield* Effect.flip(
+      guide.pipe(
+        Effect.provideService(BoxInvestigationTarget, {
+          nativeId: "thread-box",
+          apiKey: "thread-key",
+          cwd: "/tmp/t3-review-guide-1",
+        }),
+      ),
+    );
+    assert.deepEqual(fake.names, ["thread-box"]);
+    assert.lengthOf(fake.commands, 1);
+    assert.match(fake.commands[0]!, /^cd '\/tmp\/t3-review-guide-1' && /u);
+    assert.match(fake.commands[0]!, / 'investigate'$/u);
+    assert.notInclude(fake.commands[0]!, "Do not use any tools");
+  }),
+);

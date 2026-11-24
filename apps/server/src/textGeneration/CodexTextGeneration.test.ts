@@ -887,9 +887,9 @@ it.effect(
       yield* (yield* serviceWith([instance])).generateReviewGuide(input);
       expect(calls.map((selection) => selection.instanceId)).toEqual([claude]);
 
-      // A Box harness cannot investigate either, so a guide aimed at one also falls back.
-      const box = ProviderInstanceId.make("boxCodex");
-      const boxDriver = ProviderDriverKind.make("boxCodex");
+      // Command Code in a Box has no read-only mode, so a guide aimed at it also falls back.
+      const box = ProviderInstanceId.make("boxCommandCode");
+      const boxDriver = ProviderDriverKind.make("boxCommandCode");
       const boxSnapshot = yield* instance.snapshot.getSnapshot;
       const boxInstance = {
         ...instance,
@@ -901,12 +901,12 @@ it.effect(
         } as ProviderInstance["snapshot"],
         textGeneration: TextGeneration.TextGeneration.of({
           ...instance.textGeneration,
-          generateReviewGuide: () => Effect.die("a Box harness cannot investigate"),
+          generateReviewGuide: () => Effect.die("Command Code cannot investigate"),
         }),
       } satisfies ProviderInstance;
       yield* (yield* serviceWith([instance, boxInstance])).generateReviewGuide({
         ...input,
-        modelSelection: { instanceId: box, model: "gpt-5.5" },
+        modelSelection: { instanceId: box, model: "default" },
       });
       expect(calls.map((selection) => selection.instanceId)).toEqual([claude, claude]);
 
