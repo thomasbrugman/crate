@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 import { readProviderReplayTranscript } from "@t3tools/provider-testing/replayTranscript";
+import { isBoxWorkerDriver } from "@t3tools/provider-upstash-box/harnesses";
 import { provideDeterministicTestRuntime } from "./DeterministicRuntime.ts";
 import { ORCHESTRATOR_REPLAY_FIXTURES } from "./fixtures/index.ts";
 import {
@@ -190,7 +191,11 @@ const runFixtureProvider = Effect.fn("runOrchestratorReplayFixture")(function* <
       threadStartCheckpoint,
       "completed threads must retain an addressable thread-start checkpoint",
     );
-    assert.equal(threadStartCheckpoint.status, "ready");
+    // Worker Box drivers run in the cloud without rollback, so no local baseline is captured.
+    assert.equal(
+      threadStartCheckpoint.status,
+      isBoxWorkerDriver(input.driver.driver) ? "missing" : "ready",
+    );
   }
   return result;
 });

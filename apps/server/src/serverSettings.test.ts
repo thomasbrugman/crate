@@ -1463,6 +1463,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
             commandCodeAuth: '{"token":"command-code-test-secret"}',
             claudeCodeAuth: "claude-test-secret",
             codexAuth: "codex-test-secret",
+            opencodeAuth: "opencode-test-secret",
+            cursorAuth: "cursor-test-secret",
+            antigravityAuth: "antigravity-test-secret",
           },
           sourceControlHosts: {
             github: { tokens: { "github.com": "github-secret" } },
@@ -1502,6 +1505,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           "command-code-test-secret",
           "claude-test-secret",
           "codex-test-secret",
+          "opencode-test-secret",
+          "cursor-test-secret",
+          "antigravity-test-secret",
         ];
         const client = ServerSettingsModule.redactServerSettingsForClient(saved, {
           secretReferences: true,
@@ -1511,6 +1517,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           ["commandCodeAuth", "command-code-test-secret"],
           ["claudeCodeAuth", "claude-test-secret"],
           ["codexAuth", "codex-test-secret"],
+          ["opencodeAuth", "opencode-test-secret"],
+          ["cursorAuth", "cursor-test-secret"],
+          ["antigravityAuth", "antigravity-test-secret"],
         ] as const) {
           const raw = yield* store.get(`upstash-box-${Buffer.from(field).toString("base64url")}`);
           assert.isTrue(Option.isSome(raw));
@@ -1846,6 +1855,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
             commandCodeAuth: usageReference,
             claudeCodeAuth: usageReference,
             codexAuth: usageReference,
+            opencodeAuth: usageReference,
+            cursorAuth: usageReference,
+            antigravityAuth: usageReference,
           },
         });
         const legacy = ServerSettingsModule.redactServerSettingsForClient(withUsage, {
@@ -1866,6 +1878,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         assert.equal(legacy.upstashBox.commandCodeAuth, SECRET_REDACTED);
         assert.equal(legacy.upstashBox.claudeCodeAuth, SECRET_REDACTED);
         assert.equal(legacy.upstashBox.codexAuth, SECRET_REDACTED);
+        assert.equal(legacy.upstashBox.opencodeAuth, SECRET_REDACTED);
+        assert.equal(legacy.upstashBox.cursorAuth, SECRET_REDACTED);
+        assert.equal(legacy.upstashBox.antigravityAuth, SECRET_REDACTED);
         const configOf = (settings: ServerSettings, id: ProviderInstanceId) =>
           settings.providerInstances[id]?.config as Record<string, unknown> | undefined;
         assert.equal(configOf(legacy, antigravity)?.apiKey, SECRET_REDACTED);
@@ -1885,6 +1900,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         assert.deepEqual(echoed.upstashBox.commandCodeAuth, usageReference);
         assert.deepEqual(echoed.upstashBox.claudeCodeAuth, usageReference);
         assert.deepEqual(echoed.upstashBox.codexAuth, usageReference);
+        assert.deepEqual(echoed.upstashBox.opencodeAuth, usageReference);
+        assert.deepEqual(echoed.upstashBox.cursorAuth, usageReference);
+        assert.deepEqual(echoed.upstashBox.antigravityAuth, usageReference);
         assert.deepEqual(echoed.sourceControlHosts.github?.tokens, {
           "github.com": gitHubReference,
           "ghe.acme.test": "ghp_ghe",
@@ -2018,6 +2036,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         "upstashBox.apiKey",
         "upstashBox.commandCodeAuth",
         "upstashBox.claudeCodeAuth",
+        "upstashBox.opencodeAuth",
+        "upstashBox.cursorAuth",
+        "upstashBox.antigravityAuth",
         "upstashBox.codexAuth",
       ]);
     }),
