@@ -25,7 +25,7 @@ import {
   harnessCredentialKind,
   type BoxHarnessCredentials,
 } from "./credentials.ts";
-import { makeBoxGitSetup } from "./git.ts";
+import { EXCLUDE_HARNESS_FILES_COMMAND, makeBoxGitSetup } from "./git.ts";
 
 const isBoxRuntimeError = Schema.is(BoxRuntimeError);
 
@@ -60,6 +60,7 @@ function shareSetup(key: string, setup: () => Promise<BoxHandle>): Promise<BoxHa
   if (pending) return pending;
   const promise = setup()
     .then(async (box) => {
+      await requireCommand(box, EXCLUDE_HARNESS_FILES_COMMAND);
       // Restarting dev servers on wake is a convenience; a failure must not block the thread.
       await installDevServerKeeper(box).catch(() => undefined);
       return box;

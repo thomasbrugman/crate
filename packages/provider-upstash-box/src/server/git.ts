@@ -2,7 +2,26 @@
 import * as NodeCrypto from "node:crypto";
 import * as Effect from "effect/Effect";
 
-import { BOX_HOME, quoteShell, requireCommand, type BoxHandle } from "./BoxApi.ts";
+import {
+  BOX_HOME,
+  BOX_REPOSITORY_PATH,
+  quoteShell,
+  requireCommand,
+  type BoxHandle,
+} from "./BoxApi.ts";
+
+const repositoryExclude = `${BOX_REPOSITORY_PATH}/.git/info/exclude`;
+
+// Command Code keeps per-project taste learnings in the checkout. They are harness state, not
+// the user's work, so they stay out of diffs and commits through the clone's local exclude file
+// (shared by every worktree) without touching the repository's tracked .gitignore.
+export const EXCLUDE_HARNESS_FILES_COMMAND = [
+  `test ! -d ${BOX_REPOSITORY_PATH}/.git || {`,
+  `mkdir -p ${BOX_REPOSITORY_PATH}/.git/info && touch ${repositoryExclude} &&`,
+  `{ test ! -s ${repositoryExclude} || test -z "$(tail -c 1 ${repositoryExclude})" || echo >> ${repositoryExclude}; } &&`,
+  `{ grep -Fqx -- /.commandcode/taste/ ${repositoryExclude} || echo /.commandcode/taste/ >> ${repositoryExclude}; };`,
+  `}`,
+].join(" ");
 
 const gitDir = "/dev/shm/t3stash-git";
 const gitConfig = `${gitDir}/config`;

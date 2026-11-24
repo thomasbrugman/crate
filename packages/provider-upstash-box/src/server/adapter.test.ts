@@ -35,6 +35,7 @@ import { vi } from "vite-plus/test";
 import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
 import { BoxApi, type BoxHandle, type BoxStream, type BoxSubagentChunk } from "./BoxApi.ts";
+import { EXCLUDE_HARNESS_FILES_COMMAND } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 
 const instanceId = ProviderInstanceId.make("box-test");
@@ -322,14 +323,52 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
           return { stdout: result.stdout, exitCode: result.status ?? 1 };
         },
       );
+      // Command Code writes taste learnings into whichever checkout it runs in.
+      for (const checkout of [repo, worktree]) {
+        for (const file of ["taste.md", "cli/taste.md"]) {
+          const path = NodePath.join(checkout, ".commandcode", "taste", file);
+          yield* Effect.promise(() => NodeFSP.mkdir(NodePath.dirname(path), { recursive: true }));
+          yield* Effect.promise(() => NodeFSP.writeFile(path, "learned"));
+        }
+      }
+      // Boxes set up before the exclude existed still count taste files as saved.
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       assert.equal(deleted, 1);
+      const excludeHarnessFiles = () =>
+        NodeChildProcess.execFileSync("sh", [
+          "-c",
+          EXCLUDE_HARNESS_FILES_COMMAND.replaceAll("/workspace/home", home),
+        ]);
+      yield* Effect.sync(() => {
+        excludeHarnessFiles();
+        excludeHarnessFiles();
+      });
+      assert.equal(
+        yield* Effect.promise(() =>
+          NodeFSP.readFile(NodePath.join(repo, ".git", "info", "exclude"), "utf8"),
+        ).pipe(
+          Effect.map(
+            (exclude) =>
+              exclude.split("\n").filter((line) => line === "/.commandcode/taste/").length,
+          ),
+        ),
+        1,
+      );
       for (const checkout of [repo, worktree]) {
-        const path = NodePath.join(checkout, ".env");
-        yield* Effect.promise(() => NodeFSP.writeFile(path, "fixture"));
-        assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-        assert.equal(deleted, 1);
-        yield* Effect.promise(() => NodeFSP.unlink(path));
+        assert.equal(git("-C", checkout, "status", "--porcelain", "-uall").toString(), "");
+        git("-C", checkout, "add", "-A");
+        assert.equal(git("-C", checkout, "diff", "--cached", "--name-only").toString(), "");
+      }
+      assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
+      assert.equal(deleted, 2);
+      for (const checkout of [repo, worktree]) {
+        for (const file of [".env", ".commandcode/notes.md"]) {
+          const path = NodePath.join(checkout, file);
+          yield* Effect.promise(() => NodeFSP.writeFile(path, "fixture"));
+          assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
+          assert.equal(deleted, 2);
+          yield* Effect.promise(() => NodeFSP.unlink(path));
+        }
       }
       yield* Effect.sync(() =>
         git(
@@ -346,13 +385,13 @@ it.live("releases idle Boxes only when all their checkouts contain no unsaved wo
         ),
       );
       assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-      assert.equal(deleted, 1);
-      yield* Effect.sync(() => git("worktree", "remove", worktree));
+      assert.equal(deleted, 2);
+      yield* Effect.sync(() => git("worktree", "remove", "--force", worktree));
       yield* Effect.promise(() => NodeFSP.rm(repo, { recursive: true }));
       assert.isTrue(yield* adapter.deleteIdleThread!(turn.providerThread));
       yield* Effect.promise(() => NodeFSP.writeFile(NodePath.join(home, "notes.txt"), "fixture"));
       assert.isFalse(yield* adapter.deleteIdleThread!(turn.providerThread));
-      assert.equal(deleted, 2);
+      assert.equal(deleted, 3);
     }),
   ),
 );
@@ -834,7 +873,7 @@ it.effect(
   () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const { runtime, turn, prompts, harnesses } = yield* setup(
+        const { runtime, turn, prompts, harnesses, commands } = yield* setup(
           fakeStream([
             { type: "start", runId: "native-run" },
             { type: "tool-result", output: "orphan" },
@@ -860,7 +899,9 @@ it.effect(
           ]),
         );
         const text = "Earlier context\n\nhello";
+        commands.length = 0;
         yield* runtime.resumeThread({ providerThread: turn.providerThread });
+        assert.include(commands, EXCLUDE_HARNESS_FILES_COMMAND);
         assert.deepEqual(harnesses, [commandCodeHarness, commandCodeHarness]);
         yield* runtime.startTurn({
           ...turn,

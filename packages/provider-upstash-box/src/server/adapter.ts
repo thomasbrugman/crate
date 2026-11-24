@@ -26,6 +26,7 @@ import {
   BoxRuntimeError,
   isMissingBox,
   quoteShell,
+  requireCommand,
   type BoxHandle,
   type BoxStream,
 } from "./BoxApi.ts";
@@ -40,7 +41,7 @@ import {
 import { capabilities as baseCapabilities } from "./capabilities.ts";
 import { harnessCredentialKind } from "./credentials.ts";
 import { execHarness } from "./execHarness.ts";
-import { makeBoxGitSetup } from "./git.ts";
+import { EXCLUDE_HARNESS_FILES_COMMAND, makeBoxGitSetup } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 import { cancelBoxRun } from "./stop.ts";
 import { BoxTurnTranslation } from "./translation.ts";
@@ -68,7 +69,8 @@ interface ActiveTurn {
 
 // Exits 0 only when the Box holds nothing a fresh clone would lose: no uncommitted or
 // untracked or ignored files, stashes, commits missing from the remote, or files beside the repository.
-// Every Box starts with the agent configuration directories below in its workspace.
+// Every Box starts with the agent configuration directories below in its workspace, and
+// untracked Command Code taste files are harness state rather than work.
 const SAVED_WORK_CHECK = String.raw`
 cd /workspace/home || exit 1
 home=$(pwd -P) || exit 1
@@ -77,7 +79,7 @@ clean_checkout() (
   test "$(git rev-parse --show-toplevel)" = "$1" &&
   test "$(git rev-parse --path-format=absolute --git-common-dir)" = "$home/repo/.git" &&
   status=$(git -c status.showUntrackedFiles=all status --porcelain --ignored) &&
-  test -z "$status" &&
+  test -z "$(printf '%s\n' "$status" | grep -Ev '^(\?\?|!!) \.commandcode/taste/')" &&
   unpushed=$(git rev-list --count HEAD --branches --not --remotes) &&
   test "$unpushed" = 0
 )
@@ -364,6 +366,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                 // Lookup by ID also returns deleted Box tombstones; status does not.
                 await existing.getStatus();
                 await configureBoxGit(existing, config.githubToken);
+                await requireCommand(existing, EXCLUDE_HARNESS_FILES_COMMAND);
                 if (config.credentials) {
                   await installConnectedHarnesses(existing, config, () => {});
                 } else if (harness === "commandCode") {
