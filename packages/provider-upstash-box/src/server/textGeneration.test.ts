@@ -13,6 +13,7 @@ import {
 function fakeBox(chunks: ReadonlyArray<Chunk>) {
   const prompts: string[] = [];
   const names: string[] = [];
+  const commands: string[] = [];
   const box: BoxHandle = {
     id: "box-text",
     agent: {
@@ -27,7 +28,12 @@ function fakeBox(chunks: ReadonlyArray<Chunk>) {
         };
       },
     },
-    exec: { command: async () => ({ stdout: "", exitCode: 0 }) },
+    exec: {
+      command: async (command) => {
+        commands.push(command);
+        return { stdout: "", exitCode: 0 };
+      },
+    },
     files: { write: async () => undefined },
     delete: async () => undefined,
     resume: async () => undefined,
@@ -42,16 +48,21 @@ function fakeBox(chunks: ReadonlyArray<Chunk>) {
     list: async () => [],
     checkModelKey: async () => 200,
   };
-  return { api, prompts, names };
+  return { api, prompts, names, commands };
 }
 
-const generate = (chunks: ReadonlyArray<Chunk>) =>
+const generate = (chunks: ReadonlyArray<Chunk>, githubToken?: string) =>
   Effect.gen(function* () {
     const fake = fakeBox(chunks);
     const textGeneration = yield* makeBoxTextGeneration(
       "commandCode",
       "",
-      Effect.succeed({ apiKey: "test-key", templateBoxName: "cc-harness", size: "medium" }),
+      Effect.succeed({
+        apiKey: "test-key",
+        templateBoxName: "cc-harness",
+        size: "medium",
+        githubToken,
+      }),
     ).pipe(Effect.provideService(BoxApi, fake.api));
     const result = yield* textGeneration
       .generateThreadTitle({
@@ -65,15 +76,20 @@ const generate = (chunks: ReadonlyArray<Chunk>) =>
 
 it.effect("generates a thread title from the harness reply in the shared text Box", () =>
   Effect.gen(function* () {
-    const { result, prompts, names } = yield* generate([
-      { type: "text-delta", text: 'Sure: {"title": ' } as Chunk,
-      { type: "text-delta", text: '"Fix mobile login button"}' } as Chunk,
-      { type: "finish", output: "ignored", sessionId: "s" } as Chunk,
-    ]);
+    const { result, prompts, names, commands } = yield* generate(
+      [
+        { type: "text-delta", text: 'Sure: {"title": ' } as Chunk,
+        { type: "text-delta", text: '"Fix mobile login button"}' } as Chunk,
+        { type: "finish", output: "ignored", sessionId: "s" } as Chunk,
+      ],
+      "ghp_test",
+    );
     assert.deepEqual(result, { title: "Fix mobile login button" });
     assert.deepEqual(names, [textGenerationBoxName("commandCode")]);
     assert.include(prompts[0], "the login button does nothing on mobile");
     assert.include(prompts[0], '"title"');
+    assert.isTrue(commands.some((command) => command.includes(".git-credentials")));
+    assert.isFalse(commands.some((command) => command.includes("ghp_test")));
   }),
 );
 
