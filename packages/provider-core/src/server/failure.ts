@@ -140,6 +140,7 @@ function curatedCauseMessages(cause: unknown): {
         case "CursorModelUnavailableError":
         case "CodexGoalObjectiveTooLongError":
         case "ProviderSetupError":
+        case "BoxSetupScriptError":
         case "ProviderAdapterThreadInUseError":
         case "ProviderCompactionUnsupportedError":
           return { known: stringField(cause, "message"), category: categoryMessage() };

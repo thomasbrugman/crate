@@ -5,7 +5,7 @@ export function resolveDesktopAppHandoff(os: ClientOs, development = false) {
   if (os === "macOS" && !development) {
     return {
       scheme: CRATE_APP_SCHEME,
-      macInstallUrl: "https://github.com/thomasbrugman/t3stash#mac",
+      macInstallUrl: "https://github.com/thomasbrugman/crate#mac",
     };
   }
   return { scheme: development ? "t3code-dev" : "t3code", macInstallUrl: null };

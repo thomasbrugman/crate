@@ -2682,7 +2682,7 @@
   "7f6d34983e89a91c": "Supprimer l’action",
   "84435bd5cb8cfac0": "Modifier l’action",
   "2d1f6668f713dca9": "Ajouter une action",
-  "73bedbce4c29257a": "Les actions sont enregistrées pour ce projet, mais ne s’exécutent pas dans les fils cloud.",
+  "adaa5145d9e1453e": "L’action de configuration s’exécute au démarrage d’un fil cloud. Les autres actions sont enregistrées, mais ne s’exécutent pas dans les fils cloud.",
   "da1b3bc9635dcdc8": "Les actions sont des commandes propres au projet que vous pouvez lancer depuis la barre supérieure ou des raccourcis clavier.",
   "4614a422f1430cd7": "Nom",
   "d3502e7db0cdb998": "Raccourci clavier",
@@ -3355,8 +3355,6 @@
     }
   ],
   "1b1131295f62c44c": "Le processus du fournisseur n’existe plus. Interrompez ou redémarrez le fil enfant pour répondre.",
-  "52278fd875d1a073": "Détails de l’espace de travail Box",
-  "eb51025bee426871": "Les pièces jointes et les aperçus de fichiers ne sont pas disponibles dans les fils cloud. Les mentions de fichiers utilisent la copie du serveur ; seuls les fichiers poussés sont disponibles dans la Box.",
   "2cc98601912fed53": "Non disponible dans les fils de discussion cloud. Demandez à l’agent d’utiliser ses outils Box.",
   "da66023072c473d1": [
     "Impossible de charger la sortie : ",

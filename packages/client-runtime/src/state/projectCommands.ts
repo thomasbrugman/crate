@@ -149,10 +149,18 @@ export function createProjectEnvironmentAtoms<R, E>(
       tag: WS_METHODS.projectsSearchEntries,
       staleTimeMs: 15_000,
       execute: (input) =>
-        fileMetadata.seedAfterRead(
-          request(WS_METHODS.projectsSearchEntries, input),
-          (result, isCurrent) => fileMetadata.rememberEntries(input.cwd, result.entries, isCurrent),
-        ),
+        input.boxThreadId !== undefined
+          ? request(WS_METHODS.projectsSearchEntries, input)
+          : fileMetadata.seedAfterRead(
+              request(WS_METHODS.projectsSearchEntries, input),
+              (result, isCurrent) =>
+                fileMetadata.rememberEntries(input.cwd, result.entries, isCurrent),
+            ),
+    }),
+    boxComposerCapabilities: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:box-composer-capabilities",
+      tag: WS_METHODS.projectsBoxComposerCapabilities,
+      staleTimeMs: 0,
     }),
     listEntries: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:list-entries",

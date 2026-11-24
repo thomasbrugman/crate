@@ -1,7 +1,7 @@
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
 
 const FALLBACK_TRIAGE_COMMAND = "npx t3 triage";
-const DOWNLOAD_URL = "https://github.com/thomasbrugman/t3stash#mac";
+const DOWNLOAD_URL = "https://github.com/thomasbrugman/crate#mac";
 const ISSUE_URL = "https://github.com/pingdotgg/t3code/issues/new";
 const LAST_FAILURE_KEY = "t3code:boot-failed-at";
 const REPEAT_FAILURE_MS = 5 * 60_000;

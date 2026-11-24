@@ -7,3 +7,4 @@ export {
 export * as BoxExec from "./server/BoxExec.ts";
 export * as BoxApi from "./server/BoxApi.ts";
 export * as BoxServers from "./server/BoxServers.ts";
+export { BOX_COMMAND_CODE_HOME, BOX_CREDENTIALS_DIR } from "./server/credentials.ts";

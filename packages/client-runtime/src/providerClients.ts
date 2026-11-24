@@ -16,7 +16,7 @@ export const openRouterIcon: ProviderIcon = {
 
 export const providerClients = makeProviderClientRegistry(boxProviderClients);
 
-export { isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
+export { getUpstashBoxHarness, isUpstashBoxDriver } from "@t3tools/provider-upstash-box/harnesses";
 
 export function getProviderClient(driver: string | null | undefined) {
   return isProviderDriverKind(driver) ? providerClients.get(driver) : undefined;

@@ -257,6 +257,22 @@ describe("ProjectSetupScriptRunner", () => {
   );
 });
 
+describe("ProjectSetupScriptRunner shell loss", () => {
+  it.effect.each(["restarted", "error"] as const)(
+    "settles without an exit code when the shell is %s after the command was typed",
+    (type) =>
+      Effect.gen(function* () {
+        const { completion, emit } = yield* setup();
+        yield* emit(
+          type === "error"
+            ? { ...event, type, message: "The Box terminal connection closed." }
+            : { ...event, type, snapshot: openSnapshot("") },
+        );
+        expect(yield* completion).toMatchObject({ exitCode: null });
+      }),
+  );
+});
+
 const runObservedSetup = Effect.fnUntraced(function* (command: string) {
   const { writes, outputLines, emit, completion } = yield* setup({ command });
   yield* emit({ ...event, type: "output", data: "\x1b[?2004h" });
