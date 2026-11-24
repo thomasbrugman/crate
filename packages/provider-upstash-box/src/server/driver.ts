@@ -201,7 +201,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
         return {
           instanceId,
           driver: driverKind,
-          ...(displayName ? { displayName } : {}),
+          displayName: displayName || label,
           ...(accentColor ? { accentColor } : {}),
           continuation: { groupKey: continuationIdentity.continuationKey },
           enabled,
