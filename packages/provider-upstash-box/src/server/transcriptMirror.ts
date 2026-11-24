@@ -19,7 +19,7 @@ export const boxTranscriptMirrorDir = (path: Path.Path, stateDir: string, harnes
   path.join(stateDir, "box-transcripts", harness);
 
 const listCommand = (root: string) =>
-  `test -d ${root} && find ${root} -type f -name '*.jsonl' ! -name '*.checkpoints.jsonl' -printf '%P\\t%s\\n' || true`;
+  `test -d ${root} && find ${root} -type f \\( -name '*.jsonl' -o -name '*.jsonl.zst' \\) ! -name '*.checkpoints.jsonl' -printf '%P\\t%s\\n' || true`;
 
 const mirrorError = () => new BoxRuntimeError({ operation: "mirrorTranscripts" });
 
