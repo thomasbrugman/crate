@@ -21,6 +21,12 @@ import {
 } from "../../hooks/useSettings";
 import { providersIgnoringCheckedAtAtom } from "../../state/server";
 import { useEnvironmentScope } from "../../state/session";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { toastManager } from "../ui/toast";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
@@ -100,7 +106,7 @@ export function UpstashBoxEnvironmentSettings({
   const keyConfigured = typeof box.apiKey !== "string" || box.apiKey !== "";
   const update = (patch: Partial<typeof box>) => updateSettings({ upstashBox: patch });
   const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
-  const saveCredential = (
+  const saveCredential = async (
     harness: (typeof harnessCredentials)[number]["harness"],
     field: (typeof harnessCredentials)[number]["field"],
     credential: string,
@@ -115,12 +121,27 @@ export function UpstashBoxEnvironmentSettings({
     const patch = { upstashBox: { [field]: credential } };
     if (resolveProviderInstanceEnabled(existing)) {
       updateSettings(patch);
-      return;
+      return true;
     }
-    void persistProviderInstance(
+    const result = await persistProviderInstance(
       { operation: "upsert", instanceId, instance: turnedOnInstance(existing) },
       patch,
     );
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: gt("Credential not saved"),
+          description:
+            error instanceof Error
+              ? (thrownErrorMessage(error, m) ?? error.message)
+              : gt("The settings update failed."),
+        });
+      }
+      return false;
+    }
+    return true;
   };
   const [selectedHarness, setSelectedHarness] = useState<
     (typeof harnessCredentials)[number]["harness"] | null
@@ -147,7 +168,7 @@ export function UpstashBoxEnvironmentSettings({
             configured={connected}
             disabled={readOnly}
             value=""
-            onCommit={(credential) => saveCredential(harness, field, credential.trim())}
+            onCommit={(credential) => void saveCredential(harness, field, credential.trim())}
           />
         )}
         {connected &&
@@ -200,7 +221,10 @@ export function UpstashBoxEnvironmentSettings({
               label={gt("Upstash Box API key")}
               configured={keyConfigured}
               disabled={readOnly}
-              onSave={(apiKey) => update({ apiKey })}
+              onSave={(apiKey) => {
+                update({ apiKey });
+                return true;
+              }}
             />
             <div className="flex min-h-7 flex-wrap items-center justify-between gap-2 text-xs">
               <a
@@ -350,7 +374,7 @@ function OnboardingSecretInput({
   readonly label: string;
   readonly configured: boolean;
   readonly disabled: boolean;
-  readonly onSave: (value: string) => void;
+  readonly onSave: (value: string) => boolean | Promise<boolean>;
 }) {
   const gt = useGT();
   const [draft, setDraft] = useState("");
@@ -361,8 +385,7 @@ function OnboardingSecretInput({
         onSubmit={(event) => {
           event.preventDefault();
           if (disabled || !draft.trim()) return;
-          onSave(draft.trim());
-          setDraft("");
+          void Promise.resolve(onSave(draft.trim())).then((saved) => saved && setDraft(""));
         }}
       >
         <Input
