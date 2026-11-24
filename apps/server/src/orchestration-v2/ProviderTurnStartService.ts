@@ -1614,12 +1614,40 @@ export const layer: Layer.Layer<
                 isUpstashBoxDriver(candidate.driver) && candidate.nativeThreadRef !== null,
             )
           ) {
-            const parent = yield* projectionStore.getThreadRecords(source.threadId, [
-              "runs",
-              "checkpoints",
-              "providerThreads",
-            ]);
-            const parentRun = parent.runs.find((candidate) => candidate.id === source.runId);
+            const loadParent = () =>
+              projectionStore.getThreadRecords(source.threadId, [
+                "runs",
+                "checkpoints",
+                "providerThreads",
+              ]);
+            let parent = yield* loadParent();
+            let parentRun = parent.runs.find((candidate) => candidate.id === source.runId);
+            // Capture settles on the parent's effect lane after the run ends; forking
+            // while it is pending would clone the remote and drop unpushed work, so
+            // wait for the source run to gain or settle without a checkpoint.
+            const captureWaitStart = yield* DateTime.now;
+            while (
+              parentRun !== undefined &&
+              parentRun.checkpointId === null &&
+              (parentRun.status === "waiting" ||
+                parentRun.status === "interrupted" ||
+                parentRun.status === "cancelled")
+            ) {
+              if (
+                DateTime.toEpochMillis(yield* DateTime.now) -
+                  DateTime.toEpochMillis(captureWaitStart) >
+                60_000
+              ) {
+                return yield* new ProviderTurnStartError({
+                  runId,
+                  cause:
+                    "The workspace snapshot this fork was created from is still being captured. Try again in a moment.",
+                });
+              }
+              yield* Effect.sleep("250 millis");
+              parent = yield* loadParent();
+              parentRun = parent.runs.find((candidate) => candidate.id === source.runId);
+            }
             const checkpoint = parent.checkpoints.find(
               (candidate) =>
                 candidate.id === parentRun?.checkpointId && candidate.status === "ready",

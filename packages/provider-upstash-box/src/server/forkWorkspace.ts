@@ -48,9 +48,10 @@ export async function forkWorkspace(source: BoxHandle, target: BoxHandle, checkp
     // repository's checkpoint has none. Restore on the source checkout's branch name —
     // a fresh local branch with no upstream — materializing the snapshot over the
     // unborn HEAD when there is no parent commit.
-    const branchResult = await source.exec.command(`${git} symbolic-ref --short -q HEAD`);
-    const branch = /^[A-Za-z0-9._/-]+$/u.test(branchResult.stdout.trim())
-      ? branchResult.stdout.trim()
+    const branchResult = await source.exec.command(`${git} symbolic-ref -q HEAD`);
+    const headRef = branchResult.exitCode === 0 ? branchResult.stdout.trim() : "";
+    const branch = headRef.startsWith("refs/heads/")
+      ? headRef.slice("refs/heads/".length)
       : "t3-fork";
     await requireCommand(
       target,
