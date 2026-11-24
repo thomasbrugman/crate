@@ -34,7 +34,7 @@ import { vi } from "vite-plus/test";
 
 import { BOX_HARNESS_DRIVER_KINDS, type BoxHarness } from "../harnesses.ts";
 import { makeUpstashBoxAdapter } from "./adapter.ts";
-import { BoxApi, type BoxHandle, type BoxStream, type BoxSubagentChunk } from "./BoxApi.ts";
+import { BoxApi, type BoxHandle, type BoxHarnessChunk, type BoxStream } from "./BoxApi.ts";
 import { EXCLUDE_HARNESS_FILES_COMMAND } from "./git.ts";
 import { commandCodeHarness } from "./harness.ts";
 
@@ -443,10 +443,7 @@ it.effect("deletes native Boxes, keeps idle Boxes with unsaved work, and sanitiz
   ),
 );
 
-function fakeStream(
-  chunks: ReadonlyArray<Chunk | BoxSubagentChunk>,
-  error: unknown = false,
-): BoxStream {
+function fakeStream(chunks: ReadonlyArray<BoxHarnessChunk>, error: unknown = false): BoxStream {
   return {
     id: "native-run",
     cancel: async () => undefined,
@@ -997,6 +994,92 @@ it.effect(
         assert.equal(prompts[1], `t3stash-run:${Buffer.from(attemptId).toString("hex")}\nhello`);
       }),
     ),
+);
+
+it.effect("projects reasoning, todo updates, proposed plans and questions", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const question = {
+        id: "0",
+        header: "Language",
+        question: "Which language?",
+        options: [{ label: "Python", description: "Python 3" }],
+      };
+      const { runtime, turn } = yield* setup(
+        fakeStream([
+          { type: "reasoning", text: "Think" },
+          { type: "reasoning", text: "ing" },
+          { type: "todo", steps: [{ text: "Plan", status: "running" }] },
+          {
+            type: "todo",
+            steps: [
+              { text: "Plan", status: "completed" },
+              { text: "Ship", status: "pending" },
+            ],
+          },
+          { type: "text-delta", text: "Asking." },
+          { type: "proposed-plan", markdown: "# Plan" },
+          { type: "question", toolCallId: "ask", questions: [question] },
+          { ...finish, output: "Asking." },
+        ]),
+      );
+      yield* runtime.startTurn(turn);
+      const events = yield* collect(runtime.events);
+      for (const event of events) yield* decodeEvent(event);
+      const items = new Map(
+        events.flatMap((event) =>
+          event.type === "turn_item.updated" ? [[event.turnItem.id, event.turnItem] as const] : [],
+        ),
+      );
+      assert.deepEqual(
+        [...items.values()].map((item) => [item.type, item.status, item.ordinal]),
+        [
+          ["reasoning", "completed", 1],
+          ["todo_list", "completed", 2],
+          ["assistant_message", "completed", 3],
+          ["proposed_plan", "completed", 4],
+          ["user_input_request", "waiting", 5],
+        ],
+      );
+      const [reasoning, todo, , plan, request] = [...items.values()];
+      assert.deepInclude(reasoning, { text: "Thinking", streaming: false });
+      assert.deepEqual(todo?.type === "todo_list" && todo.steps, [
+        { id: "1", text: "Plan", status: "completed" },
+        { id: "2", text: "Ship", status: "pending" },
+      ]);
+      const plans = events.flatMap((event) => (event.type === "plan.updated" ? [event.plan] : []));
+      assert.deepEqual(
+        plans.map((entry) => [entry.kind, entry.id]),
+        [
+          ["todo_list", todo?.type === "todo_list" && todo.planId],
+          ["todo_list", todo?.type === "todo_list" && todo.planId],
+          ["proposed_plan", plan?.type === "proposed_plan" && plan.planId],
+          ["todo_list", todo?.type === "todo_list" && todo.planId],
+        ],
+      );
+      assert.deepInclude(plans[2], { markdown: "# Plan", status: "active" });
+      assert.deepInclude(request, { questions: [question], responseMode: "message" });
+      const runtimeRequests = events.flatMap((event) =>
+        event.type === "runtime_request.updated" ? [event.runtimeRequest] : [],
+      );
+      assert.deepEqual(
+        runtimeRequests.map((entry) => [
+          String(entry.id),
+          entry.kind,
+          entry.status,
+          entry.responseCapability,
+        ]),
+        [
+          [
+            String(request?.type === "user_input_request" && request.requestId),
+            "user_input",
+            "pending",
+            { type: "message" },
+          ],
+        ],
+      );
+    }),
+  ),
 );
 
 it.effect("splits assistant messages around tools without duplicating finish output", () =>

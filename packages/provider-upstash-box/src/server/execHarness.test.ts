@@ -52,6 +52,61 @@ it("restores fragmented harness frames and commits the session only after a succ
   await expect(Array.fromAsync(failed)).rejects.toThrow("The harness could not complete the turn.");
 });
 
+it("decodes reasoning, todo, plan and question frames and drops unusable ones", async () => {
+  const frame = (event: string, data: unknown) =>
+    `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  const output = [
+    frame("reasoning", { text: "think" }),
+    frame("todo", {
+      steps: [
+        { text: "Plan", status: "running" },
+        { text: " ", status: "completed" },
+        { text: "Ship", status: "cancelled" },
+      ],
+    }),
+    frame("plan", { markdown: " " }),
+    frame("plan", { markdown: "# Plan" }),
+    frame("question", { questions: [{ header: "No text" }] }),
+    frame("question", {
+      tool_call_id: "ask",
+      questions: [
+        {
+          question: "Which language?",
+          options: [{ label: "Python" }, { description: "no label" }],
+          multiSelect: true,
+        },
+      ],
+    }),
+    frame("done", { session_id: "provider-session" }),
+  ];
+  expect(await Array.fromAsync(await execHarness(fakeBox(output, 0), "fixture"))).toEqual([
+    { type: "start", runId: "run" },
+    { type: "reasoning", text: "think" },
+    {
+      type: "todo",
+      steps: [
+        { text: "Plan", status: "running" },
+        { text: "Ship", status: "pending" },
+      ],
+    },
+    { type: "proposed-plan", markdown: "# Plan" },
+    {
+      type: "question",
+      toolCallId: "ask",
+      questions: [
+        {
+          id: "0",
+          header: "Question",
+          question: "Which language?",
+          options: [{ label: "Python", description: "Python" }],
+          multiSelect: true,
+        },
+      ],
+    },
+    expect.objectContaining({ type: "finish", sessionId: "provider-session" }),
+  ]);
+});
+
 it("does not expose a malformed frame as an error message", async () => {
   const stream = await execHarness(
     fakeBox(["event: text\ndata: private fixture\n\n"], 0),

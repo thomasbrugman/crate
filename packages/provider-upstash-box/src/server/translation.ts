@@ -1,5 +1,8 @@
 import {
+  PlanId,
   PositiveInt,
+  RuntimeRequestId,
+  type OrchestrationV2PlanStep,
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ProviderThread,
@@ -14,10 +17,12 @@ import type {
 import type { Chunk } from "@upstash/box";
 import * as DateTime from "effect/DateTime";
 
-import type { BoxSubagentChunk } from "./BoxApi.ts";
+import type { BoxHarnessChunk, BoxPlanChunk } from "./BoxApi.ts";
 import { BoxSubagents } from "./subagents.ts";
 
 type ToolItem = Extract<OrchestrationV2TurnItem, { type: "dynamic_tool" }>;
+type ReasoningItem = Extract<OrchestrationV2TurnItem, { type: "reasoning" }>;
+type TodoItem = Extract<OrchestrationV2TurnItem, { type: "todo_list" }>;
 
 export class BoxTurnTranslation {
   private text = "";
@@ -26,6 +31,10 @@ export class BoxTurnTranslation {
   private finished: Extract<Chunk, { type: "finish" }> | undefined;
   private startedAt: DateTime.Utc;
   private tools: ToolItem[] = [];
+  private reasoning: ReasoningItem | undefined;
+  private reasoningIndex = 0;
+  private todo: TodoItem | undefined;
+  private questionIndex = 0;
   private itemOrdinal = 0;
   private messageOrdinal: number | undefined;
   private message: OrchestrationV2ConversationMessage;
@@ -151,9 +160,268 @@ export class BoxTurnTranslation {
     ];
   }
 
-  accept(chunk: Chunk | BoxSubagentChunk, now: DateTime.Utc): ProviderAdapterV2Event[] {
+  private closeMessage(now: DateTime.Utc): ProviderAdapterV2Event[] {
+    const events = this.text ? this.messageEvents(now, false) : [];
+    if (this.messageOrdinal !== undefined) {
+      this.text = "";
+      this.messageOrdinal = undefined;
+      this.messageIndex++;
+      this.message = {
+        ...this.message,
+        id: this.ids.messageFromProviderItem({
+          driver: this.thread.driver,
+          nativeItemId: `${this.input.attemptId}:assistant:${this.messageIndex}`,
+        }),
+        text: "",
+        streaming: true,
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
+    return events;
+  }
+
+  private closeReasoning(now: DateTime.Utc): ProviderAdapterV2Event[] {
+    const item = this.reasoning;
+    if (!item) return [];
+    this.reasoning = undefined;
+    return [
+      {
+        type: "turn_item.updated",
+        driver: this.thread.driver,
+        turnItem: {
+          ...item,
+          status: "completed",
+          streaming: false,
+          completedAt: now,
+          updatedAt: now,
+        },
+      },
+    ];
+  }
+
+  private itemFields(
+    nativeItemId: string,
+    nodeId: OrchestrationV2ExecutionNode["id"],
+    now: DateTime.Utc,
+  ) {
+    return {
+      id: this.ids.turnItemFromProviderItem({ driver: this.thread.driver, nativeItemId }),
+      threadId: this.input.threadId,
+      runId: this.input.runId,
+      nodeId,
+      providerThreadId: this.thread.id,
+      providerTurnId: this.turn.id,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: ++this.itemOrdinal,
+      title: null,
+      startedAt: now,
+      updatedAt: now,
+    };
+  }
+
+  private childNode(
+    nativeItemId: string,
+    kind: OrchestrationV2ExecutionNode["kind"],
+    status: OrchestrationV2ExecutionNode["status"],
+    startedAt: DateTime.Utc,
+    now: DateTime.Utc,
+    runtimeRequestId: RuntimeRequestId | null = null,
+  ): OrchestrationV2ExecutionNode {
+    return {
+      id: this.ids.nodeFromProviderItem({ driver: this.thread.driver, nativeItemId }),
+      threadId: this.input.threadId,
+      runId: this.input.runId,
+      parentNodeId: this.input.rootNodeId,
+      rootNodeId: this.input.rootNodeId,
+      kind,
+      status,
+      countsForRun: false,
+      providerThreadId: this.thread.id,
+      providerTurnId: this.turn.id,
+      nativeItemRef: null,
+      runtimeRequestId,
+      checkpointScopeId: null,
+      startedAt,
+      completedAt: status === "running" || status === "waiting" ? null : now,
+    };
+  }
+
+  private todoEvents(item: TodoItem, now: DateTime.Utc): ProviderAdapterV2Event[] {
+    const node = this.childNode(
+      `${this.input.attemptId}:todo`,
+      "todo_list",
+      item.status === "running" ? "running" : item.status === "completed" ? "completed" : "failed",
+      item.startedAt ?? now,
+      now,
+    );
+    return [
+      { type: "node.updated", driver: this.thread.driver, node },
+      {
+        type: "plan.updated",
+        driver: this.thread.driver,
+        plan: {
+          id: item.planId,
+          threadId: this.input.threadId,
+          runId: this.input.runId,
+          nodeId: node.id,
+          kind: "todo_list",
+          status: "active",
+          steps: item.steps,
+        },
+      },
+      { type: "turn_item.updated", driver: this.thread.driver, turnItem: item },
+    ];
+  }
+
+  private plan(chunk: BoxPlanChunk, now: DateTime.Utc): ProviderAdapterV2Event[] {
+    const events = [...this.closeReasoning(now), ...this.closeMessage(now)];
+    const { attemptId } = this.input;
+    switch (chunk.type) {
+      case "todo": {
+        const steps: OrchestrationV2PlanStep[] = chunk.steps.map((step, index) => ({
+          id: String(index + 1),
+          text: step.text,
+          status: step.status,
+        }));
+        const nativeItemId = `${attemptId}:todo`;
+        this.todo = this.todo
+          ? { ...this.todo, steps, updatedAt: now }
+          : {
+              ...this.itemFields(
+                nativeItemId,
+                this.ids.nodeFromProviderItem({ driver: this.thread.driver, nativeItemId }),
+                now,
+              ),
+              status: "running",
+              completedAt: null,
+              type: "todo_list",
+              planId: PlanId.make(`plan:${this.thread.driver}:${nativeItemId}`),
+              steps,
+            };
+        return [...events, ...this.todoEvents(this.todo, now)];
+      }
+      case "proposed-plan": {
+        const nativeItemId = `${attemptId}:plan`;
+        const node = this.childNode(nativeItemId, "plan", "completed", now, now);
+        const planId = PlanId.make(`plan:${this.thread.driver}:${nativeItemId}`);
+        return [
+          ...events,
+          { type: "node.updated", driver: this.thread.driver, node },
+          {
+            type: "plan.updated",
+            driver: this.thread.driver,
+            plan: {
+              id: planId,
+              threadId: this.input.threadId,
+              runId: this.input.runId,
+              nodeId: node.id,
+              kind: "proposed_plan",
+              status: "active",
+              markdown: chunk.markdown,
+            },
+          },
+          {
+            type: "turn_item.updated",
+            driver: this.thread.driver,
+            turnItem: {
+              ...this.itemFields(nativeItemId, node.id, now),
+              status: "completed",
+              completedAt: now,
+              type: "proposed_plan",
+              planId,
+              markdown: chunk.markdown,
+              streaming: false,
+            },
+          },
+        ];
+      }
+      case "question": {
+        const nativeItemId = `${attemptId}:question:${this.questionIndex++}`;
+        const requestId = RuntimeRequestId.make(
+          `runtime-request:${this.thread.driver}:${nativeItemId}`,
+        );
+        const node = this.childNode(
+          nativeItemId,
+          "user_input_request",
+          "waiting",
+          now,
+          now,
+          requestId,
+        );
+        const nativeRequestRef = {
+          driver: this.thread.driver,
+          nativeId: chunk.toolCallId ?? nativeItemId,
+          strength: chunk.toolCallId ? ("strong" as const) : ("weak" as const),
+        };
+        return [
+          ...events,
+          { type: "node.updated", driver: this.thread.driver, node },
+          {
+            type: "runtime_request.updated",
+            driver: this.thread.driver,
+            threadId: this.input.threadId,
+            runtimeRequest: {
+              id: requestId,
+              nodeId: node.id,
+              providerTurnId: this.turn.id,
+              nativeRequestRef,
+              kind: "user_input",
+              status: "pending",
+              // Box harnesses run headless, so the answer arrives as the next message.
+              responseCapability: { type: "message" },
+              createdAt: now,
+              resolvedAt: null,
+            },
+          },
+          {
+            type: "turn_item.updated",
+            driver: this.thread.driver,
+            turnItem: {
+              ...this.itemFields(nativeItemId, node.id, now),
+              status: "waiting",
+              completedAt: null,
+              type: "user_input_request",
+              requestId,
+              questions: chunk.questions,
+              responseMode: "message",
+            },
+          },
+        ];
+      }
+    }
+  }
+
+  accept(chunk: BoxHarnessChunk, now: DateTime.Utc): ProviderAdapterV2Event[] {
     if (this.terminal) return [];
     switch (chunk.type) {
+      case "todo":
+      case "proposed-plan":
+      case "question":
+        return this.plan(chunk, now);
+      case "reasoning": {
+        if (!chunk.text) return [];
+        const events = this.closeMessage(now);
+        this.reasoning = this.reasoning
+          ? { ...this.reasoning, text: this.reasoning.text + chunk.text, updatedAt: now }
+          : {
+              ...this.itemFields(
+                `${this.input.attemptId}:reasoning:${this.reasoningIndex++}`,
+                this.input.rootNodeId,
+                now,
+              ),
+              status: "running",
+              completedAt: null,
+              type: "reasoning",
+              text: chunk.text,
+              streaming: true,
+            };
+        return [
+          ...events,
+          { type: "turn_item.updated", driver: this.thread.driver, turnItem: this.reasoning },
+        ];
+      }
       case "subagent-start":
       case "subagent-finish":
         return this.subagents.accept(chunk, now, () => ++this.itemOrdinal);
@@ -174,28 +442,14 @@ export class BoxTurnTranslation {
             providerTurn: this.turn,
           },
         ];
-      case "text-delta":
+      case "text-delta": {
+        const events = this.closeReasoning(now);
         this.hasText ||= chunk.text.length > 0;
         this.text += chunk.text;
-        return this.messageEvents(now, true);
+        return [...events, ...this.messageEvents(now, true)];
+      }
       case "tool-call": {
-        const events = this.text ? this.messageEvents(now, false) : [];
-        if (this.messageOrdinal !== undefined) {
-          this.text = "";
-          this.messageOrdinal = undefined;
-          this.messageIndex++;
-          this.message = {
-            ...this.message,
-            id: this.ids.messageFromProviderItem({
-              driver: this.thread.driver,
-              nativeItemId: `${this.input.attemptId}:assistant:${this.messageIndex}`,
-            }),
-            text: "",
-            streaming: true,
-            createdAt: now,
-            updatedAt: now,
-          };
-        }
+        const events = [...this.closeReasoning(now), ...this.closeMessage(now)];
         const ordinal = ++this.itemOrdinal;
         const item: ToolItem = {
           id: this.ids.turnItemFromProviderItem({
@@ -293,7 +547,16 @@ export class BoxTurnTranslation {
           updatedAt: now,
         },
       }));
-    events.push(...this.subagents.settle(now));
+    events.push(...this.subagents.settle(now), ...this.closeReasoning(now));
+    if (this.todo?.status === "running") {
+      this.todo = {
+        ...this.todo,
+        status: status === "completed" ? "completed" : status,
+        completedAt: now,
+        updatedAt: now,
+      };
+      events.push(...this.todoEvents(this.todo, now));
+    }
     if (this.text) events.push(...this.messageEvents(now, false));
     events.push(
       {

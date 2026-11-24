@@ -83,3 +83,115 @@ it("keeps Claude subagent frames out of the parent transcript and preserves its 
   assert.include(args[args.indexOf("--settings") + 1], "worktree");
   assert.notInclude(output.join("\n"), "Child reasoning");
 });
+
+async function runManaged(argv: string[], frames: unknown[]) {
+  const child: NodeEvents.EventEmitter & { killed: boolean; kill(): void } = Object.assign(
+    new NodeEvents.EventEmitter(),
+    {
+      killed: false,
+      kill: () => {
+        child.killed = true;
+        child.emit("close", null);
+      },
+    },
+  );
+  const output: string[] = [];
+  let args: string[] = [];
+  const processStub = {
+    argv: ["node", "harness", ...argv],
+    env: {},
+    exitCode: undefined as number | undefined,
+    stdout: { write: (frame: string) => output.push(frame) },
+  };
+  await NodeVM.runInNewContext(
+    `(async () => { ${managedHarness.replace(/^import .*;$/gmu, "")} })()`,
+    {
+      process: processStub,
+      existsSync: () => true,
+      readFileSync: () => "fixture-key",
+      spawn: (_bin: string, value: string[]) => {
+        args = value;
+        return child;
+      },
+      createInterface: async function* () {
+        for (const frame of frames) yield JSON.stringify(frame);
+        if (!child.killed) child.emit("close", 0);
+      },
+    },
+  );
+  const events = output.map((entry) => {
+    const [event, data] = entry.split("\n");
+    return { event: event?.slice(7), data: JSON.parse(data!.slice(6)) as unknown };
+  });
+  return { args, events, killed: child.killed, exitCode: processStub.exitCode };
+}
+
+it("forwards Claude reasoning and todos and ends the run at a question", async () => {
+  const questions = [{ question: "Which language?", options: [{ label: "Python" }] }];
+  const { args, events, killed, exitCode } = await runManaged(
+    ["claudeCode", "test", "model", "", "token", "plan"],
+    [
+      { type: "system", subtype: "init", session_id: "parent" },
+      { type: "stream_event", event: { delta: { type: "thinking_delta", thinking: "hmm" } } },
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              name: "TodoWrite",
+              id: "todo",
+              input: { todos: [{ content: "Plan", status: "in_progress" }] },
+            },
+            { type: "tool_use", name: "AskUserQuestion", id: "ask", input: { questions } },
+            { type: "tool_use", name: "Bash", id: "late", input: { command: "ls" } },
+          ],
+        },
+      },
+      { type: "stream_event", event: { delta: { type: "text_delta", text: "self-answered" } } },
+    ],
+  );
+  assert.equal(args[args.indexOf("--permission-mode") + 1], "plan");
+  assert.deepEqual(events, [
+    { event: "reasoning", data: { text: "hmm" } },
+    { event: "todo", data: { steps: [{ text: "Plan", status: "running" }] } },
+    { event: "question", data: { tool_call_id: "ask", questions } },
+    {
+      event: "done",
+      data: { output: "", session_id: "parent", input_tokens: 0, output_tokens: 0 },
+    },
+  ]);
+  assert.isTrue(killed);
+  assert.isUndefined(exitCode);
+});
+
+it("turns a Codex plan-mode reply into a proposed plan and forwards its todo list", async () => {
+  const { args, events } = await runManaged(
+    ["codex", "Add hello", "model", "", "token", "plan"],
+    [
+      { type: "thread.started", thread_id: "thread" },
+      { type: "item.completed", item: { type: "reasoning", text: "hmm" } },
+      {
+        type: "item.started",
+        item: { type: "todo_list", items: [{ text: "Plan", completed: true }] },
+      },
+      {
+        type: "item.completed",
+        item: { type: "agent_message", text: "Here.\n<proposed_plan>\n# Plan\n</proposed_plan>" },
+      },
+      { type: "turn.completed", usage: { input_tokens: 1, output_tokens: 2 } },
+    ],
+  );
+  assert.include(args.join(" "), "<proposed_plan>");
+  assert.include(args.join(" "), "Add hello");
+  assert.deepEqual(
+    events.map((entry) => [entry.event, entry.data]),
+    [
+      ["reasoning", { text: "hmm" }],
+      ["todo", { steps: [{ text: "Plan", status: "completed" }] }],
+      ["text", { text: "Here." }],
+      ["plan", { markdown: "# Plan" }],
+      ["done", { output: "", session_id: "thread", input_tokens: 1, output_tokens: 2 }],
+    ],
+  );
+});
