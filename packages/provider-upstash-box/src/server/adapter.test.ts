@@ -1279,7 +1279,7 @@ it.live("copies the selected checkpoint into a separate Box checkout", () =>
       };
       const source = makeBox("source");
       const target = makeBox("target");
-      const ref = "refs/t3/checkpoints/fork/turn/1";
+      const ref = "refs/t3/orchestration-v2/checkpoints/Zm9yaw/ordinal/1";
       const command = async (box: BoxHandle, script: string) => {
         const result = await box.exec.command(script);
         assert.equal(result.exitCode, 0, result.stderr);

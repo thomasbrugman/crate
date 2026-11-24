@@ -11,7 +11,7 @@ export async function forkWorkspace(source: BoxHandle, target: BoxHandle, checkp
   if (
     source.id === target.id ||
     read === undefined ||
-    !checkpointRef.startsWith("refs/t3/checkpoints/")
+    !checkpointRef.startsWith("refs/t3/orchestration-v2/checkpoints/")
   )
     throw new Error("Cannot copy the fork workspace.");
   const prefix = `${BOX_WORKSPACE_PATH}/.t3stash-fork-`;
