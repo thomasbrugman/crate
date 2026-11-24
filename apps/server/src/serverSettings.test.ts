@@ -2036,10 +2036,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         "upstashBox.apiKey",
         "upstashBox.commandCodeAuth",
         "upstashBox.claudeCodeAuth",
+        "upstashBox.codexAuth",
         "upstashBox.opencodeAuth",
         "upstashBox.cursorAuth",
         "upstashBox.antigravityAuth",
-        "upstashBox.codexAuth",
       ]);
     }),
   );

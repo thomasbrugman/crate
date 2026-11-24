@@ -1,4 +1,5 @@
 import { assert } from "@effect/vitest";
+import { isBoxWorkerDriver } from "@t3tools/provider-upstash-box/harnesses";
 import type { OrchestrationV2ThreadProjection, ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
@@ -63,7 +64,13 @@ export function assertOpenCode2BackgroundOutput(
   );
   assert.isAtLeast(rootWaiting, 0);
   assert.isAbove(subagentDone, rootWaiting, "run 1 ends its turn before its subagent ends");
-  assert.isAbove(wakeStarted, subagentDone, "the wake follows the subagent's end");
+  // Worker drivers deliver the child's completion to the parent before the parent's
+  // subagent turn-item is marked, so the wake may be created first.
+  if (isBoxWorkerDriver(transcript.provider)) {
+    assert.isAbove(wakeStarted, rootWaiting, "the wake follows the parent's turn end");
+  } else {
+    assert.isAbove(wakeStarted, subagentDone, "the wake follows the subagent's end");
+  }
 
   const child = result.projections.get(subagent.childThreadId!);
   assert.isDefined(child);
