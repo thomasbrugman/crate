@@ -35,6 +35,7 @@ export class BoxTurnTranslation {
   private reasoningIndex = 0;
   private todo: TodoItem | undefined;
   private questionIndex = 0;
+  private planIndex = 0;
   private itemOrdinal = 0;
   private messageOrdinal: number | undefined;
   private message: OrchestrationV2ConversationMessage;
@@ -303,7 +304,7 @@ export class BoxTurnTranslation {
         return [...events, ...this.todoEvents(this.todo, now)];
       }
       case "proposed-plan": {
-        const nativeItemId = `${attemptId}:plan`;
+        const nativeItemId = `${attemptId}:plan:${this.planIndex++}`;
         const node = this.childNode(nativeItemId, "plan", "completed", now, now);
         const planId = PlanId.make(`plan:${this.thread.driver}:${nativeItemId}`);
         return [

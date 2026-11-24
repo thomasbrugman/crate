@@ -38,7 +38,8 @@ const args = harness === 'claudeCode'
      '--permission-mode', planMode ? 'plan' : 'bypassPermissions', ...claudeSettings, ...mcpArgs, '--model', model,
      ...(session ? ['--resume', session] : []), '--', prompt]
   : [...mcpArgs, 'exec', ...(session ? ['resume'] : []), '--json',
-     '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--model', model,
+     ...(planMode ? ['--sandbox', 'read-only'] : ['--dangerously-bypass-approvals-and-sandbox']),
+     '--skip-git-repo-check', '--model', model,
      '--', ...(session ? [session] : []), prompt];
 const env = { ...process.env };
 env.HOME = '/home/boxuser';
