@@ -6,7 +6,8 @@ descriptions, branch names, and voice transcript cleanup. Pick the model for thi
 **Settings → Voice** can each pick a different one.
 
 By default, a coding agent such as Codex or Claude writes this text, starting a session for each
-request. A **text generator** — a model API that only writes text — is usually faster and cheaper.
+request. Box harnesses run these requests in one small Box per harness, which sleeps between
+requests and has no checkout, so they cannot write review guides. A **text generator** — a model API that only writes text — is usually faster and cheaper.
 
 ## Add a text generator
 

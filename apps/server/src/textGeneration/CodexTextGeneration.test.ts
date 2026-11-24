@@ -887,6 +887,29 @@ it.effect(
       yield* (yield* serviceWith([instance])).generateReviewGuide(input);
       expect(calls.map((selection) => selection.instanceId)).toEqual([claude]);
 
+      // A Box harness cannot investigate either, so a guide aimed at one also falls back.
+      const box = ProviderInstanceId.make("boxCodex");
+      const boxDriver = ProviderDriverKind.make("boxCodex");
+      const boxSnapshot = yield* instance.snapshot.getSnapshot;
+      const boxInstance = {
+        ...instance,
+        instanceId: box,
+        driverKind: boxDriver,
+        continuationIdentity: { driverKind: boxDriver, continuationKey: box },
+        snapshot: {
+          getSnapshot: Effect.succeed({ ...boxSnapshot, instanceId: box, driver: boxDriver }),
+        } as ProviderInstance["snapshot"],
+        textGeneration: TextGeneration.TextGeneration.of({
+          ...instance.textGeneration,
+          generateReviewGuide: () => Effect.die("a Box harness cannot investigate"),
+        }),
+      } satisfies ProviderInstance;
+      yield* (yield* serviceWith([instance, boxInstance])).generateReviewGuide({
+        ...input,
+        modelSelection: { instanceId: box, model: "gpt-5.5" },
+      });
+      expect(calls.map((selection) => selection.instanceId)).toEqual([claude, claude]);
+
       // With no agent ready, it says what is missing instead of looking up a provider by that id.
       const failure = yield* Effect.flip((yield* serviceWith([])).generateReviewGuide(input));
       expect(failure.detail).toMatch(

@@ -108,7 +108,8 @@ export const make = Effect.gen(function* () {
     const unusable =
       textGeneratorCannotRun ||
       (selected?.enabled === true &&
-        (!isProviderTextGenerationCapable(selected) ||
+        ((operation === "generateReviewGuide" && !INVESTIGATING_DRIVERS.has(selected.driver)) ||
+          !isProviderTextGenerationCapable(selected) ||
           selected.models.find((model) => model.slug === selection.model)
             ?.supportsTextGeneration === false ||
           (selected.status === "error" &&
