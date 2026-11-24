@@ -1,4 +1,4 @@
-import { getUpstashBoxHarness } from "@t3tools/client-runtime/provider-clients";
+import { getUpstashBoxHarness, isWorkerBoxHarness } from "@t3tools/client-runtime/provider-clients";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
@@ -356,6 +356,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   })();
   const boxHarness = getUpstashBoxHarness(selectedProviderStatus?.driver);
   const cloudThread = boxHarness !== undefined;
+  const composerBoxHarness =
+    boxHarness !== undefined && !isWorkerBoxHarness(boxHarness) ? boxHarness : undefined;
   const openDraftDocument = (attachment: ComposerDocumentAttachment) => {
     Keyboard.dismiss();
     navigation.navigate("ThreadAttachment", {
@@ -435,7 +437,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     currentThreadId: props.selectedThread.id,
     projectCwd: props.projectCwd,
     cloudThread,
-    boxHarness,
+    boxHarness: composerBoxHarness,
     pullRequestProjectId: props.serverConfig ? (project?.id ?? null) : null,
     pullRequestRepository: project?.repositoryIdentity?.displayName ?? null,
     threadPullRequests: props.selectedThread.pullRequests,
