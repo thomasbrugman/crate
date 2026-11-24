@@ -336,7 +336,11 @@ export const make = Effect.gen(function* () {
             ),
           );
         }
-        if (event.type === "exited" || event.type === "closed") {
+        // A shell replaced after the command was typed (a Box reconnect) never prints the sentinel.
+        const shellLost =
+          event.type === "error" ||
+          (event.type === "restarted" && input.echoedWrapperLines.length > 0);
+        if (event.type === "exited" || event.type === "closed" || shellLost) {
           return settle(null).pipe(Effect.andThen(Deferred.succeed(promptReturned, undefined)));
         }
         return Effect.void;

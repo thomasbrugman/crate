@@ -102,7 +102,7 @@ import * as RpcAuthorization from "./auth/RpcAuthorization.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
 import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
-import { BoxServers } from "@t3tools/provider-upstash-box/server";
+import { BoxExec, BoxServers } from "@t3tools/provider-upstash-box/server";
 import * as BoxSnapshots from "./project/BoxSnapshots.ts";
 import * as ProjectBoxSnapshots from "./project/ProjectBoxSnapshots.ts";
 import * as PreviewManager from "./preview/Manager.ts";
@@ -855,6 +855,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(PeerLinkRequests.PeerLinkRequests)({}),
   Layer.mock(PortScanner.PortDiscovery)({ trackAgent: () => () => undefined }),
   Layer.mock(BoxServers.BoxServers)({}),
+  Layer.mock(BoxExec.BoxExec)({}),
   Layer.mock(BoxSnapshots.BoxSnapshots)({}),
   Layer.mock(PreviewManager.PreviewManager)({}),
   Layer.mock(ProcessDiagnostics.ProcessDiagnostics)({}),

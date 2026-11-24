@@ -27,7 +27,17 @@ export const BOX_HARNESS_LABELS = {
   antigravity: "Antigravity",
 } as const satisfies Record<BoxHarness, string>;
 
-const boxDriverKinds = new Set<string>(Object.values(BOX_HARNESS_DRIVER_KINDS));
+const boxDriverHarnesses = new Map<string, BoxHarness>(
+  (Object.keys(BOX_HARNESS_DRIVER_KINDS) as BoxHarness[]).map((harness) => [
+    BOX_HARNESS_DRIVER_KINDS[harness],
+    harness,
+  ]),
+);
+
+export function getUpstashBoxHarness(driver: string | null | undefined): BoxHarness | undefined {
+  return driver == null ? undefined : boxDriverHarnesses.get(driver);
+}
+
 const workerDriverKinds = new Set<string>([
   BOX_HARNESS_DRIVER_KINDS.opencode,
   BOX_HARNESS_DRIVER_KINDS.cursor,
@@ -40,5 +50,5 @@ export const boxNameForThread = (threadId: string) => `t3-${Buffer.from(threadId
 
 /** Whether a provider runs inside an Upstash Box rather than on the server's machine. */
 export function isUpstashBoxDriver(driver: string | null | undefined): boolean {
-  return driver != null && boxDriverKinds.has(driver);
+  return getUpstashBoxHarness(driver) !== undefined;
 }

@@ -218,6 +218,7 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
               { driver: driverKind, harness, agentApiKey },
               environment,
               yield* McpProviderSessions,
+              host.resolveAttachmentPath,
             )
       ).pipe(Effect.provide(boxApiLayer));
       const auth =

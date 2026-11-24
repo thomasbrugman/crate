@@ -351,6 +351,9 @@ import {
 } from "./device.ts";
 import {
   ServerConfigStreamEvent,
+  BoxComposerCapabilities,
+  BoxComposerCapabilitiesError,
+  BoxComposerCapabilitiesInput,
   DesktopUpdateCommitInput,
   OtlpEndpointCheckInput,
   ServerPrepareTriageError,
@@ -456,6 +459,7 @@ export const WS_METHODS = {
   projectsReadFile: "projects.readFile",
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
+  projectsBoxComposerCapabilities: "projects.boxComposerCapabilities",
   projectsWriteFile: "projects.writeFile",
   projectsMutate: "projects.mutate",
   projectsEnsureScratch: "projects.ensureScratch",
@@ -1547,6 +1551,12 @@ const WsProjectsSearchEntriesRpc = Rpc.make(WS_METHODS.projectsSearchEntries, {
   error: Schema.Union([ProjectSearchEntriesError, EnvironmentAuthorizationError]),
 });
 
+const WsProjectsBoxComposerCapabilitiesRpc = Rpc.make(WS_METHODS.projectsBoxComposerCapabilities, {
+  payload: BoxComposerCapabilitiesInput,
+  success: BoxComposerCapabilities,
+  error: Schema.Union([BoxComposerCapabilitiesError, EnvironmentAuthorizationError]),
+});
+
 const WsProjectsSearchContentsRpc = Rpc.make(WS_METHODS.projectsSearchContents, {
   payload: ProjectSearchContentsInput,
   success: ProjectSearchContentsResult,
@@ -2428,6 +2438,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsReadFileRpc,
   WsProjectsSearchContentsRpc,
   WsProjectsSearchEntriesRpc,
+  WsProjectsBoxComposerCapabilitiesRpc,
   WsProjectsEnsureScratchRpc,
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
