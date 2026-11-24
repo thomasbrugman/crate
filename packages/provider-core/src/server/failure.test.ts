@@ -122,6 +122,11 @@ it("preserves actionable T3 errors wrapped by turn startup", () => {
       operation: "runtime",
       detail: "Codex 0.144.3 does not work with this T3 Code release.",
     }),
+    {
+      _tag: "BoxSetupScriptError",
+      message:
+        'Setup script "Install" exited with 1. Its output is in the setup-install terminal; send a message to run it again.',
+    },
   ]) {
     const cause = new ProviderAdapter.ProviderAdapterTurnStartError({
       driver: ProviderDriverKind.make("codex"),

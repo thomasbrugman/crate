@@ -2682,7 +2682,7 @@
   "7f6d34983e89a91c": "Excluir ação",
   "84435bd5cb8cfac0": "Editar ação",
   "2d1f6668f713dca9": "Adicionar ação",
-  "73bedbce4c29257a": "As ações são salvas para este projeto, mas não são executadas nas conversas na nuvem.",
+  "adaa5145d9e1453e": "A ação de configuração é executada quando uma conversa na nuvem começa. As outras ações são salvas, mas não são executadas nas conversas na nuvem.",
   "da1b3bc9635dcdc8": "Ações são comandos do projeto que você pode executar pela barra superior ou por atalhos de teclado.",
   "4614a422f1430cd7": "Nome",
   "d3502e7db0cdb998": "Atalho de teclado",
@@ -3355,8 +3355,6 @@
     }
   ],
   "1b1131295f62c44c": "O processo do provedor não existe mais. Interrompa ou reinicie a thread filha para responder.",
-  "52278fd875d1a073": "Detalhes do espaço de trabalho Box",
-  "eb51025bee426871": "Anexos e prévias de arquivos não estão disponíveis nas conversas na nuvem. As menções a arquivos usam a cópia do servidor; apenas arquivos enviados ao remoto estão disponíveis no Box.",
   "2cc98601912fed53": "Não disponível em conversas na nuvem. Peça ao agente para usar as ferramentas do Box.",
   "da66023072c473d1": [
     "Não foi possível carregar a saída: ",

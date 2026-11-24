@@ -85,8 +85,8 @@ export const layer = Layer.effect(
               argv: [
                 "bash",
                 "-c",
-                'for directory in "$@"; do if cd -- "$directory" 2>/dev/null; then break; fi; done; export PATH="$HOME/.local/bin:$PATH"; exec bash -i',
-                "bash",
+                'for directory in "$@"; do if cd -- "$directory" 2>/dev/null; then break; fi; done; export PATH="$HOME/.local/bin:$PATH"; if test -e .git; then export T3CODE_PROJECT_ROOT="$0" T3CODE_WORKTREE_PATH="$PWD"; fi; exec bash -i',
+                BoxApi.BOX_REPOSITORY_PATH,
                 ...directories,
               ],
               cwd: BoxApi.BOX_WORKSPACE_PATH,

@@ -426,7 +426,10 @@ function ProjectScriptEditorForm({
         <DialogTitle>{isEditing ? <T>Edit Action</T> : <T>Add Action</T>}</DialogTitle>
         <DialogDescription>
           {runUnavailableReason ? (
-            <T>Actions are saved for this project but do not run in cloud threads.</T>
+            <T>
+              The setup action runs when a cloud thread starts. Other actions are saved but do not
+              run in cloud threads.
+            </T>
           ) : (
             <T>Actions are project-scoped commands you can run from the top bar or keybindings.</T>
           )}

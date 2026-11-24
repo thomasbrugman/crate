@@ -135,6 +135,23 @@ export const ServerProviderSkill = Schema.Struct({
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 
+export const BoxComposerCapabilitiesInput = Schema.Struct({
+  threadId: ThreadId,
+  harness: Schema.Literals(["commandCode", "claudeCode", "codex"]),
+});
+export type BoxComposerCapabilitiesInput = typeof BoxComposerCapabilitiesInput.Type;
+
+export const BoxComposerCapabilities = Schema.Struct({
+  slashCommands: Schema.Array(ServerProviderSlashCommand),
+  skills: Schema.Array(ServerProviderSkill),
+});
+export type BoxComposerCapabilities = typeof BoxComposerCapabilities.Type;
+
+export class BoxComposerCapabilitiesError extends Schema.TaggedError<BoxComposerCapabilitiesError>()(
+  "BoxComposerCapabilitiesError",
+  { message: TrimmedNonEmptyString },
+) {}
+
 export const ServerProviderWorkspaceSnapshot = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   checkedAt: IsoDateTime,
