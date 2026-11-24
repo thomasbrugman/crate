@@ -44,9 +44,23 @@ export async function forkWorkspace(source: BoxHandle, target: BoxHandle, checkp
       await target.files.write({ path: chunk, content, encoding: "base64" });
       await requireCommand(target, `cat -- ${chunk} >> ${bundle} && rm -- ${chunk}`);
     }
+    // A checkpoint's first parent is the Git commit under its working tree; an empty
+    // repository's checkpoint has none. Restore the tree on the clone's own branch so
+    // push and pull keep working, materializing the snapshot over the unborn HEAD
+    // when there is no parent commit.
+    const branch = `${git} symbolic-ref --short -q HEAD || echo main`;
     await requireCommand(
       target,
-      `${git} fetch --no-tags -- ${bundle} ${ref} && ${git} checkout --detach FETCH_HEAD^ && ${git} restore --source=FETCH_HEAD --staged --worktree -- . && ${git} reset --quiet -- .`,
+      `${git} fetch --no-tags -- ${bundle} ${ref} && branch=$(${branch}) && ` +
+        `if ${git} rev-parse --verify --quiet FETCH_HEAD^ >/dev/null; then ` +
+        `${git} checkout -B "$branch" FETCH_HEAD^ && ` +
+        `${git} restore --source=FETCH_HEAD --staged --worktree -- . && ` +
+        `${git} reset --quiet -- .; ` +
+        `else ` +
+        `${git} read-tree FETCH_HEAD && ` +
+        `${git} checkout-index -q -f -a && ` +
+        `${git} reset --quiet -- .; ` +
+        `fi`,
     );
   } finally {
     await Promise.allSettled(

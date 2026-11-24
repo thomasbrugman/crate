@@ -1629,6 +1629,17 @@ export const layer: Layer.Layer<
             );
             const sourceBoxId = parentProvider?.nativeThreadRef?.nativeId;
             if (
+              parentProvider?.providerInstanceId === providerThread.providerInstanceId &&
+              sourceBoxId != null &&
+              parentRun?.checkpointId !== undefined &&
+              checkpoint === undefined
+            ) {
+              return yield* new ProviderTurnStartError({
+                runId,
+                cause: "The workspace snapshot this fork was created from is no longer available.",
+              });
+            }
+            if (
               checkpoint !== undefined &&
               parentProvider?.providerInstanceId === providerThread.providerInstanceId &&
               sourceBoxId != null
