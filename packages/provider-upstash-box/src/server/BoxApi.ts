@@ -149,6 +149,20 @@ export async function requireCommand(box: Pick<BoxHandle, "exec">, command: stri
     throw new Error("Box setup command failed.");
 }
 
+/** A subagent's own checkout in its parent's Box, created from the parent's base commit. */
+export async function ensureBoxWorktree(
+  box: Pick<BoxHandle, "exec">,
+  threadId: string,
+  baseCommit = "HEAD",
+): Promise<string> {
+  const path = boxWorktreePath(threadId);
+  const { exitCode } = await box.exec.command(
+    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} ${quoteShell(baseCommit)}; }`,
+  );
+  if (exitCode !== 0) throw new Error("The Box worktree could not be prepared.");
+  return path;
+}
+
 export class BoxApi extends Context.Service<
   BoxApi,
   {

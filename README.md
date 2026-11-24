@@ -99,6 +99,10 @@ used for legacy Command Code setup, not for Git.
   project snapshot** in the thread menu. You can also choose an existing snapshot under **Upstash
   Box snapshot** in the project's settings. New threads use it in their own size. Harness and Git
   credentials use memory-backed storage; known legacy credential paths are excluded during capture.
+- **Setup scripts run in the Box.** The project's setup action (`runOnWorktreeCreate` in `t3.json`
+  or in project settings) runs once per Box checkout, in a `setup-*` terminal, before the first
+  agent turn there. Snapshot checkouts that already ran it skip it. Blocking scripts
+  (`"async": false`) hold the agent and run again on the next message if they fail.
 - **Boxes stick around.** Archiving a thread keeps its Box. Deleting the thread deletes it.
 - **Live terminal.** Once the first agent turn creates the Box, open the terminal drawer or a
   terminal tab. Each terminal runs its own shell in the Box, not on your Mac. If the Box connection
@@ -114,7 +118,6 @@ aren't built yet:
   pushed files reach the Box. The Changes panel shows the Box's diff, and the Browser panel runs on
   the Box's own Chromium.
 - No rollback, approvals, steering an agent mid-turn or reasoning streams.
-- Project setup scripts don't run in Boxes. Use a snapshot instead.
 - Box threads cannot hand off to a host worktree. Files saved by the MCP secret tool stay on the
   server, not in the Box.
 - The phone flow hasn't been tested much yet.

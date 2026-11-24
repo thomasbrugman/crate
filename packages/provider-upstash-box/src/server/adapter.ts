@@ -20,10 +20,9 @@ import {
   BOX_HOME,
   BOX_REPOSITORY_PATH,
   BOX_WORKSPACE_PATH,
-  BOX_WORKTREES_PATH,
-  boxWorktreePath,
   BoxApi,
   BoxRuntimeError,
+  ensureBoxWorktree,
   isMissingBox,
   quoteShell,
   requireCommand,
@@ -114,19 +113,6 @@ const SETUP_STEP_TEXT: Record<BoxSetupStep, string> = {
 };
 
 const boxStoppedMessage = "This thread's Box stopped mid-turn. Send a message to start a new one.";
-
-async function ensureWorktree(
-  box: BoxHandle,
-  threadId: string,
-  baseCommit = "HEAD",
-): Promise<string> {
-  const path = boxWorktreePath(threadId);
-  const { exitCode } = await box.exec.command(
-    `mkdir -p ${BOX_WORKTREES_PATH} && { test -f ${path}/.git || git -C ${BOX_REPOSITORY_PATH} worktree add --detach -- ${path} ${quoteShell(baseCommit)}; }`,
-  );
-  if (exitCode !== 0) throw new Error("The Box worktree could not be prepared.");
-  return path;
-}
 
 export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(function* (
   instanceId: ProviderInstanceId,
@@ -558,7 +544,7 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                   if (!credentials) return box.agent.stream({ prompt: streamPrompt });
                   const cwd = request.runtimePolicy.repositoryUrl
                     ? providerThread.nativeMetadata?.boxOwnerThreadId
-                      ? await ensureWorktree(
+                      ? await ensureBoxWorktree(
                           box,
                           request.threadId,
                           request.appThread.lineage.boxBaseCommit,
