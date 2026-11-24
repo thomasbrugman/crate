@@ -113,7 +113,7 @@ export function LinkedEnvironmentsSettings({
         <SettingsRow
           title={gt("No linked environments")}
           description={gt(
-            "Link another machine running T3 Code, such as a VPS, so agents here can launch and drive threads there.",
+            "Link another machine running t3stash, such as a VPS, so agents here can launch and drive threads there.",
           )}
         />
       ) : (
