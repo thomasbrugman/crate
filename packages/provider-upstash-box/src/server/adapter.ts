@@ -5,6 +5,7 @@ import {
   type ProviderDriverKind,
   type ProviderInstanceId,
   type ProviderThreadId,
+  type RunId,
 } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import type { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
@@ -225,6 +226,13 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
       const boxes = new Map<string, BoxHandle>();
       const recreatedThreads = new Set<ProviderThreadId>();
       let active: ActiveTurn | undefined;
+      let interruptedPrompt:
+        | {
+            readonly runId: RunId;
+            readonly providerThreadId: ProviderThreadId;
+            readonly text: string;
+          }
+        | undefined;
       const now = yield* DateTime.now;
       let providerSession: OrchestrationV2ProviderSession = {
         id: input.providerSessionId,
@@ -505,8 +513,15 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
               ? yield* mcpSessions.read(request.threadId)
               : undefined;
           const mcpSession = mcp?.providerInstanceId === instanceId ? mcp : undefined;
+          const previousPrompt =
+            interruptedPrompt?.runId === request.runId &&
+            interruptedPrompt.providerThreadId === providerThread.id
+              ? interruptedPrompt.text
+              : undefined;
+          interruptedPrompt = undefined;
           // Managed agents start in the Box workspace, so they are told where the clone is.
           const prompt = [
+            ...(previousPrompt === undefined ? [] : [previousPrompt]),
             ...(request.appContext ?? []).map(({ text }) => text),
             ...(!credentials && harness !== "commandCode" && request.runtimePolicy.repositoryUrl
               ? [`The repository is checked out at ${BOX_REPOSITORY_PATH}.`]
@@ -682,6 +697,12 @@ export const makeUpstashBoxAdapter = Effect.fn("UpstashBox.makeAdapter")(functio
                     box,
                   );
                 }
+                if (harness === "commandCode" && turn.interrupted && !translation.sessionId)
+                  interruptedPrompt = {
+                    runId: request.runId,
+                    providerThreadId: providerThread.id,
+                    text: prompt,
+                  };
                 active = undefined;
                 yield* publish(
                   translation.complete(

@@ -1375,17 +1375,21 @@ it.effect.each(["ok", "throw", "exit", "hang"] as const)(
         const releaseCleanup = Promise.withResolvers<{ stdout: string; exitCode: number }>();
         let cancelCount = 0;
         const order: string[] = [];
-        const { adapter, runtime, turn, lookup } = yield* setup({
-          id: "native-run",
-          cancel: async () => {
-            cancelCount++;
-            order.push("cancel");
-            cancelled.resolve();
-          },
-          async *[Symbol.asyncIterator]() {
-            yield { type: "start", runId: "native-run" };
-            await cancelled.promise;
-          },
+        let streamCount = 0;
+        const { adapter, runtime, turn, lookup, prompts } = yield* setup(async () => {
+          if (streamCount++ > 0) return fakeStream([finish]);
+          return {
+            id: "native-run",
+            cancel: async () => {
+              cancelCount++;
+              order.push("cancel");
+              cancelled.resolve();
+            },
+            async *[Symbol.asyncIterator]() {
+              yield { type: "start", runId: "native-run" };
+              await cancelled.promise;
+            },
+          };
         });
         const capabilities = yield* adapter.getCapabilities();
         assert.isTrue(capabilities.turns.supportsSteeringByInterruptRestart);
@@ -1430,6 +1434,15 @@ it.effect.each(["ok", "throw", "exit", "hang"] as const)(
           events.filter((entry) => entry.type === "turn.terminal")[0]?.status,
           "interrupted",
         );
+        if (cleanup === "ok") {
+          yield* runtime.startTurn({
+            ...turn,
+            attemptId: RunAttemptId.make("box-replacement"),
+            message: { ...turn.message, text: "steering input" },
+          });
+          yield* collect(runtime.events);
+          assert.match(prompts[1] ?? "", /\nhello\n\nsteering input$/u);
+        }
       }),
     ),
 );
