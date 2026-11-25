@@ -26,8 +26,8 @@ const runServerCommand = Effect.fn("server.runServerCommand")(function* (
 ) {
   // Before config resolution, which claims a port and creates directories.
   const server = yield* Effect.promise(() => import("../server.ts"));
-  // The server root is self-contained once the CLI supplies its runtime services; its layer
-  // assembly is intentionally opaque to the command type.
+  // The Box execution layers intentionally type host-unavailable implementations opaquely; the CLI
+  // supplies the runtime services before launching the server root.
   const runServer = server.runServer as Effect.Effect<never, never, never>;
   const logLevel = yield* GlobalFlag.LogLevel;
   const selectAutomaticPort = yield* AutomaticPort.make.pipe(Effect.provide(ProcessRunner.layer));

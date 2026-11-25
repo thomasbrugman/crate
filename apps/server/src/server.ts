@@ -823,9 +823,9 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(layerSourceControlProviderRegistry),
   Layer.provideMerge(layerGit),
   Layer.provideMerge(layerVcs),
-  Layer.provideMerge(layerBoxGit),
   Layer.provideMerge(
     Layer.mergeAll(
+      layerBoxGit,
       BoxSnapshots.layer.pipe(
         Layer.provide(BoxApi.layer),
         Layer.provide(layerServerSettings),

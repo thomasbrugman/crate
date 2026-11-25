@@ -11,6 +11,8 @@ import {
 import * as NodeUtil from "node:util";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import type * as SqlClient from "effect/sql/SqlClient";
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -21,12 +23,34 @@ import * as Stream from "effect/Stream";
 import * as ManagedProviders from "../policy/managedProviders.ts";
 import * as Settings from "../serverSettings.ts";
 import * as SecretResolver from "../secrets/SecretResolver.ts";
-import { BUILT_IN_DRIVERS } from "./builtInDrivers.ts";
+import { BUILT_IN_DRIVERS, type BuiltInDriversEnv } from "./builtInDrivers.ts";
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
 import * as ProviderInstanceRegistryMutator from "./ProviderInstanceRegistryMutator.ts";
 import * as ProviderOrchestrationAdapterInfrastructure from "./ProviderOrchestrationAdapterInfrastructure.ts";
 import * as ProviderHostLive from "./ProviderHostLive.ts";
+import type * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
+import type * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as ServerConfig from "../config.ts";
+import type * as PortScanner from "../preview/PortScanner.ts";
+
+type ProviderInstanceRegistryHydrationEnv =
+  | Exclude<
+      BuiltInDriversEnv,
+      | ProviderOrchestrationAdapterInfrastructure.ProviderOrchestrationAdapterInfrastructure
+      | AcpRegistrySupport.AcpRegistryCatalog
+      | ProviderHost.ProviderHost
+    >
+  | Settings.ServerSettingsService
+  | BackgroundPolicy.BackgroundPolicy
+  | ServerConfig.ServerConfig
+  | Path.Path
+  | FileSystem.FileSystem
+  // Secret provider reads.
+  | SecureRandom.SecureRandom
+  // The Claude runner counts its CLIs as running agents for port discovery.
+  | PortScanner.PortDiscovery
+  // Adapter ids read which subagent threads predate short ids.
+  | SqlClient.SqlClient;
 
 export const deriveProviderInstanceConfigMap = (
   settings: ServerSettings,
@@ -187,4 +211,9 @@ export const layer = Layer.unwrap(
       Layer.provideMerge(layerMutable),
     );
   }),
-);
+) as Layer.Layer<
+  | ProviderInstanceRegistry.ProviderInstanceRegistry
+  | ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator,
+  never,
+  ProviderInstanceRegistryHydrationEnv
+>;

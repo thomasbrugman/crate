@@ -88,7 +88,8 @@ import * as ProviderInstanceRegistryMutator from "./ProviderInstanceRegistryMuta
 import * as ProviderRegistry from "./ProviderRegistry.ts";
 import { CodexDriver } from "./Drivers/CodexDriver.ts";
 import * as ProviderOrchestrationAdapterInfrastructure from "./ProviderOrchestrationAdapterInfrastructure.ts";
-import * as SecretResolver from "../secrets/SecretResolver.ts";
+import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
+import * as ServerSecretResolver from "../secrets/SecretResolver.ts";
 import { ProviderDriverError } from "@t3tools/provider-core/server/errors";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
@@ -4394,7 +4395,7 @@ it.layer(
                 }).pipe(
                   Layer.provide(ProviderOrchestrationAdapterInfrastructure.layer),
                   Layer.provide(ProviderInstanceRegistryHydration.providerHostLayer),
-                  Layer.provide(SecretResolver.layer),
+                  Layer.provide(ServerSecretResolver.layer),
                 );
                 return ProviderInstanceRegistryHydration.layerSettingsWatcher(
                   changes,
