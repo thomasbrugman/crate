@@ -11,6 +11,12 @@ import {
 import * as NodeUtil from "node:util";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import type * as Digest from "effect/crypto/Digest";
+import type * as HttpClient from "effect/http/HttpClient";
+import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import type * as SqlClient from "effect/sql/SqlClient";
+import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -20,12 +26,43 @@ import * as Stream from "effect/Stream";
 import * as ManagedProviders from "../policy/managedProviders.ts";
 import * as Settings from "../serverSettings.ts";
 import * as SecretResolver from "../secrets/SecretResolver.ts";
-import { BUILT_IN_DRIVERS } from "./builtInDrivers.ts";
+import { BUILT_IN_DRIVERS, type BuiltInDriversEnv } from "./builtInDrivers.ts";
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
 import * as ProviderInstanceRegistryMutator from "./ProviderInstanceRegistryMutator.ts";
 import * as ProviderOrchestrationAdapterInfrastructure from "./ProviderOrchestrationAdapterInfrastructure.ts";
 import * as ProviderHostLive from "./ProviderHostLive.ts";
+import type * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
+import type * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import type * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
+import type * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
+import type * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
+import type * as PortScanner from "../preview/PortScanner.ts";
+
+type ProviderInstanceRegistryHydrationEnv =
+  | Exclude<
+      BuiltInDriversEnv,
+      | ProviderOrchestrationAdapterInfrastructure.ProviderOrchestrationAdapterInfrastructure
+      | AcpRegistrySupport.AcpRegistryCatalog
+      | ProviderHost.ProviderHost
+    >
+  | Settings.ServerSettingsService
+  | BackgroundPolicy.BackgroundPolicy
+  | ChildProcessSpawner.ChildProcessSpawner
+  | Digest.Digest
+  | HttpClient.HttpClient
+  | McpProviderSessions.McpProviderSessions
+  | ProviderEventLoggers.ProviderEventLoggers
+  | ServerSecretStore.ServerSecretStore
+  | ServerConfig.ServerConfig
+  | Path.Path
+  | FileSystem.FileSystem
+  // Secret provider reads.
+  | SecureRandom.SecureRandom
+  // The Claude runner counts its CLIs as running agents for port discovery.
+  | PortScanner.PortDiscovery
+  // Adapter ids read which subagent threads predate short ids.
+  | SqlClient.SqlClient;
 
 export const deriveProviderInstanceConfigMap = (
   settings: ServerSettings,
@@ -146,9 +183,17 @@ export const layerSettingsWatcher = (
     }),
   );
 
-export const layer = Layer.unwrap(
+export const layer: Layer.Layer<
+  | ProviderInstanceRegistry.ProviderInstanceRegistry
+  | ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator,
+  never,
+  ProviderInstanceRegistryHydrationEnv
+> = Layer.unwrap(
   Effect.gen(function* () {
     const serverSettings = yield* Settings.ServerSettingsService;
+    yield* seedDevReplayInstance().pipe(
+      Effect.catchCause((cause) => Effect.logWarning("Dev replay agent unavailable", cause)),
+    );
     // Subscribe before the seed read so saves during registry construction are queued.
     const settingsChanges = yield* serverSettings.subscribeChanges;
     const initialSettings: ServerSettings | undefined = yield* serverSettings.getSettings.pipe(
@@ -173,6 +218,7 @@ export const layer = Layer.unwrap(
         ManagedProviders.disallowedDriverReason(serverSettings.managedPolicy, driver),
     }).pipe(
       Layer.provide(ProviderOrchestrationAdapterInfrastructure.layerIdAllocator),
+      Layer.provide(AcpRegistrySupport.layerFromHost),
       Layer.provide(providerHostLayer),
       Layer.provide(Layer.succeed(HostProcess.Environment, hostEnvironment)),
       Layer.provide(SecretResolver.layer),

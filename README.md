@@ -13,7 +13,7 @@ repository cloned into it and your agent (Command Code, Claude Code or Codex) in
 works there, not on your laptop. Your Mac runs the app and keeps track of the threads. You can check
 in from your phone.
 
-Crate is an independent, experimental fork of [T3 Code v0.1.11](https://github.com/pingdotgg/t3code), not affiliated with T3, Theo, or Upstash.
+Crate is an independent, experimental fork of [T3 Code v0.1.12](https://github.com/pingdotgg/t3code), not affiliated with T3, Theo, or Upstash.
 
 ## Why
 

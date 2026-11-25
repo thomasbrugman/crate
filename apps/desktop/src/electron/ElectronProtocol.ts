@@ -27,8 +27,12 @@ export function getDesktopScheme(
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
 }
 
+export function getDesktopOrigin(...args: Parameters<typeof getDesktopScheme>): string {
+  return `${getDesktopScheme(...args)}://${DESKTOP_HOST}`;
+}
+
 export function getDesktopUrl(...args: Parameters<typeof getDesktopScheme>): string {
-  return `${getDesktopScheme(...args)}://${DESKTOP_HOST}/`;
+  return `${getDesktopOrigin(...args)}/`;
 }
 
 export class ElectronProtocolRegistrationError extends Schema.TaggedError<ElectronProtocolRegistrationError>()(

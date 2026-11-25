@@ -1,3 +1,7 @@
+import {
+  AcpRegistryDriver,
+  type AcpRegistryDriverEnv,
+} from "@t3tools/provider-acp-registry/server";
 import type { UsageProviderKind } from "@t3tools/contracts";
 import type { AnyProviderDriver } from "@t3tools/provider-core/server/driver";
 import type {
@@ -73,7 +77,7 @@ const BoxMuseDriver = makeBoxBackedProviderDriver("muse", MuseDriver.configSchem
   models: [],
 });
 
-export type BuiltInDriversEnv = UpstashBoxDriverEnv;
+export type BuiltInDriversEnv = UpstashBoxDriverEnv | AcpRegistryDriverEnv;
 export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv>> = [
   BoxCommandCodeDriver,
   BoxClaudeCodeDriver,
@@ -84,6 +88,7 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   BoxGrokDriver,
   BoxKiroDriver,
   BoxMuseDriver,
+  AcpRegistryDriver,
 ];
 
 export type BuiltInUsageReadersEnv = Path.Path | ServerConfig.ServerConfig;

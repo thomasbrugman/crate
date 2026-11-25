@@ -1,0 +1,12 @@
+diff --git a/dist/client.js b/dist/client.js
+index 5f556822e98a720501911ce6b3e3033eb53985a9..6478cfcae3562c4b59c792059ea04357b96ee42f 100644
+--- a/dist/client.js
++++ b/dist/client.js
+@@ -1,5 +1,6 @@
+ import { zodToJsonSchema as zodToJsonSchemaLib } from "zod-to-json-schema";
+-import { toJSONSchema as zod4ToJsonSchema } from "zod/v4/core";
++import { createRequire } from "node:module";
++const { toJSONSchema: zod4ToJsonSchema } = createRequire(import.meta.url)("zod/v4/core");
+ import { Agent, } from "./types.js";
+ import { telemetryHeaders } from "./telemetry.js";
+ import { pollDelay } from "./poll.js";
