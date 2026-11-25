@@ -136,6 +136,7 @@ it.effect("investigates review guides read-only in the thread's own Box", () =>
     ).pipe(Effect.provideService(BoxApi, fake.api));
     const guide = textGeneration.generateReviewGuide({
       cwd: "/tmp/t3-review-guide-1",
+      projectCwd: "/tmp/t3-review-guide-1",
       number: 1,
       title: "Change",
       description: "",
