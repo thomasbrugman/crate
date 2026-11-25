@@ -25,10 +25,7 @@ const runServerCommand = Effect.fn("server.runServerCommand")(function* (
   },
 ) {
   // Before config resolution, which claims a port and creates directories.
-  const server = yield* Effect.promise(() => import("../server.ts"));
-  // The Box execution layers intentionally type host-unavailable implementations opaquely; the CLI
-  // supplies the runtime services before launching the server root.
-  const runServer = server.runServer as Effect.Effect<never, never, never>;
+  const { runServer } = yield* Effect.promise(() => import("../server.ts"));
   const logLevel = yield* GlobalFlag.LogLevel;
   const selectAutomaticPort = yield* AutomaticPort.make.pipe(Effect.provide(ProcessRunner.layer));
   const config = yield* resolveServerConfig(flags, logLevel, { ...options, selectAutomaticPort });

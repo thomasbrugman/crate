@@ -3373,6 +3373,10 @@ export const layerWsRpc = (
                           }).pipe(
                             Effect.provideService(Orchestrator.OrchestratorV2, orchestrationEngine),
                             Effect.provideService(ProjectService.ProjectService, projectService),
+                            Effect.provideService(
+                              RepositoryIdentityResolver.RepositoryIdentityResolver,
+                              repositoryIdentityResolver,
+                            ),
                           )
                       ).pipe(
                         Effect.andThen(

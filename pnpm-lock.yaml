@@ -378,6 +378,7 @@ patchedDependencies:
   '@pierre/diffs@1.7.0-beta.4': 7edcdd484a99c7ec0b2667499c4cb21d113ec9bea1f8570c0b0a030d33bbf1cd
   '@react-native-menu/menu@2.0.0': 6872ba71b9847c5a0210b1b896923dadc3860faedfe28d9f062bcedfe786ef1d
   '@react-navigation/native-stack@7.21.0': 990d575444c4af2ce8218b3b7a8280fe244c03abbdb32b822a2e862f791dbf42
+  '@upstash/box@0.8.1': e8526250c576f4066b59ca2a9d8c91f0747245fc5de7898d054ed455f0b7ef3e
   alchemy@2.0.0-beta.85: 07cc8c7e14b3b9af143ddd40a059f117c27e55139fbf20bd5dde2eb30509cedd
   app-builder-lib@26.16.1: 0fbe9ae51783f5768ebe197d12d1fdb7d477a08c92e5db2f6356bcce62613c53
   dbus-next@0.10.2: cfff57561b0ee59b5addb3b2e6c6f20906e967507a530ab67e8db8108e520ba4
@@ -404,6 +405,7 @@ patchedDependencies:
   react-native-reanimated@4.8.0: db905565fb5bd6f0fa7196d5bc417466556aba0abcd81487e84e8e1d1a2f68f7
   react-native-svg@15.16.1: 7f94d240fc19418233c96f9a637dfd248846446657476c204f3614fd2847900e
   react-native-webview@14.0.1: 71009983c76818bd5e73d4ca597f76efd04101600c84cd4b4c5d920781c048ae
+  zod-to-json-schema@3.25.2: 6d24aaccb769de795a9f1293dac779ade26cabc6d85c8e182166e917c2d68bdd
 
 importers:
 
@@ -2105,7 +2107,7 @@ importers:
         version: link:../shared
       '@upstash/box':
         specifier: 0.8.1
-        version: 0.8.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)(zod@4.6.7)
+        version: 0.8.1(patch_hash=e8526250c576f4066b59ca2a9d8c91f0747245fc5de7898d054ed455f0b7ef3e)(bufferutil@4.1.0)(utf-8-validate@6.0.6)(zod@4.6.7)
       effect:
         specifier: 4.1.5
         version: 4.1.5(patch_hash=14a7acd734809d8dddbf2c19c4ec01fdd2ffae60a612de42b5ed29860216052a)
@@ -16898,7 +16900,7 @@ snapshots:
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
       zod: 4.6.7
-      zod-to-json-schema: 3.25.2(zod@4.6.7)
+      zod-to-json-schema: 3.25.2(patch_hash=6d24aaccb769de795a9f1293dac779ade26cabc6d85c8e182166e917c2d68bdd)(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
 
@@ -19287,11 +19289,11 @@ snapshots:
 
   '@ungap/structured-clone@1.3.1': {}
 
-  '@upstash/box@0.8.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)(zod@4.6.7)':
+  '@upstash/box@0.8.1(patch_hash=e8526250c576f4066b59ca2a9d8c91f0747245fc5de7898d054ed455f0b7ef3e)(bufferutil@4.1.0)(utf-8-validate@6.0.6)(zod@4.6.7)':
     dependencies:
       ws: 8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       zod: 4.6.7
-      zod-to-json-schema: 3.25.2(zod@4.6.7)
+      zod-to-json-schema: 3.25.2(patch_hash=6d24aaccb769de795a9f1293dac779ade26cabc6d85c8e182166e917c2d68bdd)(zod@4.6.7)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -26439,7 +26441,7 @@ snapshots:
       '@yuku-toolchain/types': 0.19.0
       yuku-core: 0.19.0
 
-  zod-to-json-schema@3.25.2(zod@4.6.7):
+  zod-to-json-schema@3.25.2(patch_hash=6d24aaccb769de795a9f1293dac779ade26cabc6d85c8e182166e917c2d68bdd)(zod@4.6.7):
     dependencies:
       zod: 4.6.7
 

@@ -3807,6 +3807,10 @@ it.effect.each([undefined, false, true])(
         yield* send("queued", "queued", "queue");
         yield* send("goal", "/goal all tests pass", "auto");
         yield* worker.drain();
+        // Stopping the active turn starts the goal through the run-update reaction, outside the
+        // effect worker's first drain.
+        yield* Effect.yieldNow;
+        yield* worker.drain();
 
         assert.deepEqual(steered, []);
         assert.deepEqual(yield* read(threadId), {

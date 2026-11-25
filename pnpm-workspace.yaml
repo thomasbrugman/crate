@@ -291,6 +291,9 @@ patchedDependencies:
   effect@4.1.5: patches/effect@4.1.5.patch
   "@generaltranslation/format@0.1.9": patches/@generaltranslation__format@0.1.9.patch
   gt-i18n@1.0.40: patches/gt-i18n@1.0.40.patch
+  # Node SEA cannot statically import runtime-external zod; load it through createRequire.
+  zod-to-json-schema@3.25.2: patches/zod-to-json-schema@3.25.2.patch
+  "@upstash/box@0.8.1": patches/@upstash__box@0.8.1.patch
 
 # Unmet peers fail resolution, so a pin outside a dependency's peer range is
 # caught when the lockfile changes instead of scrolling past as a warning.

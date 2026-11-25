@@ -1,0 +1,33 @@
+diff --git a/dist/esm/parsers/array.js b/dist/esm/parsers/array.js
+index 6f275adb7f1e794b814bf7be28881e384156d070..f894047b8fae5b27cd87a4a2d061b2ebe530dbb3 100644
+--- a/dist/esm/parsers/array.js
++++ b/dist/esm/parsers/array.js
+@@ -1,4 +1,5 @@
+-import { ZodFirstPartyTypeKind } from "zod/v3";
++import { createRequire } from "node:module";
++const { ZodFirstPartyTypeKind } = createRequire(import.meta.url)("zod/v3");
+ import { setResponseValueAndErrors } from "../errorMessages.js";
+ import { parseDef } from "../parseDef.js";
+ export function parseArrayDef(def, refs) {
+diff --git a/dist/esm/parsers/record.js b/dist/esm/parsers/record.js
+index dd75a92f4de5495d9fe631c11c93dc355c80b025..8669a84c09b5f852ab7696ddedc12ca0ddda9b8e 100644
+--- a/dist/esm/parsers/record.js
++++ b/dist/esm/parsers/record.js
+@@ -1,4 +1,5 @@
+-import { ZodFirstPartyTypeKind, } from "zod/v3";
++import { createRequire } from "node:module";
++const { ZodFirstPartyTypeKind, } = createRequire(import.meta.url)("zod/v3");
+ import { parseDef } from "../parseDef.js";
+ import { parseStringDef } from "./string.js";
+ import { parseBrandedDef } from "./branded.js";
+diff --git a/dist/esm/selectParser.js b/dist/esm/selectParser.js
+index c4a05bb6afde2b082400643b408d78af76707158..ba7c75caf24d6d91c52c5e5728418bee745dc36e 100644
+--- a/dist/esm/selectParser.js
++++ b/dist/esm/selectParser.js
+@@ -1,4 +1,5 @@
+-import { ZodFirstPartyTypeKind } from "zod/v3";
++import { createRequire } from "node:module";
++const { ZodFirstPartyTypeKind } = createRequire(import.meta.url)("zod/v3");
+ import { parseAnyDef } from "./parsers/any.js";
+ import { parseArrayDef } from "./parsers/array.js";
+ import { parseBigintDef } from "./parsers/bigint.js";
