@@ -17,6 +17,9 @@ const encryptedNames = [
   "opencodeAuth",
   "cursorAuth",
   "antigravityAuth",
+  "grokAuth",
+  "kiroAuth",
+  "museAuth",
 ].map((field) => `upstash-box-${Buffer.from(field).toString("base64url")}`);
 const isHarnessSecret = (name: string) =>
   encryptedNames.some((prefix) => name === prefix || name.startsWith(`${prefix}-`));

@@ -2087,6 +2087,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         "upstashBox.opencodeAuth",
         "upstashBox.cursorAuth",
         "upstashBox.antigravityAuth",
+        "upstashBox.grokAuth",
+        "upstashBox.kiroAuth",
+        "upstashBox.museAuth",
       ]);
     }),
   );

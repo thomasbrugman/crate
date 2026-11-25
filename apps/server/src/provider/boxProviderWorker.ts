@@ -19,6 +19,9 @@ import {
 import { CursorDriver } from "@t3tools/provider-cursor/server";
 import * as CursorRunner from "@t3tools/provider-cursor/server/CursorAgentSdk";
 import * as CursorSdk from "@t3tools/provider-cursor/server/CursorSdk";
+import { GrokDriver } from "@t3tools/provider-grok/server";
+import { KiroDriver } from "@t3tools/provider-kiro/server";
+import { MuseDriver, MuseUsageHome } from "@t3tools/provider-muse/server";
 import { OpenCodeDriver } from "@t3tools/provider-opencode/server";
 import * as OpenCodeRuntime from "@t3tools/provider-opencode/server/OpenCodeRuntime";
 import * as OpenCodeServerLedger from "@t3tools/provider-opencode/server/OpenCodeServerLedger";
@@ -51,21 +54,39 @@ const credentialsDir = "/dev/shm/crate-auth";
 const profileStateDir = `${credentialsDir}/worker-state`;
 // Host-side turns stage each attachment here as `<id>-<name>` before dispatch.
 const attachmentsDir = "/workspace/home/.crate-attachments/worker";
-const harnessSchema = Schema.Literals(["opencode", "cursor", "antigravity"]);
+const harnessSchema = Schema.Literals([
+  "opencode",
+  "cursor",
+  "antigravity",
+  "grok",
+  "kiro",
+  "muse",
+]);
 type Harness = typeof harnessSchema.Type;
 const parseHarness = Schema.decodeUnknownSync(harnessSchema);
 const encodeModels = Schema.encodeSync(Schema.fromJsonString(Schema.Array(ServerProviderModel)));
-const drivers = { opencode: OpenCodeDriver, cursor: CursorDriver, antigravity: AntigravityDriver };
+const drivers = {
+  opencode: OpenCodeDriver,
+  cursor: CursorDriver,
+  antigravity: AntigravityDriver,
+  grok: GrokDriver,
+  kiro: KiroDriver,
+  muse: MuseDriver,
+};
 const decodeSettings = {
   opencode: Schema.decodeSync(OpenCodeDriver.configSchema),
   cursor: Schema.decodeSync(CursorDriver.configSchema),
   antigravity: Schema.decodeSync(AntigravityDriver.configSchema),
+  grok: Schema.decodeSync(GrokDriver.configSchema),
+  kiro: Schema.decodeSync(KiroDriver.configSchema),
+  muse: Schema.decodeSync(MuseDriver.configSchema),
 };
 
 const toolLayer = Layer.mergeAll(
   CursorRunner.layer.pipe(Layer.provideMerge(CursorSdk.layer)),
   OpenCodeRuntime.layer.pipe(Layer.provide(OpenCodeServerLedger.layer({ stateDir }))),
   Layer.effect(AntigravityInstallation, makeAntigravityInstallation({ baseDir: stateDir })),
+  MuseUsageHome.layer,
   McpProviderSessions.layer,
   ProviderContinuationRequests.layer,
   IdAllocator.layer,
@@ -197,6 +218,8 @@ export async function runBoxProviderWorker() {
   const cwd = process.cwd();
   const credential = await readCredential(harness);
   if (harness === "cursor" && credential) process.env.CURSOR_API_KEY = credential;
+  if (harness === "grok" && credential) process.env.XAI_API_KEY = credential;
+  if (harness === "kiro" && credential) process.env.KIRO_API_KEY = credential;
   if (harness === "opencode") {
     const dataDir = NodePath.join(credentialsDir, "opencode", "data");
     const data = NodePath.join(dataDir, "opencode");
@@ -219,6 +242,12 @@ export async function runBoxProviderWorker() {
     process.env.OPENCODE_DB = NodePath.join(saved, "opencode.db");
   }
   const driver = drivers[harness];
+  // Muse ignores an inherited META_API_KEY so a host login is not shadowed;
+  // the instance environment still wins, so the credential rides there.
+  const environment =
+    harness === "muse" && credential
+      ? [{ name: "META_API_KEY", value: credential, sensitive: true }]
+      : [];
   const mode = process.argv[3];
   const layer = toolLayer.pipe(Layer.provideMerge(Layer.merge(hostLayer(cwd), Logger.layer([]))));
   if (mode === "catalog") {
@@ -229,7 +258,7 @@ export async function runBoxProviderWorker() {
           instanceId: ProviderInstanceId.make(harness),
           enabled: true,
           displayName: undefined,
-          environment: [],
+          environment,
           config: config as never,
         });
         return (yield* provider.snapshot.refresh).models;
@@ -265,7 +294,7 @@ export async function runBoxProviderWorker() {
           instanceId: ProviderInstanceId.make(input.instanceId),
           enabled: true,
           displayName: undefined,
-          environment: [],
+          environment,
           config: config as never,
         });
         const runtime = yield* provider.orchestrationAdapter.openSession({

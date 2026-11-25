@@ -255,7 +255,12 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
             )
       ).pipe(Effect.provide(boxApiLayer));
       const auth =
-        host.settings.update && harness !== "cursor" && harness !== "antigravity"
+        host.settings.update &&
+        harness !== "cursor" &&
+        harness !== "antigravity" &&
+        harness !== "grok" &&
+        harness !== "kiro" &&
+        harness !== "muse"
           ? yield* makeBoxHarnessAuth(instanceId, harness, environment, host.settings.update).pipe(
               Effect.provide(SecureRandom.layerWebCrypto),
             )
@@ -318,7 +323,10 @@ function makeBoxHarnessDriver<Settings extends HarnessSettings>(
             agentApiKey: settings.agentApiKey,
           });
           const models =
-            worker && (harness === "opencode" || harness === "cursor") && result.status === "ready"
+            worker &&
+            isWorkerBoxHarness(harness) &&
+            harness !== "antigravity" &&
+            result.status === "ready"
               ? yield* readBoxWorkerModels(
                   harness,
                   settings.apiKey,

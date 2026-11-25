@@ -2,11 +2,18 @@ import { ProviderDriverKind } from "@t3tools/contracts";
 
 /** The agents that can run inside a thread's Upstash Box. The Box itself is the environment. */
 export type LegacyBoxHarness = "commandCode" | "claudeCode" | "codex";
-export type WorkerBoxHarness = "opencode" | "cursor" | "antigravity";
+export type WorkerBoxHarness = "opencode" | "cursor" | "antigravity" | "grok" | "kiro" | "muse";
 export type BoxHarness = LegacyBoxHarness | WorkerBoxHarness;
 
 export function isWorkerBoxHarness(harness: BoxHarness): harness is WorkerBoxHarness {
-  return harness === "opencode" || harness === "cursor" || harness === "antigravity";
+  return (
+    harness === "opencode" ||
+    harness === "cursor" ||
+    harness === "antigravity" ||
+    harness === "grok" ||
+    harness === "kiro" ||
+    harness === "muse"
+  );
 }
 
 export const BOX_HARNESS_DRIVER_KINDS = {
@@ -16,6 +23,9 @@ export const BOX_HARNESS_DRIVER_KINDS = {
   opencode: ProviderDriverKind.make("opencode"),
   cursor: ProviderDriverKind.make("cursor"),
   antigravity: ProviderDriverKind.make("antigravity"),
+  grok: ProviderDriverKind.make("grok"),
+  kiro: ProviderDriverKind.make("kiro"),
+  muse: ProviderDriverKind.make("muse"),
 } as const satisfies Record<BoxHarness, ProviderDriverKind>;
 
 export const BOX_HARNESS_LABELS = {
@@ -25,6 +35,9 @@ export const BOX_HARNESS_LABELS = {
   opencode: "OpenCode",
   cursor: "Cursor",
   antigravity: "Antigravity",
+  grok: "Grok",
+  kiro: "Kiro",
+  muse: "Muse Code",
 } as const satisfies Record<BoxHarness, string>;
 
 const boxDriverHarnesses = new Map<string, BoxHarness>(
@@ -42,6 +55,9 @@ const workerDriverKinds = new Set<string>([
   BOX_HARNESS_DRIVER_KINDS.opencode,
   BOX_HARNESS_DRIVER_KINDS.cursor,
   BOX_HARNESS_DRIVER_KINDS.antigravity,
+  BOX_HARNESS_DRIVER_KINDS.grok,
+  BOX_HARNESS_DRIVER_KINDS.kiro,
+  BOX_HARNESS_DRIVER_KINDS.muse,
 ]);
 
 export const isBoxWorkerDriver = (driver: string) => workerDriverKinds.has(driver);

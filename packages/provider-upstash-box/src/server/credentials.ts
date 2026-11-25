@@ -40,6 +40,9 @@ export function readHarnessCredentials(
     opencode: readBoxSecret(box.opencodeAuth, resolve),
     cursor: readBoxSecret(box.cursorAuth, resolve),
     antigravity: readBoxSecret(box.antigravityAuth, resolve),
+    grok: readBoxSecret(box.grokAuth, resolve),
+    kiro: readBoxSecret(box.kiroAuth, resolve),
+    muse: readBoxSecret(box.museAuth, resolve),
   });
 }
 
@@ -82,7 +85,13 @@ export function isAuthJson(value: string): boolean {
 export function harnessCredentialKind(harness: BoxHarness, value: string) {
   if (!value?.trim()) return undefined;
   if (harness === "opencode") return isAuthJson(value) ? "file" : undefined;
-  if (harness === "cursor" || harness === "antigravity") {
+  if (
+    harness === "cursor" ||
+    harness === "antigravity" ||
+    harness === "grok" ||
+    harness === "kiro" ||
+    harness === "muse"
+  ) {
     return /[\s{}]/u.test(value) ? undefined : "key";
   }
   if (value.trimStart().startsWith("{")) return isAuthJson(value) ? "file" : undefined;
