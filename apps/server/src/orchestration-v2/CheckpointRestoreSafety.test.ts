@@ -57,6 +57,7 @@ it.effect.each([
       const result = yield* isCheckpointRestoreIsolated(
         parent,
         { cwd: "/project" },
+        null,
         {
           fileSystem: yield* FileSystem.FileSystem,
           path: yield* Path.Path,

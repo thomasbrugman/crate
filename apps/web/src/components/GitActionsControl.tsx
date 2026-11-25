@@ -1048,7 +1048,7 @@ function CheckoutGitActionsControl({
   const sourceControlScope = {
     environmentId: activeEnvironmentId,
     cwd: gitCwd,
-    ...(activeServerThread ? { threadId: activeServerThread.id } : {}),
+    ...(owner?.threadId ? { threadId: owner.threadId } : {}),
   };
   const vcsActionState = useAtomValue(vcsActionManager.stateAtom(sourceControlScope));
   const inlineSuccessExpired = useDeadlinePassed(inlineSuccess?.expiresAtMs ?? null);
@@ -1140,7 +1140,8 @@ function CheckoutGitActionsControl({
               metadataOnly: true,
             },
           }),
-          changesRevision,
+          workspaceMutationId,
+          changesStatusRevision === null ? {} : { detail: changesStatusRevision },
         )
       : null,
   );
@@ -1224,7 +1225,7 @@ function CheckoutGitActionsControl({
         ? {
             environmentId: activeEnvironmentId,
             cwd: gitCwd,
-            ...(activeServerThread ? { threadId: activeServerThread.id } : {}),
+            ...(owner?.threadId ? { threadId: owner.threadId } : {}),
           }
         : null,
     ),
@@ -1516,7 +1517,7 @@ function CheckoutGitActionsControl({
 
   // A disabled menu cannot refresh on open, and terminal edits or commits publish no status.
   const refreshStatusForEmptyMenu = () =>
-    requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd, activeServerThread?.id);
+    requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd, owner?.threadId);
 
   const initializeGit = () => {
     void (async () => {
@@ -1733,7 +1734,7 @@ function CheckoutGitActionsControl({
                       refreshVcsStatus,
                       activeEnvironmentId,
                       gitCwd,
-                      activeServerThread?.id,
+                      owner?.threadId,
                     );
                   }
                 }}

@@ -55,13 +55,16 @@ import { scrollToSettingsTarget } from "./settingsLayout";
 import {
   searchSettings,
   revealSettingsSearchTarget,
-  SETTINGS_NAV_GROUPS,
+  settingsNavGroups,
   SETTINGS_NAV_LABELS,
   SETTINGS_SECTION_LABELS,
   type SettingsPath,
   type SettingsSearchItem,
 } from "./settingsSearch";
-import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
+import {
+  useAvailableSettingsSearchItems,
+  useHasSecretProvidersEnvironment,
+} from "./useAvailableSettingsSearchItems";
 import { handleSettingsSectionKeyDown } from "./settingsSectionNavigation";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 
@@ -134,16 +137,18 @@ function SettingsSectionIcon({ to }: { to: SettingsPath }) {
 
 function MobileSettingsSections({
   activePath,
+  navGroups,
   onSelect,
 }: {
   activePath: string;
+  navGroups: ReturnType<typeof settingsNavGroups>;
   onSelect: (to: SettingsPath) => void;
 }) {
   const gt = useGT();
   const m = useMessages();
-  const selected = SETTINGS_NAV_GROUPS.flatMap((group) => group.paths).find(
-    (to) => activePath === to || activePath.startsWith(`${to}/`),
-  );
+  const selected = navGroups
+    .flatMap((group) => group.paths)
+    .find((to) => activePath === to || activePath.startsWith(`${to}/`));
   return (
     <Menu>
       <MenuTrigger
@@ -157,7 +162,7 @@ function MobileSettingsSections({
         <ChevronDownIcon />
       </MenuTrigger>
       <MenuPopup align="start" className="w-(--anchor-width)">
-        {SETTINGS_NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <MenuGroup key={group.heading}>
             {group.headingHidden ? null : <MenuGroupLabel>{m(group.heading)}</MenuGroupLabel>}
             {group.paths.map((to) => (
@@ -191,6 +196,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(0);
   const searchableItems = useAvailableSettingsSearchItems();
+  const navGroups = settingsNavGroups(useHasSecretProvidersEnvironment());
   const results = searchSettings(query, searchableItems, m);
   const isSearching = query.trim().length > 0;
   const hasResults = results.length > 0;
@@ -307,7 +313,11 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
     <>
       <div className="flex shrink-0 items-center gap-2 border-b bg-sidebar p-2 md:hidden">
         <div className="min-w-0 flex-1">
-          <MobileSettingsSections activePath={activePath} onSelect={handleSectionClick} />
+          <MobileSettingsSections
+            activePath={activePath}
+            navGroups={navGroups}
+            onSelect={handleSectionClick}
+          />
         </div>
         <Button
           size="icon-xl"
@@ -440,7 +450,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
               ) : (
                 <div className="flex flex-col gap-4">
                   <div onKeyDown={handleSettingsSectionKeyDown} className="flex flex-col gap-4">
-                    {SETTINGS_NAV_GROUPS.map((group, index) => (
+                    {navGroups.map((group, index) => (
                       <div
                         key={group.heading}
                         className="flex flex-col gap-1 max-md:border-t max-md:border-sidebar-border max-md:pt-4 max-md:first:border-t-0 max-md:first:pt-0"

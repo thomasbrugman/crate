@@ -1401,7 +1401,8 @@ it.layer(layerProjectionStoreTest)("CheckpointCaptureServiceV2", (it) => {
                     Layer.mock(CheckpointStore.CheckpointStore)({
                       isGitRepository: (_cwd, id) =>
                         assertCheckpointThread(id).pipe(Effect.as(true)),
-                      captureCheckpoint: ({ threadId: id }) => assertCheckpointThread(id),
+                      captureCheckpoint: ({ threadId: id }) =>
+                        assertCheckpointThread(id).pipe(Effect.as(null)),
                       hasCheckpointRef: ({ threadId: id }) =>
                         assertCheckpointThread(id).pipe(Effect.as(false)),
                     }),

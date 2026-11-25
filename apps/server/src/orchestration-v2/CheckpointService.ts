@@ -255,7 +255,7 @@ export interface CheckpointServiceV2Shape {
    */
   readonly restore: (input: {
     readonly targets: ReadonlyArray<{
-      readonly scope: Pick<OrchestrationV2CheckpointScope, "id" | "cwd">;
+      readonly scope: Pick<OrchestrationV2CheckpointScope, "id" | "cwd" | "threadId">;
       readonly checkpoint: Pick<OrchestrationV2Checkpoint, "ordinalWithinScope" | "ref" | "status">;
     }>;
     /** Every folder of the thread with checkpoints of its own; a restore leaves the others' alone. */
@@ -902,6 +902,7 @@ export const layer: Layer.Layer<
                 // One an earlier failed rewind left is still the only copy of how the folder was.
                 const kept = yield* checkpointStore.hasCheckpointRef({
                   cwd: target.scope.cwd,
+                  threadId: target.scope.threadId,
                   checkpointRef: preRewindRef,
                 });
                 if (!kept) {

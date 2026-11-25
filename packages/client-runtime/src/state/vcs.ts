@@ -1,5 +1,6 @@
 import {
   type EnvironmentId,
+  type ThreadId,
   type VcsListRefsInput,
   type VcsListRefsResult,
   type VcsRefreshStatusResult,
@@ -362,8 +363,12 @@ export function createVcsEnvironmentAtoms<R, E>(
     refreshLocalStatusForPicker: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:vcs:refresh-local-status-for-picker",
       tag: WS_METHODS.vcsRefreshStatus,
-      execute: (input: { readonly cwd: string }) =>
-        requestGuarded(WS_METHODS.vcsRefreshStatus, { cwd: input.cwd, localOnly: true }),
+      execute: (input: { readonly cwd: string; readonly threadId?: ThreadId }) =>
+        requestGuarded(WS_METHODS.vcsRefreshStatus, {
+          cwd: input.cwd,
+          ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+          localOnly: true,
+        }),
       onSettled: invalidateRefsIfChanged,
     }),
     createWorktree: createEnvironmentRpcCommand(runtime, {

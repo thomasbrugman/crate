@@ -125,6 +125,7 @@ export const make = Effect.gen(function* () {
 
   interface Comparison {
     readonly cwd: string;
+    readonly threadId?: ThreadId;
     readonly fromCheckpointRef: CheckpointRef;
     readonly toCheckpointRef: CheckpointRef;
     readonly fallbackFromToHead: false;

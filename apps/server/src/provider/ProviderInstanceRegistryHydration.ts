@@ -11,6 +11,7 @@ import {
 import * as NodeUtil from "node:util";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -149,6 +150,9 @@ export const layerSettingsWatcher = (
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const serverSettings = yield* Settings.ServerSettingsService;
+    yield* seedDevReplayInstance().pipe(
+      Effect.catchCause((cause) => Effect.logWarning("Dev replay agent unavailable", cause)),
+    );
     // Subscribe before the seed read so saves during registry construction are queued.
     const settingsChanges = yield* serverSettings.subscribeChanges;
     const initialSettings: ServerSettings | undefined = yield* serverSettings.getSettings.pipe(
@@ -173,6 +177,7 @@ export const layer = Layer.unwrap(
         ManagedProviders.disallowedDriverReason(serverSettings.managedPolicy, driver),
     }).pipe(
       Layer.provide(ProviderOrchestrationAdapterInfrastructure.layerIdAllocator),
+      Layer.provide(AcpRegistrySupport.layerFromHost),
       Layer.provide(providerHostLayer),
       Layer.provide(Layer.succeed(HostProcess.Environment, hostEnvironment)),
       Layer.provide(SecretResolver.layer),

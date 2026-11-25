@@ -706,7 +706,11 @@ it.effect("skips post-turn captures that waited out another capture's timeout in
 
 it.effect("keeps the pre-rewind snapshot of a folder a failed rewind could not put back", () => {
   const targets = ["first", "second"].map((name) => ({
-    scope: { id: CheckpointScopeId.make(`checkpoint-scope:rewind:${name}`), cwd: `/repo/${name}` },
+    scope: {
+      id: CheckpointScopeId.make(`checkpoint-scope:rewind:${name}`),
+      cwd: `/repo/${name}`,
+      threadId: ThreadId.make(`thread:rewind:${name}`),
+    },
     checkpoint: {
       ordinalWithinScope: 1,
       ref: CheckpointRef.make(`refs/t3/test/rewind/${name}`),
