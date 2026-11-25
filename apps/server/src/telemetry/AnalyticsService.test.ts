@@ -322,10 +322,15 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
 
   it.effect("sends nothing on a CI runner unless the environment opts in", () =>
     Effect.gen(function* () {
+      const posthogEnv = {
+        T3CODE_POSTHOG_KEY: sendingEnv.T3CODE_POSTHOG_KEY,
+        T3CODE_POSTHOG_HOST: sendingEnv.T3CODE_POSTHOG_HOST,
+      };
       const onCi = (telemetryEnv: Parameters<typeof analyticsLayerWith>[2]) =>
-        sendFor(1, respondWithStatus(204), recordTwentyEvents, undefined, telemetryEnv).pipe(
-          Effect.provideService(HostProcess.Environment, { GITHUB_ACTIONS: "true" }),
-        );
+        sendFor(1, respondWithStatus(204), recordTwentyEvents, undefined, {
+          ...posthogEnv,
+          ...telemetryEnv,
+        }).pipe(Effect.provideService(HostProcess.Environment, { GITHUB_ACTIONS: "true" }));
       assert.deepEqual(yield* onCi({}), []);
       assert.equal((yield* onCi({ T3CODE_TELEMETRY_ENABLED: true })).length, 1);
     }),
