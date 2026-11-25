@@ -16,6 +16,9 @@ import {
 } from "@t3tools/provider-upstash-box/server";
 import { AntigravitySettings } from "@t3tools/contracts";
 import { CursorDriver } from "@t3tools/provider-cursor/server";
+import { GrokDriver } from "@t3tools/provider-grok/server";
+import { KiroDriver } from "@t3tools/provider-kiro/server";
+import { MuseDriver } from "@t3tools/provider-muse/server";
 import { OpenCodeDriver } from "@t3tools/provider-opencode/server";
 import * as ModelManifest from "./ModelManifest.ts";
 import { AntigravityDriver } from "./Drivers/AntigravityDriver.ts";
@@ -54,6 +57,22 @@ const BoxAntigravityDriver = makeBoxBackedProviderDriver("antigravity", Antigrav
   })),
 });
 
+const BoxGrokDriver = makeBoxBackedProviderDriver("grok", GrokDriver.configSchema, {
+  artifact: boxProviderArtifact,
+  settings: ({ customModels }) => ({ customModels }),
+  models: [],
+});
+const BoxKiroDriver = makeBoxBackedProviderDriver("kiro", KiroDriver.configSchema, {
+  artifact: boxProviderArtifact,
+  settings: ({ customModels }) => ({ customModels }),
+  models: [],
+});
+const BoxMuseDriver = makeBoxBackedProviderDriver("muse", MuseDriver.configSchema, {
+  artifact: boxProviderArtifact,
+  settings: ({ customModels }) => ({ customModels }),
+  models: [],
+});
+
 export type BuiltInDriversEnv = UpstashBoxDriverEnv;
 export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv>> = [
   BoxCommandCodeDriver,
@@ -62,6 +81,9 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   BoxOpenCodeDriver,
   BoxCursorDriver,
   BoxAntigravityDriver,
+  BoxGrokDriver,
+  BoxKiroDriver,
+  BoxMuseDriver,
 ];
 
 export type BuiltInUsageReadersEnv = Path.Path | ServerConfig.ServerConfig;

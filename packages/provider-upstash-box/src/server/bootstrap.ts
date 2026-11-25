@@ -220,6 +220,7 @@ export const cliPackages = {
   claudeCode: { bin: "claude", package: "@anthropic-ai/claude-code@2.1.80" },
   codex: { bin: "codex", package: "@openai/codex@0.115.0" },
   opencode: { bin: "opencode", package: "opencode-ai@1.19.6" },
+  grok: { bin: "grok", package: "@xai-official/grok@1.0.92" },
 } as const;
 
 function credentialSelection(config: BoxRuntimeConfig): BoxHarnessCredentials {
@@ -233,6 +234,19 @@ function credentialSelection(config: BoxRuntimeConfig): BoxHarnessCredentials {
 
 export function installHarnessCli(box: Pick<BoxHandle, "exec">, harness: BoxHarness) {
   if (harness === "antigravity") return Promise.resolve();
+  if (harness === "kiro") {
+    // Kiro's installer has no npm package; it drops kiro-cli into ~/.local/bin.
+    return requireCommand(
+      box,
+      `test -x ${BOX_HOME}/.local/bin/kiro-cli || curl -fsSL https://cli.kiro.dev/install | bash`,
+    );
+  }
+  if (harness === "muse") {
+    return requireCommand(
+      box,
+      `test -x ${BOX_HOME}/.local/bin/muse || curl -fsSL https://dev.meta.ai/install.sh | bash`,
+    );
+  }
   if (harness === "cursor") {
     return requireCommand(
       box,
@@ -252,11 +266,20 @@ export async function installConnectedHarnesses(
   onProgress: (step: BoxSetupStep) => void,
 ): Promise<void> {
   const credentials = credentialSelection(config);
-  const workerHarnesses: readonly WorkerBoxHarness[] = ["opencode", "cursor", "antigravity"];
+  const workerHarnesses: readonly WorkerBoxHarness[] = [
+    "opencode",
+    "cursor",
+    "antigravity",
+    "grok",
+    "kiro",
+    "muse",
+  ];
   const harnesses = [
     ...(Object.keys(cliPackages) as (keyof typeof cliPackages)[]),
     "cursor",
     "antigravity",
+    "kiro",
+    "muse",
   ] as const;
   const connected = harnesses.flatMap((harness) => {
     const value = credentials[harness] ?? "";

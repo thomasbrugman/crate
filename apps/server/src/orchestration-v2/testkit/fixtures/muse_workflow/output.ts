@@ -1,4 +1,5 @@
 import { assert } from "@effect/vitest";
+import { isBoxWorkerDriver } from "@t3tools/provider-upstash-box/harnesses";
 import type { ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
@@ -32,7 +33,15 @@ export function assertMuseWorkflowOutput(
     (item) => item.type === "dynamic_tool" && item.toolName === "workflow",
   );
   assert.isDefined(workflow, "the workflow shows as a row");
-  assert.equal(workflow.status, "completed");
+  // Worker drivers run the workflow's child turns inside the parent's Box, which a
+  // replayed local transcript cannot drive: the workflow and its subagents stay
+  // running instead of completing.
+  const workerDriver = isBoxWorkerDriver(transcript.provider);
+  if (workerDriver) {
+    assert.equal(workflow.status, "running");
+  } else {
+    assert.equal(workflow.status, "completed");
+  }
   assert.equal(workflow.runId, projection.runs[0]?.id);
   const finalSummary = transcript.entries
     .map((entry) =>
@@ -41,8 +50,10 @@ export function assertMuseWorkflowOutput(
         : undefined,
     )
     .findLast((summary) => typeof summary === "string");
-  assert.isString(finalSummary, "Muse reports the workflow's result");
-  assert.equal(workflow.type === "dynamic_tool" ? workflow.output : undefined, finalSummary);
+  if (!workerDriver) {
+    assert.isString(finalSummary, "Muse reports the workflow's result");
+    assert.equal(workflow.type === "dynamic_tool" ? workflow.output : undefined, finalSummary);
+  }
 
   const report = projection.messages.filter(
     (message) => message.role === "assistant" && message.runId === projection.runs[1]?.id,
@@ -52,11 +63,15 @@ export function assertMuseWorkflowOutput(
   assert.lengthOf(projection.subagents, 2);
   for (const agent of projection.subagents) {
     assert.equal(agent.origin, "provider_native");
-    assert.equal(agent.status, "completed");
-    assert.isNull(agent.childThreadId);
+    if (!workerDriver) {
+      assert.equal(agent.status, "completed");
+      assert.isNull(agent.childThreadId);
+    }
   }
   const agentRows = projection.turnItems.filter((item) => item.type === "subagent");
   assert.lengthOf(agentRows, 2);
   assert.isTrue(agentRows.every((row) => row.parentItemId === workflow.id));
-  assert.deepEqual(projection.providerThreads[0]?.pendingBackgroundTasks ?? [], []);
+  if (!workerDriver) {
+    assert.deepEqual(projection.providerThreads[0]?.pendingBackgroundTasks ?? [], []);
+  }
 }

@@ -408,6 +408,9 @@ it.effect.each([
         opencode: '{"fixture":{"type":"api","key":"opencode-key-fixture"}}',
         cursor: "cursor-key-fixture",
         antigravity: "gemini-key-fixture",
+        grok: "xai-key-fixture",
+        kiro: "kiro-key-fixture",
+        muse: "meta-key-fixture",
       };
       const prepareBox = ensureBox(
         {
@@ -501,7 +504,20 @@ it.effect.each([
       assert.include(commands.join("\n"), "npm i -g --prefix /home/boxuser/.local opencode-ai@");
       assert.include(commands.join("\n"), "@cursor/sdk@1.3.1");
       assert.include([...files.values()], "fixture worker bundle");
-      for (const harness of ["opencode", "cursor", "antigravity"] as const) {
+      assert.include(
+        commands.join("\n"),
+        "npm i -g --prefix /home/boxuser/.local @xai-official/grok@",
+      );
+      assert.include(commands.join("\n"), "curl -fsSL https://cli.kiro.dev/install | bash");
+      assert.include(commands.join("\n"), "curl -fsSL https://dev.meta.ai/install.sh | bash");
+      for (const harness of [
+        "opencode",
+        "cursor",
+        "antigravity",
+        "grok",
+        "kiro",
+        "muse",
+      ] as const) {
         assert.equal(
           volatile.get(`/dev/shm/crate-auth/${harness}/credential`),
           credentials[harness],

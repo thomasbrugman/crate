@@ -75,6 +75,24 @@ const harnessCredentials = [
     label: BOX_HARNESS_LABELS.antigravity,
     hint: msg("Paste your Gemini API key."),
   },
+  {
+    harness: "grok",
+    field: "grokAuth",
+    label: BOX_HARNESS_LABELS.grok,
+    hint: msg("Paste your xAI API key."),
+  },
+  {
+    harness: "kiro",
+    field: "kiroAuth",
+    label: BOX_HARNESS_LABELS.kiro,
+    hint: msg("Paste your Kiro API key (Kiro Pro and higher plans)."),
+  },
+  {
+    harness: "muse",
+    field: "museAuth",
+    label: BOX_HARNESS_LABELS.muse,
+    hint: msg("Paste your Meta API key."),
+  },
 ] as const;
 
 export const UPSTASH_BOX_SIZE_LABELS = {

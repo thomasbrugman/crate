@@ -83,6 +83,9 @@ it.effect("resolves vault-backed harness credentials alongside pasted ones", () 
       opencode: '{"provider":{"type":"api","key":"fixture"}}',
       cursor: "fixture-cursor-key",
       antigravity: "fixture-gemini-key",
+      grok: "",
+      kiro: "",
+      muse: "",
     });
   }),
 );
